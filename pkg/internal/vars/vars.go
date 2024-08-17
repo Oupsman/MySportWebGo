@@ -4,6 +4,8 @@ import (
 	"os"
 )
 
+const engine_version int = 1 // the version of the analysis engine
+
 var ListenPort string
 var Dsn string
 var SecretKey string

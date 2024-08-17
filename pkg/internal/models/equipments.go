@@ -1,19 +1,22 @@
 package models
 
 import (
-	"gorm.io/gorm"
+	"github.com/google/uuid"
 	"time"
 )
 
 type Equipments struct {
-	gorm.Model
-	Name                string    `json:"name"`
-	Brand               string    `json:"brand"`
-	EquipmentModel      string    `json:"model"`
-	DateOfPurchase      time.Time `json:"date_of_purchase"`
-	InitialMileage      int       `json:"initial_mileage"`
-	Mileage             int       `json:"mileage"`
-	Weight              int       `json:"weight"`
+	ID                  uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4()"`
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	DeletedAt           *time.Time `sql:"index"`
+	Name                string     `json:"name"`
+	Brand               string     `json:"brand"`
+	EquipmentModel      string     `json:"model"`
+	DateOfPurchase      time.Time  `json:"date_of_purchase"`
+	InitialMileage      int        `json:"initial_mileage"`
+	Mileage             int        `json:"mileage"`
+	Weight              int        `json:"weight"`
 	User                Users
 	UserID              int
 	MaintenanceInterval int  `json:"maintenance_interval"`

@@ -1,12 +1,14 @@
 package models
 
 import (
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"time"
 )
 
 type Users struct {
 	gorm.Model
+	UUID             uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4()"`
 	Username         string    `gorm:"unique" json:"username"`
 	Password         string    `json:"password"`
 	Role             string    `json:"role"`
@@ -20,5 +22,14 @@ type Users struct {
 	MaxHR            int       `json:"max_hr" gorm:"default:170"`
 	WeightObjective  int       `json:"weight_objective" gorm:"default:0"`
 	SecurityDistance int       `json:"security_distance" gorm:"default:500"`
-	Validated        bool      `json:"validated"`
+}
+
+type Validations struct {
+	ID        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4()"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt *time.Time `sql:"index"`
+	User      Users
+	UserID    int
+	Validated bool `json:"validated"`
 }

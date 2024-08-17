@@ -52,3 +52,11 @@ func (db *DB) Ping() error {
 	}
 	return sqlDB.Ping()
 }
+
+func CreateOrMigrate(db *DB) error {
+	err := db.AutoMigrate(&Users{}, &Equipments{}, &Activity{}, &Validations{})
+	if err != nil {
+		return err
+	}
+	return nil
+}

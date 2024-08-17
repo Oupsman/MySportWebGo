@@ -10,3 +10,10 @@ type NotificationsBody struct {
 var Genders = []string{"Male", "Female"}
 
 var Units = []string{"Imperial", "Metric"}
+
+type FloatArray []float64
+
+type GpsPoint struct {
+	Lat float64 `json:"lat"`
+	Lon float64 `json:"lon"`
+}

@@ -15,23 +15,23 @@ type WebServer struct {
 
 func AppHandler(App *app.App) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Set("storeApp", App)
+		c.Set("App", App)
 		c.Next()
 	}
 }
 
-func RunHttp(listenAddr string, storeApp *app.App) error {
+func RunHttp(listenAddr string, App *app.App) error {
 
 	httpRouter := gin.Default()
 
 	httpRouter.LoadHTMLGlob("templates/*")
 	httpRouter.Use(static.Serve("/static", static.LocalFile("./static", true)))
 
-	httpRouter.Use(AppHandler(storeApp))
+	httpRouter.Use(AppHandler(App))
 	httpRouter.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "index.tmpl", gin.H{
-			"title":    "SwitchDB Web Interface",
-			"vapidkey": storeApp.Notifications.PubKey,
+			"title":    "MySportWeb",
+			"vapidkey": App.Notifications.PubKey,
 		})
 	})
 
@@ -57,31 +57,13 @@ func RunHttp(listenAddr string, storeApp *app.App) error {
 	apiv1.POST("/user/login", controllers.Login)
 	apiv1.POST("/user/register", controllers.Register)
 	apiv1.GET("/user/logout", middlewares.IsAuthorized(), controllers.Logout)
-	apiv1.GET("/user/refreshtoken", middlewares.IsAuthorized(), controllers.RefreshToken)
-	apiv1.GET("/user", middlewares.IsAuthorized(), controllers.GetUser)
-	apiv1.POST("/user", middlewares.IsAuthorized(), controllers.UpdateUser)
-	apiv1.GET("/whoami", middlewares.IsAuthorized(), controllers.WhoAmI)
-	// Games
-	apiv1.GET("/games", controllers.GetGames)
-	apiv1.GET("/game/:gameID", middlewares.IsAuthorized(), controllers.GetGame)
-	apiv1.GET("/getgameprices/gameNameID", middlewares.IsAuthorized(), controllers.GetGamePrices)
-	apiv1.POST("/searchgame", middlewares.IsAuthorized(), controllers.SearchGame)
-	apiv1.POST("/trackgame", middlewares.IsAuthorized(), controllers.AddGame)
-	apiv1.POST("/untrackgame", middlewares.IsAuthorized(), controllers.UntrackGame)
-	// Notification channels
-	apiv1.POST("/channel", middlewares.IsAuthorized(), controllers.AddChannel)
-	apiv1.POST("/channel/:channelID", middlewares.IsAuthorized(), controllers.UpdateChannel)
-	apiv1.GET("/channel/:channelID", middlewares.IsAuthorized(), controllers.GetChannel)
-	apiv1.DELETE("/channel/:channelID", middlewares.IsAuthorized(), controllers.DeleteChannel)
-	apiv1.GET("/channel/:channelID/test", middlewares.IsAuthorized(), controllers.TestChannel)
-	apiv1.GET("/channels", middlewares.IsAuthorized(), controllers.GetChannels)
-	apiv1.GET("/getvapidkey", controllers.GetKey)
 
-	// Admin
-	apiv1.DELETE("/admin/user", middlewares.IsAdmin(), controllers.DeleteUser)
-	apiv1.GET("/admin/users", middlewares.IsAdmin(), controllers.GetAllUsers)
-	apiv1.GET("/admin/games", middlewares.IsAdmin(), controllers.GetAllGames)
-	apiv1.PUT("/admin/user/:userID", middlewares.IsAdmin(), controllers.UpdateUserAdmin)
+	// Activities
+	apiv1.POST("/activity", middlewares.IsAuthorized(), controllers.UploadActivity)
+	apiv1.GET("/activity/list", middlewares.IsAuthorized(), controllers.ListActivities)
+	apiv1.GET("/activity/:id", middlewares.IsAuthorized(), controllers.GetActivity)
+	apiv1.DELETE("/activity/:id", middlewares.IsAuthorized(), controllers.DeleteActivity)
+	apiv1.POST("/activity/:id", middlewares.IsAuthorized(), controllers.UpdateActivity)
 
 	// Start and run the server
 	err := httpRouter.Run(listenAddr)
