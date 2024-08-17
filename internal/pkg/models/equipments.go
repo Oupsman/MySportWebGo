@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+// /MEDIA/user uuid/equipments/equipment uuid/pic filename.pic extension
+
 type Equipments struct {
 	ID                  uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4()"`
 	CreatedAt           time.Time

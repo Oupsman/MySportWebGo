@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"MySportWeb/pkg/internal/vars"
+	"MySportWeb/internal/pkg/vars"
 	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 	"math"

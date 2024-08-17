@@ -1,8 +1,8 @@
 package notifications
 
 import (
-	"MySportWeb/pkg/internal/models"
-	"MySportWeb/pkg/internal/types"
+	"MySportWeb/internal/pkg/models"
+	"MySportWeb/internal/pkg/types"
 	"encoding/json"
 	"errors"
 	webpush "github.com/SherClockHolmes/webpush-go"

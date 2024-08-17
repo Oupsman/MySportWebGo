@@ -1,7 +1,7 @@
 package notifications
 
 import (
-	"MySportWeb/pkg/internal/types"
+	"MySportWeb/internal/pkg/types"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"net/http"

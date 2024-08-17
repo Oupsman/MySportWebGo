@@ -1,15 +1,17 @@
 package controllers
 
 import (
-	"MySportWeb/pkg/internal/app"
-	"MySportWeb/pkg/internal/models"
-	"MySportWeb/pkg/internal/types"
-	"MySportWeb/pkg/internal/utils"
-	"MySportWeb/pkg/internal/vars"
+	"MySportWeb/internal/pkg/app"
+	"MySportWeb/internal/pkg/models"
+	"MySportWeb/internal/pkg/types"
+	"MySportWeb/internal/pkg/utils"
+	"MySportWeb/internal/pkg/vars"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"time"
 )
+
+// /MEDIA/user uuid/profile pictures/profile picture.png
 
 func Login(c *gin.Context) {
 

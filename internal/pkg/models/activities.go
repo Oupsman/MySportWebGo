@@ -1,7 +1,7 @@
 package models
 
 import (
-	"MySportWeb/pkg/internal/types"
+	"MySportWeb/internal/pkg/types"
 	"github.com/google/uuid"
 	"time"
 )
@@ -30,12 +30,13 @@ type Activity struct {
 	Timezone      string    `json:"timezone" gorm:"default:'Europe/Paris'"`
 	Masked        bool      `json:"masked" gorm:"default:true"`
 	Equipment     Equipments
-	EquipmentID   int    `json:"equipment_id"`
-	Serialnumber  string `json:"serialnumber"`
-	Lastimport    bool   `json:"lastimport"`
-	Visibility    int    `json:"visibility" gorm:"default:0"`
-	CanComments   bool   `json:"can_comments" gorm:"default:false"`
-	EngineVersion int    `json:"engine_version"`
+	EquipmentID   int      `json:"equipment_id"`
+	Serialnumber  string   `json:"serialnumber"`
+	Lastimport    bool     `json:"lastimport"`
+	Visibility    int      `json:"visibility" gorm:"default:0"`
+	CanComments   bool     `json:"can_comments" gorm:"default:false"`
+	EngineVersion int      `json:"engine_version"`
+	Medias        []string `json:"medias"`
 	// precalculated FIT analysis results
 	Speeds             types.FloatArray   `json:"speeds"`
 	Hearts             types.FloatArray   `json:"hearts"`

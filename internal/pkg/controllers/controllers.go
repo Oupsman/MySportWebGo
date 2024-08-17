@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"MySportWeb/pkg/internal/app"
+	"MySportWeb/internal/pkg/app"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )

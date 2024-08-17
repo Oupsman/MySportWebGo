@@ -1,9 +1,9 @@
 package webserver
 
 import (
-	"MySportWeb/pkg/internal/app"
-	"MySportWeb/pkg/internal/controllers"
-	"MySportWeb/pkg/internal/middlewares"
+	"MySportWeb/internal/pkg/app"
+	"MySportWeb/internal/pkg/controllers"
+	"MySportWeb/internal/pkg/middlewares"
 	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
 	"net/http"
