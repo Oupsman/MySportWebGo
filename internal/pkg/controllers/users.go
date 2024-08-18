@@ -49,6 +49,7 @@ func Login(c *gin.Context) {
 		"exp":        expirationTime.Unix(),
 		"iss":        "mysportweb",
 		"sub":        existingUser.ID,
+		"uuid":       existingUser.UUID.String(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -58,7 +59,7 @@ func Login(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "could not generate token"})
 		return
 	}
-
+	c.SetCookie("mysportweb_session", tokenString, 3600, "/", "localhost", false, true)
 	c.JSON(200, gin.H{"token": tokenString})
 }
 
@@ -167,8 +168,6 @@ func UpdateUser(c *gin.Context) {
 	updatedUser.ID = uint(UserID)
 	updatedUser.Email = user.Email
 	updatedUser.Username = currentUser.Username
-	updatedUser.Country = currentUser.Country
-	updatedUser.Region = currentUser.Region
 	updatedUser.Role = currentUser.Role
 	if user.Password != "" {
 		newHash, err := utils.GenerateHashPassword(user.Password)

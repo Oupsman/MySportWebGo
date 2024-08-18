@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -15,14 +16,9 @@ type Notifs struct {
 	PrivKey string
 }
 
-func (notif *Notifs) Notify(notification types.NotificationsBody, logger zerolog.Logger, client *http.Client, db database.DB) error {
+func (notif *Notifs) Notify(notification types.NotificationsBody, logger zerolog.Logger, client *http.Client, db models.DB) error {
 	var err error
 	switch notification.ChannelProvider {
-	case "telegram":
-		err = notif.TelegramSend(notification, logger, client)
-
-	case "discord":
-		err = notif.DiscordSend(notification)
 	case "email":
 
 	case "browser":
@@ -38,7 +34,7 @@ func (notif *Notifs) Notify(notification types.NotificationsBody, logger zerolog
 	return nil
 }
 
-func (notif *Notifs) Notifications(client *http.Client, logger zerolog.Logger, db database.DB) {
+func (notif *Notifs) Notifications(client *http.Client, logger zerolog.Logger, db models.DB) {
 	for true {
 		// get all unsent notifications
 		notifications, err := db.GetUnsentNotifications()

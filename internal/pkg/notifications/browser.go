@@ -22,7 +22,7 @@ func (notif *Notifs) GenerateVAPIDKeys(logger zerolog.Logger) (*models.Keys, err
 		PrivKey: privateVapidKeys,
 	}, nil
 }
-func (notif *Notifs) BrowserSend(notification types.NotificationsBody, logger zerolog.Logger, client *http.Client, db database.DB) error {
+func (notif *Notifs) BrowserSend(notification types.NotificationsBody, logger zerolog.Logger, client *http.Client, db models.DB) error {
 
 	logger.Debug().Msg("sending webpush notification")
 	// Get VAPID keys

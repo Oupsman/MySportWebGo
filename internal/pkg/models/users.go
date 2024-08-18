@@ -1,6 +1,7 @@
 package models
 
 import (
+	"MySportWeb/internal/pkg/types"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"time"
@@ -32,4 +33,44 @@ type Validations struct {
 	User      Users
 	UserID    int
 	Validated bool `json:"validated"`
+}
+
+func (db *DB) GetUser(userID uint64) (Users, error) {
+	var user Users
+	result := db.First(&user, userID)
+	if result.Error != nil {
+		return Users{}, result.Error
+	}
+	return user, nil
+}
+
+func (db *DB) CreateUser(user types.UserBody) error {
+	var newUser = Users{
+		Username: user.Username,
+		Password: user.Password,
+		Email:    user.Email,
+	}
+	result := db.Create(&newUser)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (db *DB) UpdateUser(user Users) error {
+
+	result := db.Save(user)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (db *DB) GetAllUsers() ([]Users, error) {
+	var users []Users
+	result := db.Find(&users)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return users, nil
 }
