@@ -15,16 +15,16 @@ For now the app can :
 * Support laps and splits (I'm not using those)
 * handle multiple users BUT the social side of the app is yet to be implemented
 * handle multiple sports (running, biking,hiking)
-* provide a shitload of graphs
+* provide a shitload of datas about the sessions (speed, distance, elevation, etc)
+* Estimate your power level (cycling only for now)
 * handle multiple equipments, but having a default equipment for each sport is still to be implemented
 
 # For now, this app IS NOT PRODUCTION READY !
 
 ## TODO
 
-1. Better UX
-2. Support more devices
-3. Support more sports (swimming, skiing, snowboarding, etc)
+1. Support more devices
+2. Support more sports (swimming, skiing, snowboarding, etc)
 3. Handle multiple languages
 4. Support GPX & TCX files format
 5. 

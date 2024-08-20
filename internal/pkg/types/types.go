@@ -33,3 +33,9 @@ type UserBody struct {
 	OldPassword string `json:"oldpassword"`
 	Email       string `json:"email"`
 }
+
+type Device struct {
+	Model  string `json:"model"`
+	Brand  string `json:"brand"`
+	Serial string `json:"serial_number"`
+}
