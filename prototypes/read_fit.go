@@ -45,13 +45,14 @@ func main() {
 				fmt.Printf("  Average speed: %2f\n", mmsToKmh(float64(session.AvgSpeed)))
 				fmt.Printf("  Total ascent: %d\n", session.TotalAscent)
 			}
+			fmt.Println("Records: ")
 			for _, record := range activity.Records {
 				fmt.Printf("  Time: %s\n", record.Timestamp)
 				fmt.Printf("  Latitude: %f\n", semiCircleToDegres(record.PositionLat))
 				fmt.Printf("  Longitude: %f\n", semiCircleToDegres(record.PositionLong))
-				// Unit of Altitude is weird ... can't figure it out
-				fmt.Printf("  Altitude: %d\n", record.EnhancedAltitude)
-				fmt.Printf("  Speed: %2f\n", mmsToKmh(float64(record.Speed)))
+				fmt.Printf("  Distance: %2f\n", record.DistanceScaled())
+				fmt.Printf("  Altitude: %f\n", record.EnhancedAltitudeScaled())
+				fmt.Printf("  Speed: %2f\n", msToKmH(record.EnhancedSpeedScaled()))
 				fmt.Printf("  Heart rate: %d\n", record.HeartRate)
 				fmt.Printf("  Cadence: %d\n", record.Cadence)
 				fmt.Printf("  Power: %d\n", record.Power)
@@ -63,6 +64,13 @@ func main() {
 
 func mmsToKmh(mms float64) float64 {
 	return mms * 3600 / 1000000
+}
+
+func msToKmH(ms float64) float64 {
+	return ms * 3.6
+}
+func msTomKm(ms float64) float64 {
+	return 16.666666667 / (ms)
 }
 
 func cmToKm(cm uint32) float64 {

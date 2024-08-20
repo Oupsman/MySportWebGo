@@ -2,10 +2,9 @@ package controllers
 
 import (
 	"MySportWeb/internal/pkg/app"
-	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/utils"
+	"MySportWeb/services/activity"
 	"github.com/gin-gonic/gin"
-	"github.com/muktihari/fit/decoder"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -43,18 +42,6 @@ func UploadActivity(c *gin.Context) {
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
-	_, err = SumAnalyze(dstFile + "/" + file.Filename)
+	_, err = activity.SumAnalyze(dstFile + "/" + file.Filename)
 	// 	c.String(http.StatusOK, fmt.Sprintf("'%s' uploaded!", file.Filename))
-}
-
-func SumAnalyze(filePath string) (models.Activity, error) {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return models.Activity{}, err
-	}
-	defer f.Close()
-
-	dec := decoder.NewRaw()
-
-	return models.Activity{}, nil
 }
