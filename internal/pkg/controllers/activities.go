@@ -137,6 +137,15 @@ func GetActivity(c *gin.Context) {
 	if (activity.Visibility == 0 && activity.User.ID != user.ID) || activity.Visibility == 2 {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You can't access this activity"})
 	}
+	if activity.User.ID != user.ID {
+		// Deleting non-public datas if user is not the owner
+		activity.GpsPoints = nil
+		activity.StartPosition = nil
+		activity.EndPosition = nil
+		// TODO : is there more fields that needs to be nilled ?
+
+	}
+
 	c.JSON(http.StatusOK, gin.H{"activity": activity})
 }
 

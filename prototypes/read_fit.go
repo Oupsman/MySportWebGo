@@ -19,47 +19,47 @@ func main() {
 
 	dec := decoder.New(f)
 	// Read the fit file
+
 	for dec.Next() {
-		for dec.Next() {
-			fit, err := dec.Decode()
-			if err != nil {
-				panic(err)
-			}
-			activity := filedef.NewActivity(fit.Messages...)
+		fit, err := dec.Decode()
+		if err != nil {
+			panic(err)
+		}
+		activity := filedef.NewActivity(fit.Messages...)
 
-			fmt.Printf("File Type: %s\n", activity.FileId.Type)
-			fmt.Printf("Sessions count: %d\n", len(activity.Sessions))
-			fmt.Printf("Laps count: %d\n", len(activity.Laps))
-			fmt.Printf("Records count: %d\n", len(activity.Records))
+		fmt.Printf("File Type: %s\n", activity.FileId.Type)
+		fmt.Printf("Sessions count: %d\n", len(activity.Sessions))
+		fmt.Printf("Laps count: %d\n", len(activity.Laps))
+		fmt.Printf("Records count: %d\n", len(activity.Records))
 
-			fmt.Println("Session summary:")
-			for _, session := range activity.Sessions {
-				fmt.Printf("  Sport: %s\n", session.Sport)
-				fmt.Printf("  Start time: %s\n", session.StartTime)
-				// Unit seems to be milliseconds
-				fmt.Printf("  Total timer time: %s\n", convertTime(session.TotalTimerTime/1000))
-				// Distance Unit is centimeters
-				fmt.Printf("  Total distance: %2f\n", cmToKm(session.TotalDistance))
-				fmt.Printf("  Total calories: %d\n", session.TotalCalories)
-				// Unit is millimeters per second
-				fmt.Printf("  Average speed: %2f\n", mmsToKmh(float64(session.AvgSpeed)))
-				fmt.Printf("  Total ascent: %d\n", session.TotalAscent)
-			}
-			fmt.Println("Records: ")
-			for _, record := range activity.Records {
-				fmt.Printf("  Time: %s\n", record.Timestamp)
-				fmt.Printf("  Latitude: %f\n", semiCircleToDegres(record.PositionLat))
-				fmt.Printf("  Longitude: %f\n", semiCircleToDegres(record.PositionLong))
-				fmt.Printf("  Distance: %2f\n", record.DistanceScaled())
-				fmt.Printf("  Altitude: %f\n", record.EnhancedAltitudeScaled())
-				fmt.Printf("  Speed: %2f\n", msToKmH(record.EnhancedSpeedScaled()))
-				fmt.Printf("  Heart rate: %d\n", record.HeartRate)
-				fmt.Printf("  Cadence: %d\n", record.Cadence)
-				fmt.Printf("  Power: %d\n", record.Power)
-				fmt.Printf("  Temperature: %d\n", record.Temperature)
-			}
+		fmt.Println("Session summary:")
+		for _, session := range activity.Sessions {
+			fmt.Printf("  Sport: %s\n", session.Sport)
+			fmt.Printf("  Start time: %s\n", session.StartTime)
+			// Unit seems to be milliseconds
+			fmt.Printf("  Total timer time: %s\n", convertTime(session.TotalTimerTime/1000))
+			// Distance Unit is centimeters
+			fmt.Printf("  Total distance: %2f\n", cmToKm(session.TotalDistance))
+			fmt.Printf("  Total calories: %d\n", session.TotalCalories)
+			// Unit is millimeters per second
+			fmt.Printf("  Average speed: %2f\n", mmsToKmh(float64(session.AvgSpeed)))
+			fmt.Printf("  Total ascent: %d\n", session.TotalAscent)
+		}
+		fmt.Println("Records: ")
+		for _, record := range activity.Records {
+			fmt.Printf("  Time: %s\n", record.Timestamp)
+			fmt.Printf("  Latitude: %f\n", semiCircleToDegres(record.PositionLat))
+			fmt.Printf("  Longitude: %f\n", semiCircleToDegres(record.PositionLong))
+			fmt.Printf("  Distance: %2f\n", record.DistanceScaled())
+			fmt.Printf("  Altitude: %f\n", record.EnhancedAltitudeScaled())
+			fmt.Printf("  Speed: %2f\n", msToKmH(record.EnhancedSpeedScaled()))
+			fmt.Printf("  Heart rate: %d\n", record.HeartRate)
+			fmt.Printf("  Cadence: %d\n", record.Cadence)
+			fmt.Printf("  Power: %d\n", record.Power)
+			fmt.Printf("  Temperature: %d\n", record.Temperature)
 		}
 	}
+
 }
 
 func mmsToKmh(mms float64) float64 {

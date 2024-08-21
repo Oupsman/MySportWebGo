@@ -30,11 +30,12 @@ func SumAnalyze(filePath string, user models.Users, equipment models.Equipments)
 			panic(err)
 		}
 		fitActivity := filedef.NewActivity(fit.Messages...)
+
 		activity.User = user
 		activity.Equipment = equipment
 		activity.Sport = fitActivity.Sessions[0].Sport.String()
 		activity.Date = fitActivity.Sessions[0].StartTime
-		activity.Duration = fitActivity.Sessions[0].TotalTimerTime
+		activity.Duration = fitActivity.Sessions[0].TotalTimerTime / 1000
 		if fitActivity.Sessions[0].TotalDistance > 0 {
 			activity.Distance = fitActivity.Sessions[0].TotalDistanceScaled()
 		} else {
@@ -56,8 +57,16 @@ func SumAnalyze(filePath string, user models.Users, equipment models.Equipments)
 
 		// TODO : one day, I'll get the weight of the user and its equipment
 		activity.TotalWeight = 110
-
-		activity, err = AnalyzeRecords(fitActivity, activity)
+		switch activity.Sport {
+		case "running", "cycling", "hiking":
+			activity, err = AnalyzeRecords(fitActivity, activity)
+			break
+		case "swimming":
+			if fitActivity.Sessions[0].SportProfileName == "Pool Swim" {
+				activity, err = AnalyzeSwimRecords(fitActivity, activity)
+			}
+			break
+		}
 		if err != nil {
 			return models.Activity{}, err
 		}
@@ -69,19 +78,19 @@ func SumAnalyze(filePath string, user models.Users, equipment models.Equipments)
 func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (models.Activity, error) {
 	var startmeters, stopmeters, meters = 0.0, 0.0, 0.0
 	var startaltitude, stopaltitude = 0.0, 0.0
-	var avgspeed_t = 0.0
+	var avgSpeedT = 0.0
 	var km = 0.0
 	var hasPower = false
 	var tsstartkm time.Time
 	var tsstartdist float64
 	var counter = 0
-	var records_count = len(fitActivity.Records)
+	var recordsCount = len(fitActivity.Records)
 	var altitudes, filtered []float64
 
 	distance := activity.Distance
 	weight := activity.TotalWeight
 
-	if records_count > 0 {
+	if recordsCount > 0 {
 		tsstartkm = fitActivity.Records[0].Timestamp
 		tsstartdist = fitActivity.Records[0].DistanceScaled()
 	}
@@ -91,16 +100,16 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	if fitActivity.Sessions[0].AvgPower != math.MaxUint16 {
 		hasPower = true
 	}
-	for km < distance && counter < records_count-1 {
+	for km < distance && counter < recordsCount-1 {
 		stopkm := km + 1.0
-		for km < stopkm && counter < records_count-1 {
+		for km < stopkm && counter < recordsCount-1 {
 			var deltaDistance, deltaAltitude float64
 			stopmeters = meters + 30
 			startmeters = fitActivity.Records[counter].DistanceScaled()
 			startaltitude = fitActivity.Records[counter].EnhancedAltitudeScaled()
 			record := fitActivity.Records[counter]
-			for meters < stopmeters && counter < records_count-1 {
-				if counter < records_count-1 {
+			for meters < stopmeters && counter < recordsCount-1 {
+				if counter < recordsCount-1 {
 					if record.HeartRate != math.MaxUint8 {
 						activity.Hearts = append(activity.Hearts, record.HeartRate)
 					}
@@ -178,11 +187,11 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 		delta := tsstopkm.Sub(tsstartkm)
 		dist := tsstopdist - tsstartdist
 		if delta.Seconds() > 0 {
-			avgspeed_t = dist / delta.Seconds()
+			avgSpeedT = dist / delta.Seconds()
 		}
 		tsstartkm = tsstopkm
 		tsstartdist = tsstopdist
-		activity.Means = append(activity.Means, avgspeed_t)
+		activity.Means = append(activity.Means, avgSpeedT)
 
 	}
 	counter = 0
@@ -194,23 +203,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	}
 
 	if len(altitudes) > 2 {
-		for counter < records_count-2 {
-			var value float64
-			if counter+1 < len(filtered) {
-				value = filtered[counter+1] - filtered[counter]
-			} else {
-				value = 0
-			}
-
-			if math.Abs(value) <= 5 {
-				if value >= 0 {
-					activity.PositiveElevation += value
-				} else {
-					activity.NegativeElevation += value
-				}
-			}
-			counter++
-		}
+		ComputeElevation(&activity, filtered)
 	}
 
 	activity.GpsCenter = &types.GpsPoint{
@@ -221,5 +214,32 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 		{Lat: utils.Min(activity.Lats), Lon: utils.Min(activity.Lons)},
 		{Lat: utils.Max(activity.Lats), Lon: utils.Max(activity.Lons)},
 	}
+	return activity, nil
+}
+
+func ComputeElevation(activity *models.Activity, filtered []float64) {
+	counter := 0
+	recordsCount := len(filtered)
+	for counter < recordsCount-2 {
+		var value float64
+		if counter+1 < len(filtered) {
+			value = filtered[counter+1] - filtered[counter]
+		} else {
+			value = 0
+		}
+
+		if math.Abs(value) <= 5 {
+			if value >= 0 {
+				activity.PositiveElevation += value
+			} else {
+				activity.NegativeElevation += value
+			}
+		}
+		counter++
+	}
+}
+
+func AnalyzeSwimRecords(fitActivity *filedef.Activity, activity models.Activity) (models.Activity, error) {
+
 	return activity, nil
 }

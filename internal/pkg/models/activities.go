@@ -70,8 +70,8 @@ type Activity struct {
 	Means              types.FloatArray   `json:"means"`
 	PositiveElevation  float64            `json:"positive_elevation"`
 	NegativeElevation  float64            `json:"negative_elevation"`
-	StartPosition      types.GpsPoint     `json:"start_position"`
-	EndPosition        types.GpsPoint     `json:"end_position"`
+	StartPosition      *types.GpsPoint    `json:"start_position"`
+	EndPosition        *types.GpsPoint    `json:"end_position"`
 }
 
 func (db *DB) CreateActivity(activity Activity) error {
