@@ -6,6 +6,7 @@ import (
 	"MySportWeb/internal/pkg/utils"
 	"github.com/muktihari/fit/decoder"
 	"github.com/muktihari/fit/profile/filedef"
+	"github.com/muktihari/fit/proto"
 	"math"
 	"os"
 	"time"
@@ -15,7 +16,6 @@ import (
 
 func SumAnalyze(filePath string, user models.Users, equipment models.Equipments) (models.Activity, error) {
 	var activity models.Activity
-
 	f, err := os.Open(filePath)
 	if err != nil {
 		return models.Activity{}, err
@@ -29,49 +29,59 @@ func SumAnalyze(filePath string, user models.Users, equipment models.Equipments)
 		if err != nil {
 			panic(err)
 		}
-		fitActivity := filedef.NewActivity(fit.Messages...)
-
-		activity.User = user
-		activity.Equipment = equipment
-		activity.Sport = fitActivity.Sessions[0].Sport.String()
-		activity.Date = fitActivity.Sessions[0].StartTime
-		activity.Duration = fitActivity.Sessions[0].TotalTimerTime / 1000
-		if fitActivity.Sessions[0].TotalDistance > 0 {
-			activity.Distance = fitActivity.Sessions[0].TotalDistanceScaled()
-		} else {
-			activity.Distance = 0
-		}
-		activity.Calories = fitActivity.Sessions[0].TotalCalories
-		activity.AvgSpeed = fitActivity.Sessions[0].AvgSpeedScaled()
-		activity.AvgRPM = fitActivity.Sessions[0].AvgCadence
-		activity.AvgHR = fitActivity.Sessions[0].AvgHeartRate
-		if fitActivity.Sessions[0].AvgPower != math.MaxUint16 {
-			activity.AvgPower = fitActivity.Sessions[0].AvgPower
-		}
-		if fitActivity.Sessions[0].AvgPower > 0 {
-			activity.AvgPower = fitActivity.Sessions[0].AvgPower
-		}
-		activity.TotalAscent = fitActivity.Sessions[0].TotalAscent
-		activity.TotalDescent = fitActivity.Sessions[0].TotalDescent
-		activity.MaxSpeed = fitActivity.Sessions[0].MaxSpeedScaled()
-
-		// TODO : one day, I'll get the weight of the user and its equipment
-		activity.TotalWeight = 110
-		switch activity.Sport {
-		case "running", "cycling", "hiking":
-			activity, err = AnalyzeRecords(fitActivity, activity)
-			break
-		case "swimming":
-			if fitActivity.Sessions[0].SportProfileName == "Pool Swim" {
-				activity, err = AnalyzeSwimRecords(fitActivity, activity)
-			}
-			break
-		}
+		activity, err = DecodeFit(fit, user, equipment)
 		if err != nil {
 			return models.Activity{}, err
 		}
 	}
 
+	return activity, nil
+}
+
+func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (models.Activity, error) {
+	var activity models.Activity
+	var err error
+	fitActivity := filedef.NewActivity(fit.Messages...)
+
+	activity.User = user
+	activity.Equipment = equipment
+	activity.Sport = fitActivity.Sessions[0].Sport.String()
+	activity.Date = fitActivity.Sessions[0].StartTime
+	activity.Duration = fitActivity.Sessions[0].TotalTimerTime / 1000
+	if fitActivity.Sessions[0].TotalDistance > 0 {
+		activity.Distance = fitActivity.Sessions[0].TotalDistanceScaled()
+	} else {
+		activity.Distance = 0
+	}
+	activity.Calories = fitActivity.Sessions[0].TotalCalories
+	activity.AvgSpeed = fitActivity.Sessions[0].AvgSpeedScaled()
+	activity.AvgRPM = fitActivity.Sessions[0].AvgCadence
+	activity.AvgHR = fitActivity.Sessions[0].AvgHeartRate
+	if fitActivity.Sessions[0].AvgPower != math.MaxUint16 {
+		activity.AvgPower = fitActivity.Sessions[0].AvgPower
+	}
+	if fitActivity.Sessions[0].AvgPower > 0 {
+		activity.AvgPower = fitActivity.Sessions[0].AvgPower
+	}
+	activity.TotalAscent = fitActivity.Sessions[0].TotalAscent
+	activity.TotalDescent = fitActivity.Sessions[0].TotalDescent
+	activity.MaxSpeed = fitActivity.Sessions[0].MaxSpeedScaled()
+
+	// TODO : one day, I'll get the weight of the user and its equipment
+	activity.TotalWeight = 110
+	switch activity.Sport {
+	case "running", "cycling", "hiking":
+		activity, err = AnalyzeRecords(fitActivity, activity)
+		break
+	case "swimming":
+		if fitActivity.Sessions[0].SportProfileName == "Pool Swim" {
+			activity, err = AnalyzeSwimRecords(fitActivity, activity)
+		}
+		break
+	}
+	if err != nil {
+		return models.Activity{}, err
+	}
 	return activity, nil
 }
 
