@@ -24,3 +24,20 @@ type Equipments struct {
 	MaintenanceInterval int  `json:"maintenance_interval"`
 	IsDefault           bool `json:"is_default"`
 }
+
+func (db *DB) CreateEquipment(equipment Equipments) error {
+	result := db.Create(&equipment)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (db *DB) GetDefaultEquipment(userID uint) Equipments {
+	var equipment Equipments
+	result := db.Where("user_id = ? AND is_default = ?", userID, true).First(&equipment)
+	if result.Error != nil {
+		return Equipments{}
+	}
+	return equipment
+}

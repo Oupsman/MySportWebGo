@@ -44,6 +44,15 @@ func (db *DB) GetUser(userID uint64) (Users, error) {
 	return user, nil
 }
 
+func (db *DB) GetUserByUUID(uuid uuid.UUID) (Users, error) {
+	var user Users
+	result := db.Where("uuid = ?", uuid).First(&user)
+	if result.Error != nil {
+		return Users{}, result.Error
+	}
+	return user, nil
+}
+
 func (db *DB) CreateUser(user types.UserBody) error {
 	var newUser = Users{
 		Username: user.Username,

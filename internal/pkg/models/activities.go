@@ -54,6 +54,7 @@ type Activity struct {
 	Lons               types.FloatArray   `json:"lons"`
 	StepLengths        types.FloatArray   `json:"step_lengths"`
 	GpsPoints          []types.GpsPoint   `json:"gps_points"`
+	PublicGpsPoints    []types.GpsPoint   `json:"public_gps_points"`
 	VerticalOscis      types.FloatArray   `json:"vertical_oscis"`
 	VerticalRatios     types.FloatArray   `json:"vertical_ratios"`
 	Stances            types.FloatArray   `json:"stance"`
@@ -73,7 +74,7 @@ type Activity struct {
 	EndPosition        types.GpsPoint     `json:"end_position"`
 }
 
-func (db *DB) CreateActivity(activity *Activity) error {
+func (db *DB) CreateActivity(activity Activity) error {
 	err := db.Create(activity).Error
 	if err != nil {
 		return err
@@ -104,4 +105,13 @@ func (db *DB) DeleteActivity(id uuid.UUID) error {
 		return err
 	}
 	return nil
+}
+
+func (db *DB) GetActivitiesByUser(userID uint) ([]Activity, error) {
+	var activities []Activity
+	err := db.Preload("User").Preload("Equipment").Find(&activities, "user_id = ?", userID).Error
+	if err != nil {
+		return nil, err
+	}
+	return activities, nil
 }

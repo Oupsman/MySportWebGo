@@ -1,4 +1,4 @@
-package activity
+package activityService
 
 import (
 	"MySportWeb/internal/pkg/models"
@@ -53,11 +53,14 @@ func SumAnalyze(filePath string, user models.Users, equipment models.Equipments)
 		activity.TotalAscent = fitActivity.Sessions[0].TotalAscent
 		activity.TotalDescent = fitActivity.Sessions[0].TotalDescent
 		activity.MaxSpeed = fitActivity.Sessions[0].MaxSpeedScaled()
-		switch activity.Sport {
-		case "Cycling":
-			activity, err = AnalyzeRecords(fitActivity, activity)
-		}
 
+		// TODO : one day, I'll get the weight of the user and its equipment
+		activity.TotalWeight = 110
+
+		activity, err = AnalyzeRecords(fitActivity, activity)
+		if err != nil {
+			return models.Activity{}, err
+		}
 	}
 
 	return activity, nil
@@ -76,7 +79,6 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	var altitudes, filtered []float64
 
 	distance := activity.Distance
-	// TODO : one day, I'll get the weight of the user and its equipment
 	weight := activity.TotalWeight
 
 	if records_count > 0 {
@@ -119,6 +121,15 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 						altitudes = append(altitudes, record.EnhancedAltitudeScaled())
 						km = record.DistanceScaled() / 1000
 						meters = record.DistanceScaled()
+
+						// if the user has a security distance, we add the points to the public gps points
+						if float64(activity.User.SecurityDistance) > record.DistanceScaled() && fitActivity.Sessions[0].TotalDistanceScaled()-float64(activity.User.SecurityDistance) < record.DistanceScaled() {
+							activity.PublicGpsPoints = append(activity.PublicGpsPoints, types.GpsPoint{
+								Lat: utils.SemiCircleToDegres(record.PositionLat),
+								Lon: utils.SemiCircleToDegres(record.PositionLong),
+							})
+						}
+
 					}
 					if hasPower && activity.Sport == "cycling" {
 						if record.Power != math.MaxUint16 {

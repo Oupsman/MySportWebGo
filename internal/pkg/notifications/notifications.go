@@ -64,7 +64,7 @@ func New() *Notifs {
 	return &Notifs{}
 }
 
-func (notif *Notifs) Start(logger zerolog.Logger, client *http.Client, db database.DB) error {
+func (notif *Notifs) Start(logger zerolog.Logger, client *http.Client, db models.DB) error {
 
 	keys, err := db.GetKeys()
 	if err != nil {

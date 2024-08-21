@@ -27,11 +27,19 @@ type ChannelBody struct {
 }
 
 type UserBody struct {
-	ID          uint64 `json:"user_id"`
-	Username    string `json:"username"`
-	Password    string `json:"password"`
-	OldPassword string `json:"oldpassword"`
-	Email       string `json:"email"`
+	ID               uint64  `json:"user_id"`
+	Username         string  `json:"username"`
+	Password         string  `json:"password"`
+	OldPassword      string  `json:"oldpassword"`
+	Email            string  `json:"email"`
+	Weight           uint16  `json:"weight"`
+	Unit             int     `json:"unit"`
+	Timezone         string  `json:"timezone"`
+	Gender           int     `json:"gender"`
+	Height           float32 `json:"height"`
+	MaxHR            int     `json:"max_hr"`
+	WeightObjective  int     `json:"weight_objective"`
+	SecurityDistance int     `json:"security_distance"`
 }
 
 type Device struct {
