@@ -47,3 +47,11 @@ type Device struct {
 	Brand  string `json:"brand"`
 	Serial string `json:"serial_number"`
 }
+
+type Length struct {
+	Swolf    uint16  `json:"swolf"`
+	Pace     float64 `json:"pace"`
+	Length   float64 `json:"length"`
+	Strokes  uint16  `json:"strokes"`
+	Duration float64 `json:"duration"`
+}

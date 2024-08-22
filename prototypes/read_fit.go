@@ -9,8 +9,8 @@ import (
 )
 
 func main() {
-	filePath := "FIT/Karoo-Morning_Ride-Sep-06-2022-061544.fit"
-	// filePath := "FIT/2024-08-02-16-34-19.fit"
+	// filePath := "FIT/Karoo-Morning_Ride-Sep-06-2022-061544.fit"
+	filePath := "FIT/2024-08-02-16-34-19.fit"
 	f, err := os.Open(filePath)
 	if err != nil {
 		panic(err)
@@ -45,36 +45,28 @@ func main() {
 			fmt.Printf("  Average speed: %2f\n", mmsToKmh(float64(session.AvgSpeed)))
 			fmt.Printf("  Total ascent: %d\n", session.TotalAscent)
 		}
-		fmt.Println("Records: ")
-		for _, record := range activity.Records {
-			fmt.Printf("  Time: %s\n", record.Timestamp)
-			fmt.Printf("  Latitude: %f\n", semiCircleToDegres(record.PositionLat))
-			fmt.Printf("  Longitude: %f\n", semiCircleToDegres(record.PositionLong))
-			fmt.Printf("  Distance: %2f\n", record.DistanceScaled())
-			fmt.Printf("  Altitude: %f\n", record.EnhancedAltitudeScaled())
-			fmt.Printf("  Speed: %2f\n", msToKmH(record.EnhancedSpeedScaled()))
-			fmt.Printf("  Heart rate: %d\n", record.HeartRate)
-			fmt.Printf("  Cadence: %d\n", record.Cadence)
-			fmt.Printf("  Power: %d\n", record.Power)
-			fmt.Printf("  Temperature: %d\n", record.Temperature)
+		fmt.Println("Lengths: ")
+		for _, length := range activity.Lengths {
+			swolf := Swolf(length.TotalStrokes, uint16(math.Ceil(length.TotalElapsedTimeScaled())))
+			swimPace := SwimPace(activity.Sessions[0].PoolLengthScaled(), length.TotalElapsedTimeScaled(), length.TotalStrokes)
+			fmt.Printf("  %s %f %d %d %f \n", length.StartTime, math.Ceil(length.TotalElapsedTimeScaled()), length.TotalStrokes, swolf, swimPace)
 		}
 	}
 
 }
 
-func mmsToKmh(mms float64) float64 {
-	return mms * 3600 / 1000000
+func SwimPace(poolLength float64, time float64, strokes uint16) float64 {
+	if strokes == math.MaxUint16 {
+		return 30
+	}
+	return time * 100 / poolLength
 }
 
-func msToKmH(ms float64) float64 {
-	return ms * 3.6
-}
-func msTomKm(ms float64) float64 {
-	return 16.666666667 / (ms)
-}
-
-func cmToKm(cm uint32) float64 {
-	return float64(cm) / 100000
+func Swolf(strokes uint16, time uint16) uint16 {
+	if strokes == math.MaxUint16 {
+		return 0
+	}
+	return strokes + time
 }
 
 func convertTime(time uint32) string {
@@ -103,9 +95,17 @@ func convertTime(time uint32) string {
 	return result
 }
 
-func semiCircleToDegres(semi int32) float64 {
-	if semi > 0 {
-		return float64(semi) * (180.0 / math.Pow(2.0, 31.0))
-	}
-	return 0
+func mmsToKmh(mms float64) float64 {
+	return mms * 3600 / 1000000
+}
+
+func msToKmH(ms float64) float64 {
+	return ms * 3.6
+}
+func msTomKm(ms float64) float64 {
+	return 16.666666667 / (ms)
+}
+
+func cmToKm(cm uint32) float64 {
+	return float64(cm) / 100000
 }

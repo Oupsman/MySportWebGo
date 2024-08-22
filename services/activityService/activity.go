@@ -69,15 +69,10 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 
 	// TODO : one day, I'll get the weight of the user and its equipment
 	activity.TotalWeight = 110
-	switch activity.Sport {
-	case "running", "cycling", "hiking":
-		activity, err = AnalyzeRecords(fitActivity, activity)
-		break
-	case "swimming":
-		if fitActivity.Sessions[0].SportProfileName == "Pool Swim" {
-			activity, err = AnalyzeSwimRecords(fitActivity, activity)
-		}
-		break
+
+	activity, err = AnalyzeRecords(fitActivity, activity)
+	if len(fitActivity.Lengths) > 0 {
+		activity.Lengths = AnalyzeLengths(fitActivity)
 	}
 	if err != nil {
 		return models.Activity{}, err
@@ -247,9 +242,4 @@ func ComputeElevation(activity *models.Activity, filtered []float64) {
 		}
 		counter++
 	}
-}
-
-func AnalyzeSwimRecords(fitActivity *filedef.Activity, activity models.Activity) (models.Activity, error) {
-
-	return activity, nil
 }

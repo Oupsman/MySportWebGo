@@ -72,6 +72,7 @@ type Activity struct {
 	NegativeElevation  float64            `json:"negative_elevation"`
 	StartPosition      *types.GpsPoint    `json:"start_position"`
 	EndPosition        *types.GpsPoint    `json:"end_position"`
+	Lengths            []types.Length     `json:"lengths"`
 }
 
 func (db *DB) CreateActivity(activity Activity) error {
