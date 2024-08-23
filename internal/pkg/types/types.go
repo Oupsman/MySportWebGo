@@ -49,9 +49,10 @@ type Device struct {
 }
 
 type Length struct {
-	Swolf    uint16  `json:"swolf"`
-	Pace     float64 `json:"pace"`
-	Length   float64 `json:"length"`
-	Strokes  uint16  `json:"strokes"`
-	Duration float64 `json:"duration"`
+	Swolf     uint16  `json:"swolf"`
+	Pace      float64 `json:"pace"`
+	Length    float64 `json:"length"`
+	Strokes   uint16  `json:"strokes"`
+	Duration  float64 `json:"duration"`
+	TimeStamp float64 `json:"timeStamp"`
 }

@@ -18,8 +18,8 @@ type Activity struct {
 	Filename         string         `json:"filename"`
 	FilePath         string         `json:"file_path"`
 	Sport            string         `json:"sport"`
-	IsCommute        string         `json:"is_commute"`
-	Co2              int            `json:"co2"`
+	IsCommute        bool           `json:"is_commute"`
+	Co2              uint32         `json:"co2"`
 	Distance         float64        `json:"distance"`
 	Duration         uint32         `json:"duration"`
 	AvgSpeed         float64        `json:"avg_speed"`

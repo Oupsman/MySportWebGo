@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/muktihari/fit/decoder"
 	"github.com/muktihari/fit/profile/filedef"
@@ -8,7 +9,17 @@ import (
 	"os"
 )
 
+type Length struct {
+	Swolf     uint16  `json:"swolf"`
+	Pace      float64 `json:"pace"`
+	Length    float64 `json:"length"`
+	Strokes   uint16  `json:"strokes"`
+	Duration  float64 `json:"duration"`
+	TimeStamp float64 `json:"timeStamp"`
+}
+
 func main() {
+	var lengths []Length
 	// filePath := "FIT/Karoo-Morning_Ride-Sep-06-2022-061544.fit"
 	filePath := "FIT/2024-08-02-16-34-19.fit"
 	f, err := os.Open(filePath)
@@ -32,25 +43,23 @@ func main() {
 		fmt.Printf("Laps count: %d\n", len(activity.Laps))
 		fmt.Printf("Records count: %d\n", len(activity.Records))
 
-		fmt.Println("Session summary:")
-		for _, session := range activity.Sessions {
-			fmt.Printf("  Sport: %s\n", session.Sport)
-			fmt.Printf("  Start time: %s\n", session.StartTime)
-			// Unit seems to be milliseconds
-			fmt.Printf("  Total timer time: %s\n", convertTime(session.TotalTimerTime/1000))
-			// Distance Unit is centimeters
-			fmt.Printf("  Total distance: %2f\n", cmToKm(session.TotalDistance))
-			fmt.Printf("  Total calories: %d\n", session.TotalCalories)
-			// Unit is millimeters per second
-			fmt.Printf("  Average speed: %2f\n", mmsToKmh(float64(session.AvgSpeed)))
-			fmt.Printf("  Total ascent: %d\n", session.TotalAscent)
-		}
 		fmt.Println("Lengths: ")
-		for _, length := range activity.Lengths {
-			swolf := Swolf(length.TotalStrokes, uint16(math.Ceil(length.TotalElapsedTimeScaled())))
-			swimPace := SwimPace(activity.Sessions[0].PoolLengthScaled(), length.TotalElapsedTimeScaled(), length.TotalStrokes)
-			fmt.Printf("  %s %f %d %d %f \n", length.StartTime, math.Ceil(length.TotalElapsedTimeScaled()), length.TotalStrokes, swolf, swimPace)
+		poolLength := activity.Sessions[0].PoolLengthScaled()
+		previousTS := 0.0
+		for _, activityLength := range activity.Lengths {
+			var length = Length{
+				Swolf:     Swolf(activityLength.TotalStrokes, uint16(activityLength.TotalElapsedTimeScaled())),
+				Pace:      SwimPace(activity.Sessions[0].PoolLengthScaled(), activityLength.TotalElapsedTimeScaled(), activityLength.TotalStrokes),
+				Duration:  activityLength.TotalElapsedTimeScaled(),
+				Length:    poolLength,
+				Strokes:   activityLength.TotalStrokes,
+				TimeStamp: previousTS,
+			}
+			previousTS += activityLength.TotalElapsedTimeScaled()
+			lengths = append(lengths, length)
 		}
+		res, _ := json.MarshalIndent(lengths, "", "  ")
+		fmt.Println(string(res))
 	}
 
 }

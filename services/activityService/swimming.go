@@ -23,14 +23,17 @@ func Swolf(strokes uint16, time uint16) uint16 {
 func AnalyzeLengths(activity *filedef.Activity) []types.Length {
 	var lengths []types.Length
 	poolLength := activity.Sessions[0].PoolLengthScaled()
+	TS := 0.0
 	for _, activityLength := range activity.Lengths {
 		var length = types.Length{
-			Swolf:    Swolf(activityLength.TotalStrokes, uint16(math.Ceil(activityLength.TotalElapsedTimeScaled()))),
-			Pace:     SwimPace(activity.Sessions[0].PoolLengthScaled(), activityLength.TotalElapsedTimeScaled(), activityLength.TotalStrokes),
-			Duration: activityLength.TotalElapsedTimeScaled(),
-			Length:   poolLength,
-			Strokes:  activityLength.TotalStrokes,
+			Swolf:     Swolf(activityLength.TotalStrokes, uint16(activityLength.TotalElapsedTimeScaled())),
+			Pace:      SwimPace(activity.Sessions[0].PoolLengthScaled(), activityLength.TotalElapsedTimeScaled(), activityLength.TotalStrokes),
+			Duration:  activityLength.TotalElapsedTimeScaled(),
+			Length:    poolLength,
+			Strokes:   activityLength.TotalStrokes,
+			TimeStamp: TS,
 		}
+		TS += activityLength.TotalElapsedTimeScaled()
 		lengths = append(lengths, length)
 	}
 	return lengths

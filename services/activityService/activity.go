@@ -74,6 +74,9 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	if len(fitActivity.Lengths) > 0 {
 		activity.Lengths = AnalyzeLengths(fitActivity)
 	}
+	if activity.Sport == "cycling" {
+		activity.Co2 = Commute(activity)
+	}
 	if err != nil {
 		return models.Activity{}, err
 	}
