@@ -287,3 +287,16 @@ func invertMatrix(a [][]float64) [][]float64 {
 
 	return inv
 }
+
+func NormalizedAvg[T Number](arr []T) float64 {
+	var sum float64
+
+	if len(arr) == 0 {
+		return 0
+	}
+
+	for _, val := range arr {
+		sum += math.Pow(float64(val), 4)
+	}
+	return sum / float64(len(arr))
+}

@@ -2,6 +2,6 @@ package activityService
 
 import "MySportWeb/internal/pkg/models"
 
-func Commute(activity models.Activity) uint32 {
-	return uint32(activity.Distance * 110)
+func Commute(activity models.Activity) float32 {
+	return float32(activity.Distance * 0.2217)
 }
