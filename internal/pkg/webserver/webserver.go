@@ -24,7 +24,7 @@ func RunHttp(listenAddr string, App *app.App) error {
 
 	httpRouter := gin.Default()
 
-	httpRouter.LoadHTMLGlob("templates/*")
+	//	httpRouter.LoadHTMLGlob("templates/*")
 	httpRouter.Use(static.Serve("/static", static.LocalFile("./static", true)))
 
 	httpRouter.Use(AppHandler(App))

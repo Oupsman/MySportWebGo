@@ -1,5 +1,12 @@
 package types
 
+import (
+	"database/sql/driver"
+	"encoding/json"
+)
+
+type MultiString []string
+
 type NotificationsBody struct {
 	Message         string `json:"message"`
 	Config          string `json:"config"`
@@ -17,6 +24,8 @@ type GpsPoint struct {
 	Lat float64 `json:"lat"`
 	Lon float64 `json:"lon"`
 }
+
+type GpsPointArray []GpsPoint
 
 type ChannelBody struct {
 	ChannelID       uint64 `json:"channel_id"`
@@ -55,4 +64,92 @@ type Length struct {
 	Strokes   uint16  `json:"strokes"`
 	Duration  float64 `json:"duration"`
 	TimeStamp float64 `json:"timeStamp"`
+}
+
+type LengthArray []Length
+
+type Int8Array []int8
+
+type Uint8Array []uint8
+
+type Uint16Array []uint16
+
+func (s *GpsPoint) Scan(src interface{}) error {
+	return json.Unmarshal(src.([]byte), s)
+}
+
+func (s GpsPoint) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+func (s *Device) Scan(src interface{}) error {
+	return json.Unmarshal(src.([]byte), s)
+}
+
+func (s Device) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+func (s *Length) Scan(src interface{}) error {
+	return json.Unmarshal(src.([]byte), s)
+}
+
+func (s Length) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+func (s *LengthArray) Scan(src interface{}) error {
+	return json.Unmarshal(src.([]byte), s)
+}
+
+func (s LengthArray) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+func (s *MultiString) Scan(src interface{}) error {
+	return json.Unmarshal(src.([]byte), s)
+}
+
+func (s MultiString) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+func (s *FloatArray) Scan(src interface{}) error {
+	return json.Unmarshal(src.([]byte), s)
+}
+
+func (s FloatArray) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+func (s *GpsPointArray) Scan(src interface{}) error {
+	return json.Unmarshal(src.([]byte), s)
+}
+
+func (s GpsPointArray) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+func (s *Uint8Array) Scan(src interface{}) error {
+	return json.Unmarshal(src.([]byte), s)
+}
+
+func (s Uint8Array) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+func (s *Uint16Array) Scan(src interface{}) error {
+	return json.Unmarshal(src.([]byte), s)
+}
+
+func (s Uint16Array) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+func (s *Int8Array) Scan(src interface{}) error {
+	return json.Unmarshal(src.([]byte), s)
+}
+
+func (s Int8Array) Value() (driver.Value, error) {
+	return json.Marshal(s)
 }

@@ -8,7 +8,7 @@ import (
 // /MEDIA/user uuid/equipments/equipment uuid/pic filename.pic extension
 
 type Equipments struct {
-	ID                  uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4()"`
+	ID                  uuid.UUID `gorm:"type:uuid;default:gen_random_uuid()"`
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 	DeletedAt           *time.Time `sql:"index"`
