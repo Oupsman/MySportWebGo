@@ -1,6 +1,7 @@
 package vars
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -18,7 +19,15 @@ func CheckVariable(Key string, mandatory bool) string {
 }
 
 func Init() {
-	Dsn = CheckVariable("DSN", true)
+
+	dbhost := CheckVariable("DBHOST", true)
+	dbport := CheckVariable("DBPORT", true)
+	dbuser := CheckVariable("DBUSER", true)
+	dbpass := CheckVariable("DBPASSWORD", true)
+	dbname := CheckVariable("DBNAME", true)
+
+	Dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable", dbhost, dbuser, dbpass, dbname, dbport)
+
 	ListenPort = CheckVariable("LISTEN_PORT", false)
 	SecretKey = CheckVariable("SECRET_KEY", true)
 }

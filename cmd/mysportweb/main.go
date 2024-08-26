@@ -4,6 +4,7 @@ import (
 	"MySportWeb/internal/pkg/app"
 	"MySportWeb/internal/pkg/vars"
 	"MySportWeb/internal/pkg/webserver"
+	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -21,10 +22,12 @@ func main() {
 	}
 
 	var g errgroup.Group
-
+	var host = ""
+	var listenAddr string
+	listenAddr = fmt.Sprintf("%s:%s", host, vars.ListenPort)
 	g.Go(func() error {
 		//		return webserver.RunHttp(":8080", storeApp, update.Message.Chat.ID)
-		return webserver.RunHttp(":8080", App)
+		return webserver.RunHttp(listenAddr, App)
 	})
 	g.Go(func() error { return App.Start() })
 
