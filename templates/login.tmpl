@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ .title }}</title>
+  <!-- Get the latest major version -->
+  <link rel="stylesheet" href="/static/css/jquery-ui.min.css">
+
+  <link href="/static/css/global.css" rel="stylesheet">
+  <link href="/static/css/login.css" rel="stylesheet">
+</head>
+<body>
+<div id="container">
+
+    <div id="logindiv">
+        <div id="logintitle">
+            <h1>{{ .title }}</h1>
+        </div>
+        <form id="loginform">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+
+
+            <input type="submit" value="Login">
+        </form>
+    </div>
+    <script src="/static/js/jquery.js"></script>
+    <script src="/static/js/jquery-ui.min.js"></script>
+    <script src="/static/js/login.js"></script>
+
+</body>
+</html>

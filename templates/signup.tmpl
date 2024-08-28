@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ .title }}</title>
+  <!-- Get the latest major version -->
+  <link rel="stylesheet" href="/static/css/jquery-ui.min.css">
+  <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+<div id="container">
+    <h1>{{ .title }}</h1>
+    <div id="signupdiv">
+        <form id="signupform">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" required>
+            <input type="submit" value="Sign Up">
+        </form>
+    </div>
+    <script src="/static/js/jquery.js"></script>
+    <script src="/static/js/jquery-ui.min.js"></script>
+    <script src="/static/js/signup.js"></script>
+
+</body>
+</html>
