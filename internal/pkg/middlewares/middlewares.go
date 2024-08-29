@@ -2,7 +2,7 @@ package middlewares
 
 import (
 	"MySportWeb/internal/pkg/utils"
-	"github.com/dgrijalva/jwt-go"
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strings"

@@ -5,6 +5,7 @@ import (
 	"MySportWeb/internal/pkg/app"
 	"MySportWeb/internal/pkg/controllers"
 	"MySportWeb/internal/pkg/middlewares"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -24,6 +25,10 @@ func AppHandler(App *app.App) gin.HandlerFunc {
 func RunHttp(listenAddr string, App *app.App) error {
 
 	httpRouter := gin.Default()
+	config := cors.DefaultConfig()
+	config.AllowAllOrigins = true
+	config.AddAllowMethods("OPTIONS")
+	httpRouter.Use(cors.New(config))
 
 	httpRouter.LoadHTMLGlob("templates/*")
 	httpRouter.Use(static.Serve("/static", static.LocalFile("./static", true)))
