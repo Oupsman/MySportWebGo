@@ -28,8 +28,8 @@ type Activity struct {
 	Calories         uint16            `json:"kcal"`
 	Timezone         string            `json:"timezone" gorm:"default:'Europe/Paris'"`
 	Masked           bool              `json:"masked" gorm:"default:true"`
-	Equipment        Equipments        `json:"equipment"`
-	EquipmentID      int               `json:"equipment_id"`
+	Equipment        Equipments        `json:"equipment" gorm:"null"`
+	EquipmentID      uuid.UUID         `json:"equipment_id"`
 	Serialnumber     string            `json:"serialnumber"`
 	Lastimport       bool              `json:"lastimport"`
 	Visibility       int               `json:"visibility" gorm:"default:0"`
@@ -76,7 +76,7 @@ type Activity struct {
 }
 
 func (db *DB) CreateActivity(activity Activity) error {
-	err := db.Create(activity).Error
+	err := db.Create(&activity).Error
 	if err != nil {
 		return err
 	}

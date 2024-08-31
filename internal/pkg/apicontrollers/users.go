@@ -118,13 +118,13 @@ func GetUser(c *gin.Context) {
 	App := c.MustGet("App")
 	db := App.(*app.App).DB
 	bearerToken := c.Request.Header.Get("Authorization")
-	UserID, err := utils.GetUserID(bearerToken)
+	userUUID, err := utils.GetUserUUID(bearerToken)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
-	user, err := db.GetUser(UserID)
+	user, err := db.GetUserByUUID(userUUID)
 
 	if err != nil {
 		c.JSON(400, gin.H{"error": "user not found"})

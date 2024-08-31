@@ -11,6 +11,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
 	github.com/muktihari/fit v0.21.0
+	github.com/pconstantinou/savitzkygolay v0.0.1
 	github.com/rs/zerolog v1.33.0
 	golang.org/x/crypto v0.23.0
 	golang.org/x/exp v0.0.0-20240531132922-fd00a4e0eefc
@@ -53,6 +54,7 @@ require (
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
+	gonum.org/v1/plot v0.14.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

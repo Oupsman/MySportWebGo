@@ -28,6 +28,7 @@ func RunHttp(listenAddr string, App *app.App) error {
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true
 	config.AddAllowMethods("OPTIONS")
+	config.AllowHeaders = []string{"Authorization", "Content-Type"}
 	httpRouter.Use(cors.New(config))
 
 	httpRouter.LoadHTMLGlob("templates/*")

@@ -18,12 +18,13 @@ import (
 
 func UploadActivity(c *gin.Context) {
 	App := c.MustGet("App")
-	cookie, err := c.Cookie("mysportweb_session")
+	bearerToken := c.Request.Header.Get("Authorization")
+	userUUID, err := utils.GetUserUUID(bearerToken)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
 	db := App.(*app.App).DB
-	userUUID, err := utils.GetUserUUID(cookie)
+
 	user, err := db.GetUserByUUID(userUUID)
 
 	equipment := db.GetDefaultEquipment(user.ID)
@@ -47,7 +48,10 @@ func UploadActivity(c *gin.Context) {
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
-	activity, err := activityService.SumAnalyze(dstFile+"/"+file.Filename, user, equipment)
+	activity, err := activityService.SumAnalyze(dstFile, user, equipment)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
 	err = db.CreateActivity(activity)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -58,12 +62,12 @@ func UploadActivity(c *gin.Context) {
 
 func ListActivities(c *gin.Context) {
 	App := c.MustGet("App")
-	cookie, err := c.Cookie("mysportweb_session")
+	bearerToken := c.Request.Header.Get("Authorization")
+	userUUID, err := utils.GetUserUUID(bearerToken)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
 	db := App.(*app.App).DB
-	userUUID, err := utils.GetUserUUID(cookie)
 	user, err := db.GetUserByUUID(userUUID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -78,12 +82,12 @@ func ListActivities(c *gin.Context) {
 
 func UpdateActivity(c *gin.Context) {
 	App := c.MustGet("App")
-	cookie, err := c.Cookie("mysportweb_session")
+	bearerToken := c.Request.Header.Get("Authorization")
+	userUUID, err := utils.GetUserUUID(bearerToken)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
 	db := App.(*app.App).DB
-	userUUID, err := utils.GetUserUUID(cookie)
 	user, err := db.GetUserByUUID(userUUID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -114,12 +118,12 @@ func UpdateActivity(c *gin.Context) {
 
 func GetActivity(c *gin.Context) {
 	App := c.MustGet("App")
-	cookie, err := c.Cookie("mysportweb_session")
+	bearerToken := c.Request.Header.Get("Authorization")
+	userUUID, err := utils.GetUserUUID(bearerToken)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
 	db := App.(*app.App).DB
-	userUUID, err := utils.GetUserUUID(cookie)
 	user, err := db.GetUserByUUID(userUUID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -151,12 +155,12 @@ func GetActivity(c *gin.Context) {
 
 func DeleteActivity(c *gin.Context) {
 	App := c.MustGet("App")
-	cookie, err := c.Cookie("mysportweb_session")
+	bearerToken := c.Request.Header.Get("Authorization")
+	userUUID, err := utils.GetUserUUID(bearerToken)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
 	db := App.(*app.App).DB
-	userUUID, err := utils.GetUserUUID(cookie)
 	user, err := db.GetUserByUUID(userUUID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})

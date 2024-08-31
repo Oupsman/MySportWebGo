@@ -6,7 +6,9 @@ import (
 	"MySportWeb/internal/pkg/utils"
 	"github.com/muktihari/fit/decoder"
 	"github.com/muktihari/fit/profile/filedef"
+	"github.com/muktihari/fit/profile/mesgdef"
 	"github.com/muktihari/fit/proto"
+	"github.com/pconstantinou/savitzkygolay"
 	"math"
 	"os"
 	"time"
@@ -60,7 +62,7 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	if fitActivity.Sessions[0].AvgPower != math.MaxUint16 {
 		activity.AvgPower = fitActivity.Sessions[0].AvgPower
 	}
-	if fitActivity.Sessions[0].AvgPower > 0 {
+	if fitActivity.Sessions[0].AvgPower > 0 && fitActivity.Sessions[0].AvgPower != math.MaxUint16 {
 		activity.AvgPower = fitActivity.Sessions[0].AvgPower
 	}
 	activity.TotalAscent = fitActivity.Sessions[0].TotalAscent
@@ -69,6 +71,18 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 
 	// TODO : one day, I'll get the weight of the user and its equipment
 	activity.TotalWeight = 110
+
+	if activity.Date.Hour() > 0 && activity.Date.Hour() < 12 {
+		activity.Title = "Morning " + activity.Sport
+	} else if activity.Date.Hour() >= 12 && activity.Date.Hour() < 14 {
+		activity.Title = "Lunch " + activity.Sport
+	} else if activity.Date.Hour() >= 14 && activity.Date.Hour() < 18 {
+		activity.Title = "Afternoon " + activity.Sport
+	} else if activity.Date.Hour() >= 18 && activity.Date.Hour() < 22 {
+		activity.Title = "Evening " + activity.Sport
+	} else {
+		activity.Title = "Night " + activity.Sport
+	}
 
 	activity, err = AnalyzeRecords(fitActivity, activity)
 	if len(fitActivity.Lengths) > 0 {
@@ -115,9 +129,11 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 			stopmeters = meters + 30
 			startmeters = fitActivity.Records[counter].DistanceScaled()
 			startaltitude = fitActivity.Records[counter].EnhancedAltitudeScaled()
-			record := fitActivity.Records[counter]
+			//record := fitActivity.Records[counter]
+			var record *mesgdef.Record
 			for meters < stopmeters && counter < recordsCount-1 {
 				if counter < recordsCount-1 {
+					record = fitActivity.Records[counter]
 					if record.HeartRate != math.MaxUint8 {
 						activity.Hearts = append(activity.Hearts, record.HeartRate)
 					}
@@ -125,14 +141,14 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 						activity.Temperatures = append(activity.Temperatures, record.Temperature)
 					}
 
-					if record.PositionLat != math.MaxInt32 && record.PositionLong != math.MaxInt32 && record.SpeedScaled() != math.MaxFloat64 {
+					if record.PositionLat != math.MaxInt32 && record.PositionLong != math.MaxInt32 && record.EnhancedSpeedScaled() != math.MaxFloat64 {
 						activity.Lats = append(activity.Lats, utils.SemiCircleToDegres(record.PositionLat))
 						activity.Lons = append(activity.Lons, utils.SemiCircleToDegres(record.PositionLong))
 						activity.GpsPoints = append(activity.GpsPoints, types.GpsPoint{
 							Lat: utils.SemiCircleToDegres(record.PositionLat),
 							Lon: utils.SemiCircleToDegres(record.PositionLong),
 						})
-						activity.Speeds = append(activity.Speeds, record.SpeedScaled())
+						activity.Speeds = append(activity.Speeds, record.EnhancedSpeedScaled())
 						activity.Distances = append(activity.Distances, record.DistanceScaled())
 						// not directly writing in the activity struct here, since we may want to apply a filter on the array
 						altitudes = append(altitudes, record.EnhancedAltitudeScaled())
@@ -205,7 +221,18 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	counter = 0
 
 	if len(altitudes) > 200 {
-		filtered = utils.SavitzkyGolay(altitudes, 47, 3)
+		filter, err := savitzkygolay.NewFilterWindow(47)
+		if err != nil {
+			return models.Activity{}, err
+		}
+		ys := make([]float64, len(altitudes))
+		for i, _ := range altitudes {
+			ys[i] = float64(i)
+		}
+		filtered, err = filter.Process(altitudes, ys)
+		if err != nil {
+			return models.Activity{}, err
+		}
 	} else {
 		filtered = altitudes
 	}
