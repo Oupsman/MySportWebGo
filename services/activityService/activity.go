@@ -4,6 +4,7 @@ import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/utils"
+	"MySportWeb/internal/pkg/vars"
 	"github.com/muktihari/fit/decoder"
 	"github.com/muktihari/fit/profile/filedef"
 	"github.com/muktihari/fit/profile/mesgdef"
@@ -44,7 +45,7 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	var activity models.Activity
 	var err error
 	fitActivity := filedef.NewActivity(fit.Messages...)
-
+	activity.EngineVersion = vars.Engine_version
 	activity.User = user
 	activity.Equipment = equipment
 	activity.Sport = fitActivity.Sessions[0].Sport.String()
@@ -56,9 +57,22 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 		activity.Distance = 0
 	}
 	activity.Calories = fitActivity.Sessions[0].TotalCalories
-	activity.AvgSpeed = fitActivity.Sessions[0].AvgSpeedScaled()
-	activity.AvgRPM = fitActivity.Sessions[0].AvgCadence
-	activity.AvgHR = fitActivity.Sessions[0].AvgHeartRate
+	if fitActivity.Sessions[0].EnhancedAvgSpeedScaled() != math.MaxFloat64 {
+		activity.AvgSpeed = fitActivity.Sessions[0].EnhancedAvgSpeedScaled()
+	} else {
+		activity.AvgSpeed = fitActivity.Sessions[0].AvgSpeedScaled()
+	}
+	if fitActivity.Sessions[0].EnhancedMaxSpeedScaled() != math.MaxFloat64 {
+		activity.MaxSpeed = fitActivity.Sessions[0].EnhancedMaxSpeedScaled()
+	} else {
+		activity.MaxSpeed = fitActivity.Sessions[0].MaxSpeedScaled()
+	}
+	if fitActivity.Sessions[0].AvgCadence != math.MaxUint8 {
+		activity.AvgRPM = fitActivity.Sessions[0].AvgCadence
+	}
+	if fitActivity.Sessions[0].AvgHeartRate != math.MaxUint8 {
+		activity.AvgHR = fitActivity.Sessions[0].AvgHeartRate
+	}
 	if fitActivity.Sessions[0].AvgPower != math.MaxUint16 {
 		activity.AvgPower = fitActivity.Sessions[0].AvgPower
 	}
@@ -67,7 +81,6 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	}
 	activity.TotalAscent = fitActivity.Sessions[0].TotalAscent
 	activity.TotalDescent = fitActivity.Sessions[0].TotalDescent
-	activity.MaxSpeed = fitActivity.Sessions[0].MaxSpeedScaled()
 
 	// TODO : one day, I'll get the weight of the user and its equipment
 	activity.TotalWeight = 110
@@ -135,7 +148,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 				if counter < recordsCount-1 {
 					record = fitActivity.Records[counter]
 					if record.HeartRate != math.MaxUint8 {
-						activity.Hearts = append(activity.Hearts, record.HeartRate)
+						activity.Hearts = append(activity.Hearts, uint16(record.HeartRate))
 					}
 					if record.Temperature != math.MaxInt8 {
 						activity.Temperatures = append(activity.Temperatures, record.Temperature)
@@ -156,7 +169,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 						meters = record.DistanceScaled()
 
 						// if the user has a security distance, we add the points to the public gps points
-						if float64(activity.User.SecurityDistance) > record.DistanceScaled() && fitActivity.Sessions[0].TotalDistanceScaled()-float64(activity.User.SecurityDistance) < record.DistanceScaled() {
+						if float64(activity.User.SecurityDistance) < record.DistanceScaled() && fitActivity.Sessions[0].TotalDistanceScaled()-record.DistanceScaled() > float64(activity.User.SecurityDistance) {
 							activity.PublicGpsPoints = append(activity.PublicGpsPoints, types.GpsPoint{
 								Lat: utils.SemiCircleToDegres(record.PositionLat),
 								Lon: utils.SemiCircleToDegres(record.PositionLong),
@@ -236,18 +249,28 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	} else {
 		filtered = altitudes
 	}
-
+	activity.Altitudes = filtered
 	if len(altitudes) > 2 {
 		ComputeElevation(&activity, filtered)
 	}
 
-	activity.GpsCenter = &types.GpsPoint{
-		Lat: utils.Avg(activity.Lats),
-		Lon: utils.Avg(activity.Lons),
-	}
-	activity.GpsBounds = []types.GpsPoint{
-		{Lat: utils.Min(activity.Lats), Lon: utils.Min(activity.Lons)},
-		{Lat: utils.Max(activity.Lats), Lon: utils.Max(activity.Lons)},
+	if len(activity.GpsPoints) > 2 {
+		activity.StartPosition = &types.GpsPoint{
+			Lat: utils.SemiCircleToDegres(fitActivity.Records[0].PositionLat),
+			Lon: utils.SemiCircleToDegres(fitActivity.Records[0].PositionLong),
+		}
+		activity.EndPosition = &types.GpsPoint{
+			Lat: utils.SemiCircleToDegres(fitActivity.Records[len(fitActivity.Records)-1].PositionLat),
+			Lon: utils.SemiCircleToDegres(fitActivity.Records[len(fitActivity.Records)-1].PositionLong),
+		}
+		activity.GpsCenter = &types.GpsPoint{
+			Lat: utils.Avg(activity.Lats),
+			Lon: utils.Avg(activity.Lons),
+		}
+		activity.GpsBounds = []types.GpsPoint{
+			{Lat: utils.Min(activity.Lats), Lon: utils.Min(activity.Lons)},
+			{Lat: utils.Max(activity.Lats), Lon: utils.Max(activity.Lons)},
+		}
 	}
 	return activity, nil
 }

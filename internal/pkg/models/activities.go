@@ -41,10 +41,10 @@ type Activity struct {
 	TotalWeight      uint16            `json:"total_weight"` // weight of the user + equipment at the time of the initial import of activity
 	Device           types.Device      `json:"device"`
 	UserAge          uint8             `json:"user_age"` // age of the user at the time of the initial import of activity
-
+	Thumbnail        string            `json:"thumbnail"`
 	// precalculated FIT analysis results
 	Speeds             types.FloatArray    `json:"speeds"`
-	Hearts             types.Uint8Array    `json:"hearts"`
+	Hearts             types.Uint16Array   `json:"hearts"`
 	Powers             types.Uint16Array   `json:"powers"`
 	AvgPower           uint16              `json:"power_avg"`
 	PowerAxis          types.FloatArray    `json:"power_axis"`
@@ -75,8 +75,8 @@ type Activity struct {
 	Lengths            types.LengthArray   `json:"lengths"`
 }
 
-func (db *DB) CreateActivity(activity Activity) error {
-	err := db.Create(&activity).Error
+func (db *DB) CreateActivity(activity *Activity) error {
+	err := db.Create(activity).Error
 	if err != nil {
 		return err
 	}
@@ -108,9 +108,9 @@ func (db *DB) DeleteActivity(id uuid.UUID) error {
 	return nil
 }
 
-func (db *DB) GetActivitiesByUser(userID uint) ([]Activity, error) {
-	var activities []Activity
-	err := db.Preload("User").Preload("Equipment").Find(&activities, "user_id = ?", userID).Error
+func (db *DB) GetActivitiesByUser(userID uint) ([]types.ActivitySummary, error) {
+	var activities []types.ActivitySummary
+	err := db.Debug().Table("activities").Preload("User").Preload("Equipment").Where("user_id = ?", userID).Scan(&activities).Error
 	if err != nil {
 		return nil, err
 	}

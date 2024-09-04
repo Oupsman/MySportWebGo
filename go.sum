@@ -96,6 +96,8 @@ github.com/modern-go/reflect2 v1.0.2 h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9G
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/muktihari/fit v0.21.0 h1:5vadPn/9C+NCek89Sqid4XnYiXL/y3vf/GlKHo8Wzo4=
 github.com/muktihari/fit v0.21.0/go.mod h1:10pZhxvt38aAD0mC5uLWW7tq4KhQsgb837EtP/HzewE=
+github.com/muktihari/fit v0.21.2 h1:rHSMUU3T0h6harEb2xPEZRglet7wkS7XvS+uakXrJag=
+github.com/muktihari/fit v0.21.2/go.mod h1:10pZhxvt38aAD0mC5uLWW7tq4KhQsgb837EtP/HzewE=
 github.com/pconstantinou/savitzkygolay v0.0.1 h1:c+UmWMQw36yqLOFpGsEWCP53kNPYh6/ggBaSSo1r94Q=
 github.com/pconstantinou/savitzkygolay v0.0.1/go.mod h1:jNojAlKJmtHPEKlqsZLIymlg6QAL5CV8xnqaujE4kDs=
 github.com/pelletier/go-toml/v2 v2.2.2 h1:aYUidT7k73Pcl9nb2gScu7NSrKCSHIDE89b3+6Wq+LM=

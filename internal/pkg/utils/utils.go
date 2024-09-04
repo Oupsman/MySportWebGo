@@ -300,3 +300,7 @@ func NormalizedAvg[T Number](arr []T) float64 {
 	}
 	return sum / float64(len(arr))
 }
+
+func GetUUID(param string) (uuid.UUID, error) {
+	return uuid.Parse(param)
+}

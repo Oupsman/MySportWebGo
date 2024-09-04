@@ -3,6 +3,10 @@ package types
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
+	"github.com/google/uuid"
+	"strconv"
+	"strings"
 )
 
 type MultiString []string
@@ -64,6 +68,14 @@ type Length struct {
 	Strokes   uint16  `json:"strokes"`
 	Duration  float64 `json:"duration"`
 	TimeStamp float64 `json:"timeStamp"`
+}
+
+type ActivitySummary struct {
+	ID        uuid.UUID `json:"id"`
+	Title     string    `json:"title"`
+	Date      string    `json:"date"`
+	Sport     string    `json:"sport"`
+	Thumbnail string    `json:"thumbnail"`
 }
 
 type LengthArray []Length
@@ -131,11 +143,34 @@ func (s GpsPointArray) Value() (driver.Value, error) {
 }
 
 func (s *Uint8Array) Scan(src interface{}) error {
-	return json.Unmarshal(src.([]byte), s)
+
+	src = strings.Trim(src.(string), "[]")
+	strNumbers := strings.Split(src.(string), ",")
+	var numbers Uint8Array
+
+	for _, strNum := range strNumbers {
+		num, err := strconv.ParseUint(strNum, 10, 64)
+		if err == nil {
+			numbers = append(numbers, uint8(num))
+		} else {
+			return err
+		}
+	}
+
+	*s = numbers
+	return nil
 }
 
 func (s Uint8Array) Value() (driver.Value, error) {
-	return json.Marshal(s)
+
+	var result string
+
+	if s == nil {
+		result = "null"
+	} else {
+		result = strings.Join(strings.Fields(fmt.Sprintf("%d", s)), ",")
+	}
+	return result, nil
 }
 
 func (s *Uint16Array) Scan(src interface{}) error {

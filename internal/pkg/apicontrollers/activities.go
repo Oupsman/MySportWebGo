@@ -22,6 +22,7 @@ func UploadActivity(c *gin.Context) {
 	userUUID, err := utils.GetUserUUID(bearerToken)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	db := App.(*app.App).DB
 
@@ -31,6 +32,7 @@ func UploadActivity(c *gin.Context) {
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	// single file
 	file, _ := c.FormFile("file")
@@ -39,6 +41,7 @@ func UploadActivity(c *gin.Context) {
 	baseDir := "MEDIA/" + userUUID.String() + "/Activities/"
 	if err := os.MkdirAll(filepath.Dir(baseDir), 0770); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	dstFile := baseDir + file.Filename
@@ -47,14 +50,19 @@ func UploadActivity(c *gin.Context) {
 	err = c.SaveUploadedFile(file, dstFile)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	activity, err := activityService.SumAnalyze(dstFile, user, equipment)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
-	err = db.CreateActivity(activity)
+	activity.Filename = file.Filename
+	activity.FilePath = dstFile
+	err = db.CreateActivity(&activity)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
 	// 	c.String(http.StatusOK, fmt.Sprintf("'%s' uploaded!", file.Filename))
@@ -66,15 +74,18 @@ func ListActivities(c *gin.Context) {
 	userUUID, err := utils.GetUserUUID(bearerToken)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	db := App.(*app.App).DB
 	user, err := db.GetUserByUUID(userUUID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	activities, err := db.GetActivitiesByUser(user.ID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"activities": activities})
@@ -86,32 +97,39 @@ func UpdateActivity(c *gin.Context) {
 	userUUID, err := utils.GetUserUUID(bearerToken)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	db := App.(*app.App).DB
 	user, err := db.GetUserByUUID(userUUID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	activityUUID, err := uuid.FromBytes([]byte(c.Param("id")))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	activity, err := db.GetActivity(activityUUID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	if activity.User.ID != user.ID {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "You are not the owner of this activity"})
+		return
 	}
 	err = c.BindJSON(&activity)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	err = db.UpdateActivity(activity)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
 }
@@ -122,24 +140,29 @@ func GetActivity(c *gin.Context) {
 	userUUID, err := utils.GetUserUUID(bearerToken)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	db := App.(*app.App).DB
 	user, err := db.GetUserByUUID(userUUID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
-	activityUUID, err := uuid.FromBytes([]byte(c.Param("id")))
+	activityUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	activity, err := db.GetActivity(activityUUID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	if (activity.Visibility == 0 && activity.User.ID != user.ID) || activity.Visibility == 2 {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You can't access this activity"})
+		return
 	}
 	if activity.User.ID != user.ID {
 		// Deleting non-public datas if user is not the owner
@@ -159,28 +182,34 @@ func DeleteActivity(c *gin.Context) {
 	userUUID, err := utils.GetUserUUID(bearerToken)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	db := App.(*app.App).DB
 	user, err := db.GetUserByUUID(userUUID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	activityUUID, err := uuid.FromBytes([]byte(c.Param("id")))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	activity, err := db.GetActivity(activityUUID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	if activity.User.ID != user.ID {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "You are not the owner of this activity"})
+		return
 	}
 	err = db.DeleteActivity(activityUUID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
 }
