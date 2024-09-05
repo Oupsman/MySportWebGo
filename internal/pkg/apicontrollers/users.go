@@ -189,3 +189,38 @@ func UpdateUser(c *gin.Context) {
 
 	c.JSON(200, gin.H{"message": "user updated successfully"})
 }
+
+func Dashboard(c *gin.Context) {
+	var Dashboard types.Dashboard
+	var TotalDuration uint32
+	App := c.MustGet("App")
+	db := App.(*app.App).DB
+	bearerToken := c.Request.Header.Get("Authorization")
+	userID, err := utils.GetUserID(bearerToken)
+
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	err = db.Table("activities").Where("user_id = ?", userID).Order("date desc").Limit(10).Scan(&Dashboard.Activities).Error
+	err = db.Table("equipments").Where("user_id = ?", userID).Count(&Dashboard.NbEquipments).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Count(&Dashboard.NbActivities).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Select("sum(distance)").Scan(&Dashboard.TotalDistance).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Select("sum(duration)").Scan(&TotalDuration).Error
+	// get this month activities
+	err = db.Table("activities").Where("user_id = ?", userID).Where("date >= ?", time.Now().AddDate(0, -1, 0)).Scan(&Dashboard.ActivitiesCalendar).Error
+	// get the maximum distance
+	err = db.Table("activities").Where("user_id = ?", userID).Select("max(distance)").Scan(&Dashboard.MaxDistance).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Select("max(duration)").Scan(&Dashboard.MaxDuration).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Select("max(positive_elevation)").Scan(&Dashboard.MaxElevation).Error
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	Dashboard.TotalDuration = utils.ConvertTime(TotalDuration)
+	Dashboard.TotalDistance /= 1000
+
+	c.JSON(200, Dashboard)
+}

@@ -98,9 +98,15 @@ func CmToKm(cm uint32) float64 {
 
 func ConvertTime(time uint32) string {
 	result := ""
+	day := time / 86400
 	hour := time / 3600
 	minute := (time % 3600) / 60
 	second := time % 60
+
+	if day > 0 {
+		result += fmt.Sprintf("%d days ", day)
+	}
+
 	if hour < 10 {
 		result += fmt.Sprintf("0%d", hour)
 

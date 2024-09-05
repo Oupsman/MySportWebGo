@@ -78,6 +78,24 @@ type ActivitySummary struct {
 	Thumbnail string    `json:"thumbnail"`
 }
 
+type ActivityCalendar struct {
+	ID    uuid.UUID `json:"id"`
+	Title string    `json:"name"`
+	Date  string    `json:"start"`
+}
+
+type Dashboard struct {
+	Activities         []ActivitySummary  `json:"activities"`
+	ActivitiesCalendar []ActivityCalendar `json:"activities_calendar"`
+	NbEquipments       int64              `json:"nb_equipments"`
+	NbActivities       int64              `json:"nb_activities"`
+	TotalDistance      float64            `json:"total_distance"`
+	TotalDuration      string             `json:"total_duration"`
+	MaxDistance        float64            `json:"max_distance"`
+	MaxDuration        uint32             `json:"max_duration"`
+	MaxElevation       float64            `json:"max_elevation"`
+}
+
 type LengthArray []Length
 
 type Int8Array []int8

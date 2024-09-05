@@ -106,7 +106,7 @@ func UpdateActivity(c *gin.Context) {
 		return
 	}
 
-	activityUUID, err := uuid.FromBytes([]byte(c.Param("id")))
+	activityUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -191,7 +191,7 @@ func DeleteActivity(c *gin.Context) {
 		return
 	}
 
-	activityUUID, err := uuid.FromBytes([]byte(c.Param("id")))
+	activityUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
