@@ -9,7 +9,7 @@ import (
 
 func main() {
 	// filePath := "FIT/Karoo-Morning_Ride-Sep-06-2022-061544.fit"
-	filePath := "2024-04-29-18-28-29.fit"
+	filePath := "2022-08-30-18-12-37.fit"
 	f, err := os.Open(filePath)
 	if err != nil {
 		panic(err)
@@ -27,8 +27,10 @@ func main() {
 		activity := filedef.NewActivity(fit.Messages...)
 
 		fmt.Printf("File Type: %s\n", activity.FileId.Type)
-		fmt.Printf("Average Speed: %f\n", activity.Sessions[0].EnhancedAvgSpeedScaled())
-		fmt.Printf("Max Speed: %f\n", activity.Sessions[0].EnhancedMaxSpeedScaled())
+		fmt.Printf("EnhancedAvgSpeedScaled: %f\n", activity.Sessions[0].EnhancedAvgSpeedScaled())
+		fmt.Printf("AvgSpeedScaled: %f\n", activity.Sessions[0].AvgSpeedScaled())
+		fmt.Printf("EnhancedAvgSpeed: %d\n", activity.Sessions[0].EnhancedAvgSpeed)
+		fmt.Printf("AvgSpeed: %d\n", activity.Sessions[0].AvgSpeed)
 
 	}
 

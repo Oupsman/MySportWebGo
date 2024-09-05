@@ -56,13 +56,15 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	} else {
 		activity.Distance = 0
 	}
-	activity.Calories = fitActivity.Sessions[0].TotalCalories
-	if fitActivity.Sessions[0].EnhancedAvgSpeedScaled() != math.MaxFloat64 {
+	if fitActivity.Sessions[0].TotalCalories != math.MaxUint16 {
+		activity.Calories = fitActivity.Sessions[0].TotalCalories
+	}
+	if !math.IsNaN(fitActivity.Sessions[0].EnhancedAvgSpeedScaled()) {
 		activity.AvgSpeed = fitActivity.Sessions[0].EnhancedAvgSpeedScaled()
 	} else {
 		activity.AvgSpeed = fitActivity.Sessions[0].AvgSpeedScaled()
 	}
-	if fitActivity.Sessions[0].EnhancedMaxSpeedScaled() != math.MaxFloat64 {
+	if !math.IsNaN(fitActivity.Sessions[0].EnhancedMaxSpeedScaled()) {
 		activity.MaxSpeed = fitActivity.Sessions[0].EnhancedMaxSpeedScaled()
 	} else {
 		activity.MaxSpeed = fitActivity.Sessions[0].MaxSpeedScaled()
@@ -147,26 +149,42 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 			for meters < stopmeters && counter < recordsCount-1 {
 				if counter < recordsCount-1 {
 					record = fitActivity.Records[counter]
+					activity.TimeStamps = append(activity.TimeStamps, record.Timestamp.Sub(fitActivity.Sessions[0].StartTime).String())
 					if record.HeartRate != math.MaxUint8 {
 						activity.Hearts = append(activity.Hearts, uint16(record.HeartRate))
 					}
 					if record.Temperature != math.MaxInt8 {
 						activity.Temperatures = append(activity.Temperatures, record.Temperature)
 					}
-
-					if record.PositionLat != math.MaxInt32 && record.PositionLong != math.MaxInt32 && record.EnhancedSpeedScaled() != math.MaxFloat64 {
+					if !math.IsNaN(record.EnhancedSpeedScaled()) {
+						activity.Speeds = append(activity.Speeds, record.EnhancedSpeedScaled())
+					} else if !math.IsNaN(record.SpeedScaled()) {
+						activity.Speeds = append(activity.Speeds, record.SpeedScaled())
+					} else {
+						activity.Speeds = append(activity.Speeds, 0)
+					}
+					if !math.IsNaN(record.DistanceScaled()) {
+						activity.Distances = append(activity.Distances, record.DistanceScaled())
+					} else {
+						activity.Distances = append(activity.Distances, 0)
+					}
+					// not directly writing in the activity struct here, since we may want to apply a filter on the array
+					if !math.IsNaN(record.EnhancedAltitudeScaled()) && !math.IsNaN(record.DistanceScaled()) {
+						altitudes = append(altitudes, record.EnhancedAltitudeScaled())
+						km = record.DistanceScaled() / 1000
+						meters = record.DistanceScaled()
+					} else if !math.IsNaN(record.AltitudeScaled()) && !math.IsNaN(record.DistanceScaled()) {
+						altitudes = append(altitudes, record.AltitudeScaled())
+					} else {
+						altitudes = append(altitudes, 0)
+					}
+					if record.PositionLat != math.MaxInt32 && record.PositionLong != math.MaxInt32 {
 						activity.Lats = append(activity.Lats, utils.SemiCircleToDegres(record.PositionLat))
 						activity.Lons = append(activity.Lons, utils.SemiCircleToDegres(record.PositionLong))
 						activity.GpsPoints = append(activity.GpsPoints, types.GpsPoint{
 							Lat: utils.SemiCircleToDegres(record.PositionLat),
 							Lon: utils.SemiCircleToDegres(record.PositionLong),
 						})
-						activity.Speeds = append(activity.Speeds, record.EnhancedSpeedScaled())
-						activity.Distances = append(activity.Distances, record.DistanceScaled())
-						// not directly writing in the activity struct here, since we may want to apply a filter on the array
-						altitudes = append(altitudes, record.EnhancedAltitudeScaled())
-						km = record.DistanceScaled() / 1000
-						meters = record.DistanceScaled()
 
 						// if the user has a security distance, we add the points to the public gps points
 						if float64(activity.User.SecurityDistance) < record.DistanceScaled() && fitActivity.Sessions[0].TotalDistanceScaled()-record.DistanceScaled() > float64(activity.User.SecurityDistance) {
@@ -182,7 +200,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 							activity.Powers = append(activity.Powers, record.Power)
 						}
 					}
-					if record.SpeedScaled() != math.MaxFloat64 && record.SpeedScaled() > activity.MaxSpeed {
+					if !math.IsNaN(record.SpeedScaled()) && record.SpeedScaled() > activity.MaxSpeed {
 						activity.MaxSpeed = record.SpeedScaled()
 						activity.MaxSpeedPosition = types.GpsPoint{
 							Lat: utils.SemiCircleToDegres(record.PositionLat),
@@ -228,7 +246,9 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 		}
 		tsstartkm = tsstopkm
 		tsstartdist = tsstopdist
-		activity.Means = append(activity.Means, avgSpeedT)
+		if !math.IsNaN(avgSpeedT) {
+			activity.Means = append(activity.Means, avgSpeedT)
+		}
 
 	}
 	counter = 0

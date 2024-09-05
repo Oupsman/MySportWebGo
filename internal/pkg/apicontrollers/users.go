@@ -206,8 +206,6 @@ func Dashboard(c *gin.Context) {
 	err = db.Table("activities").Where("user_id = ?", userID).Order("date desc").Limit(10).Scan(&Dashboard.Activities).Error
 	err = db.Table("equipments").Where("user_id = ?", userID).Count(&Dashboard.NbEquipments).Error
 	err = db.Table("activities").Where("user_id = ?", userID).Count(&Dashboard.NbActivities).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Select("sum(distance)").Scan(&Dashboard.TotalDistance).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Select("sum(duration)").Scan(&TotalDuration).Error
 	// get this month activities
 	err = db.Table("activities").Where("user_id = ?", userID).Where("date >= ?", time.Now().AddDate(0, -1, 0)).Scan(&Dashboard.ActivitiesCalendar).Error
 	// get the maximum distance
