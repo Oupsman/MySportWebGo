@@ -28,6 +28,6 @@ func Init() {
 
 	Dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable", dbhost, dbuser, dbpass, dbname, dbport)
 
-	ListenPort = CheckVariable("LISTEN_PORT", false)
+	ListenPort = CheckVariable("LISTEN_PORT", true)
 	SecretKey = CheckVariable("SECRET_KEY", true)
 }

@@ -211,9 +211,9 @@ func Dashboard(c *gin.Context) {
 	// get this month activities
 	err = db.Table("activities").Where("user_id = ?", userID).Where("date >= ?", time.Now().AddDate(0, -1, 0)).Scan(&Dashboard.ActivitiesCalendar).Error
 	// get the maximum distance
-	err = db.Table("activities").Where("user_id = ?", userID).Select("max(distance)").Scan(&Dashboard.MaxDistance).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Select("max(duration)").Scan(&Dashboard.MaxDuration).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Select("max(positive_elevation)").Scan(&Dashboard.MaxElevation).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(max(distance), 0)").Scan(&Dashboard.MaxDistance).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(max(duration), 0)").Scan(&Dashboard.MaxDuration).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(max(positive_elevation), 0)").Scan(&Dashboard.MaxElevation).Error
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return

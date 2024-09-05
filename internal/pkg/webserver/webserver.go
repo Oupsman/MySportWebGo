@@ -26,7 +26,8 @@ func RunHttp(listenAddr string, App *app.App) error {
 
 	httpRouter := gin.Default()
 	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true
+	// config.AllowAllOrigins = true
+	config.AllowOrigins = []string{"http://localhost:3000"}
 	config.AddAllowMethods("OPTIONS")
 	config.AllowHeaders = []string{"Authorization", "Content-Type"}
 	httpRouter.Use(cors.New(config))
