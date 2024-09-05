@@ -104,6 +104,8 @@ type Uint8Array []uint8
 
 type Uint16Array []uint16
 
+type Int16Array []int16
+
 func (s *GpsPoint) Scan(src interface{}) error {
 	return json.Unmarshal(src.([]byte), s)
 }
@@ -204,5 +206,13 @@ func (s *Int8Array) Scan(src interface{}) error {
 }
 
 func (s Int8Array) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+func (s *Int16Array) Scan(src interface{}) error {
+	return json.Unmarshal(src.([]byte), s)
+}
+
+func (s Int16Array) Value() (driver.Value, error) {
 	return json.Marshal(s)
 }

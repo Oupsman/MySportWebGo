@@ -48,7 +48,7 @@ type Activity struct {
 	Powers             types.Uint16Array   `json:"powers"`
 	AvgPower           uint16              `json:"power_avg"`
 	PowerAxis          types.FloatArray    `json:"power_axis"`
-	Cadences           types.Uint8Array    `json:"cadences"`
+	Cadences           types.Uint16Array   `json:"cadences"`
 	Distances          types.FloatArray    `json:"dist_array"`
 	Lats               types.FloatArray    `json:"lats"`
 	Lons               types.FloatArray    `json:"lons"`
@@ -59,7 +59,7 @@ type Activity struct {
 	VerticalRatios     types.FloatArray    `json:"vertical_ratios"`
 	Stances            types.FloatArray    `json:"stance"`
 	StanceTimes        types.FloatArray    `json:"stance_times"`
-	Temperatures       types.Int8Array     `json:"temperatures"`
+	Temperatures       types.Int16Array    `json:"temperatures"`
 	TimeStamps         types.MultiString   `json:"time_stamps"`
 	PhysicalConditions types.FloatArray    `json:"physical_conditions"`
 	TotalAscent        uint16              `json:"total_ascent"`

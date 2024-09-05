@@ -154,9 +154,9 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 						activity.Hearts = append(activity.Hearts, uint16(record.HeartRate))
 					}
 					if record.Temperature != math.MaxInt8 {
-						activity.Temperatures = append(activity.Temperatures, record.Temperature)
+						activity.Temperatures = append(activity.Temperatures, int16(record.Temperature))
 					}
-					if !math.IsNaN(record.EnhancedSpeedScaled()) {
+					if !math.IsNaN(record.EnhancedSpeedScaled()) && record.EnhancedSpeedScaled() != 65.535 {
 						activity.Speeds = append(activity.Speeds, record.EnhancedSpeedScaled())
 					} else if !math.IsNaN(record.SpeedScaled()) {
 						activity.Speeds = append(activity.Speeds, record.SpeedScaled())
@@ -208,7 +208,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 						}
 					}
 					if record.Cadence != math.MaxUint8 {
-						activity.Cadences = append(activity.Cadences, record.Cadence)
+						activity.Cadences = append(activity.Cadences, uint16(record.Cadence))
 					}
 
 				}
