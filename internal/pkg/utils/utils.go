@@ -82,10 +82,7 @@ func GetUserRole(tokenString string) (string, error) {
 }
 
 func SemiCircleToDegres(semi int32) float64 {
-	if semi > 0 {
-		return float64(semi) * (180.0 / math.Pow(2.0, 31.0))
-	}
-	return 0
+	return float64(semi) * (180.0 / math.Pow(2.0, 31.0))
 }
 
 func MmsToKmh(mms float64) float64 {
