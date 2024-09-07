@@ -2,6 +2,7 @@ package apicontrollers
 
 import (
 	"MySportWeb/internal/pkg/app"
+	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/services/activityService"
 	"github.com/gin-gonic/gin"
@@ -92,6 +93,8 @@ func ListActivities(c *gin.Context) {
 }
 
 func UpdateActivity(c *gin.Context) {
+	var newActivity models.Activity
+
 	App := c.MustGet("App")
 	bearerToken := c.Request.Header.Get("Authorization")
 	userUUID, err := utils.GetUserUUID(bearerToken)
@@ -121,7 +124,13 @@ func UpdateActivity(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "You are not the owner of this activity"})
 		return
 	}
-	err = c.BindJSON(&activity)
+	err = c.ShouldBindJSON(&newActivity)
+	activity.Title = newActivity.Title
+	activity.CanComments = newActivity.CanComments
+	activity.IsCommute = newActivity.IsCommute
+	activity.EquipmentID = newActivity.EquipmentID
+	activity.Visibility = newActivity.Visibility
+
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -160,7 +169,7 @@ func GetActivity(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if (activity.Visibility == 0 && activity.User.ID != user.ID) || activity.Visibility == 2 {
+	if activity.Visibility == 0 && activity.User.ID != user.ID {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You can't access this activity"})
 		return
 	}
