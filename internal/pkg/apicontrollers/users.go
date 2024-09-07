@@ -207,7 +207,7 @@ func Dashboard(c *gin.Context) {
 	err = db.Table("equipments").Where("user_id = ?", userID).Count(&Dashboard.NbEquipments).Error
 	err = db.Table("activities").Where("user_id = ?", userID).Count(&Dashboard.NbActivities).Error
 	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(sum(distance), 0)").Scan(&Dashboard.TotalDistance).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(sum(duration), 0)").Scan(&Dashboard.TotalDuration).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(sum(duration), 0)").Scan(&TotalDuration).Error
 
 	// get this month activities
 	err = db.Table("activities").Where("user_id = ?", userID).Where("date >=  DATE_TRUNC('month',  CURRENT_DATE)").Scan(&Dashboard.ActivitiesCalendar).Error

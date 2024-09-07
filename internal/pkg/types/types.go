@@ -79,9 +79,10 @@ type ActivitySummary struct {
 }
 
 type ActivityCalendar struct {
-	ID    uuid.UUID `json:"id"`
-	Title string    `json:"name"`
-	Date  string    `json:"start"`
+	ID       uuid.UUID `json:"id"`
+	Title    string    `json:"title"`
+	Date     string    `json:"start"`
+	Duration int       `json:"duration"`
 }
 
 type Dashboard struct {
