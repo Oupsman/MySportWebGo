@@ -34,7 +34,7 @@ func RunHttp(listenAddr string, App *app.App) error {
 
 	httpRouter.LoadHTMLGlob("templates/*")
 	httpRouter.Use(static.Serve("/static", static.LocalFile("./static", true)))
-
+	httpRouter.Use(static.Serve("/MEDIA", static.LocalFile("./MEDIA", true)))
 	httpRouter.Use(AppHandler(App))
 	httpRouter.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "index.tmpl", gin.H{

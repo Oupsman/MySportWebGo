@@ -28,7 +28,7 @@ func GenerateThumbnail(activity models.Activity) error {
 		return err
 	}
 	htmlPage := "<html><head><link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css\"\n     integrity=\"sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=\"\n     crossorigin=\"\"/><script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"\n     integrity=\"sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=\"\n     crossorigin=\"\"></script></head><body>"
-	htmlPage += "<div id=\"map\" style=\"width: 600px; height: 400px; position: absolute;\"></div>\n"
+	htmlPage += "<div id=\"map\" style=\"width: 300px; height: 200px; position: absolute;\"></div>\n"
 	htmlPage += "<script>"
 	htmlPage += "var map = new L.map('map', { zoomControl: false });\n"
 	htmlPage += "var tile_layer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {\n    maxZoom: 19}).addTo(map);"
