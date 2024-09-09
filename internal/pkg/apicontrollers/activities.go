@@ -65,6 +65,11 @@ func UploadActivity(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	err = activityService.GenerateThumbnail(activity)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
 	// 	c.String(http.StatusOK, fmt.Sprintf("'%s' uploaded!", file.Filename))
 }
