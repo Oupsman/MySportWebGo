@@ -25,7 +25,6 @@ func main() {
 			panic(err)
 		}
 		activity := filedef.NewActivity(fit.Messages...)
-
 		fmt.Printf("File Type: %s\n", activity.FileId.Type)
 		fmt.Printf("EnhancedAvgSpeedScaled: %f\n", activity.Sessions[0].EnhancedAvgSpeedScaled())
 		fmt.Printf("AvgSpeedScaled: %f\n", activity.Sessions[0].AvgSpeedScaled())
