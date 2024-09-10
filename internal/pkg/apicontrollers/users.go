@@ -129,6 +129,7 @@ func GetUser(c *gin.Context) {
 	if err != nil {
 		c.JSON(400, gin.H{"error": "user not found"})
 	}
+	user.Password = ""
 	c.JSON(200, user)
 }
 

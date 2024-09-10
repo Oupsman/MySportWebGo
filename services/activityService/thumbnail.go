@@ -60,7 +60,7 @@ func GenerateThumbnail(activity models.Activity) error {
 	})
 	err = chromedp.Run(ctx,
 		chromedp.Navigate("file://	"+fileName),
-		chromedp.Sleep(50*time.Millisecond),
+		chromedp.Sleep(100*time.Millisecond),
 		chromedp.Screenshot("#map", &screenshotBuffer, chromedp.NodeVisible),
 	)
 	if err != nil {

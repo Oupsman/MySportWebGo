@@ -58,6 +58,8 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.POST("/user/register", apicontrollers.Register)
 	apiv1.GET("/user/logout", middlewares.IsAuthorized(), apicontrollers.Logout)
 	apiv1.GET("/user/dashboard", middlewares.IsAuthorized(), apicontrollers.Dashboard)
+	apiv1.GET("/user", middlewares.IsAuthorized(), apicontrollers.GetUser)
+	apiv1.POST("/user", middlewares.IsAuthorized(), apicontrollers.UpdateUser)
 
 	// Activities
 	apiv1.POST("/activity", middlewares.IsAuthorized(), apicontrollers.UploadActivity)
