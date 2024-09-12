@@ -180,6 +180,13 @@ func UpdateUser(c *gin.Context) {
 	} else {
 		updatedUser.Password = currentUser.Password
 	}
+	updatedUser.DateOfBirth = user.DateOfBirth
+	updatedUser.UUID = user.UUID
+	updatedUser.Height = user.Height
+	updatedUser.Weight = user.Weight
+	updatedUser.MaxHR = user.MaxHR
+	updatedUser.Gender = user.Gender
+	updatedUser.SecurityDistance = user.SecurityDistance
 
 	err = db.UpdateUser(updatedUser)
 

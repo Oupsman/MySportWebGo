@@ -15,14 +15,14 @@ type Users struct {
 	Role             string    `json:"role"`
 	Email            string    `json:"email" gorm:"unique"`
 	DateOfBirth      time.Time `json:"date_of_birth"`
-	Weight           int       `json:"weight" gorm:"default:70"`
+	Weight           uint16    `json:"weight" gorm:"default:70"`
 	Unit             int       `json:"unit"`
 	Timezone         string    `json:"timezone" gorm:"default:'Europe/Paris'"`
 	Gender           int       `json:"gender" gorm:"default:0"`
-	Height           int       `json:"height"`
-	MaxHR            int       `json:"max_hr" gorm:"default:0"`
-	WeightObjective  int       `json:"weight_objective" gorm:"default:0"`
-	SecurityDistance int       `json:"security_distance" gorm:"default:500"`
+	Height           uint16    `json:"height"`
+	MaxHR            uint16    `json:"max_hr" gorm:"default:0"`
+	WeightObjective  uint16    `json:"weight_objective" gorm:"default:0"`
+	SecurityDistance uint16    `json:"security_distance" gorm:"default:500"`
 }
 
 type Validations struct {
@@ -92,7 +92,7 @@ func (user *Users) GetAge(date time.Time) int {
 	return age
 }
 
-func (user *Users) GetWeight() int {
+func (user *Users) GetWeight() uint16 {
 	if user.Weight == 0 {
 		return 70
 	} else {
@@ -100,10 +100,10 @@ func (user *Users) GetWeight() int {
 	}
 }
 
-func (user *Users) GetMaxHR(date time.Time) int {
+func (user *Users) GetMaxHR(date time.Time) uint16 {
 	// A rought estimate can be made with 220-age for men and 226-age for women
 	if user.MaxHR == 0 {
-		return 220 + user.Gender*6 - user.GetAge(date)
+		return uint16(220 + user.Gender*6 - user.GetAge(date))
 	}
 
 	return user.MaxHR
