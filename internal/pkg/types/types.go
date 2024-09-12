@@ -42,6 +42,7 @@ type ChannelBody struct {
 
 type UserBody struct {
 	ID               uint64    `json:"user_id"`
+	UUID             uuid.UUID `json:"uuid"`
 	Username         string    `json:"username"`
 	Password         string    `json:"password"`
 	OldPassword      string    `json:"oldpassword"`
