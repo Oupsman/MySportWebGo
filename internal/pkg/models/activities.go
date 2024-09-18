@@ -46,6 +46,7 @@ type Activity struct {
 	Speeds             types.FloatArray    `json:"speeds"`
 	Hearts             types.Uint16Array   `json:"hearts"`
 	Powers             types.Uint16Array   `json:"powers"`
+	PowerTS            types.MultiString   `json:"power_ts"`
 	AvgPower           uint16              `json:"power_avg"`
 	PowerAxis          types.FloatArray    `json:"power_axis"`
 	Cadences           types.Uint16Array   `json:"cadences"`

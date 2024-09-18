@@ -124,7 +124,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	var counter = 0
 	var recordsCount = len(fitActivity.Records)
 	var altitudes, filtered []float64
-	var securityDistance = float64(activity.User.SecurityDistance)
+	var securityDistance = float64(activity.User.SecurityDistance) / 1000
 	var startPosition, endPosition types.GpsPoint
 
 	distance := activity.Distance
@@ -158,11 +158,9 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 		Lon: utils.SemiCircleToDegres(fitActivity.Records[recordsCount-1].PositionLong),
 	}
 
-	if utils.Haversine(startPosition, endPosition) < 300 {
+	if utils.Haversine(startPosition, endPosition) < securityDistance {
 		// Activity is a loop so we double the security distance
-		securityDistance = 2 * securityDistance / 1000
-	} else {
-		securityDistance = securityDistance / 1000
+		securityDistance = 2 * securityDistance
 	}
 	counter = 0
 	for km < distance && counter < recordsCount-1 {
@@ -218,6 +216,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 						// if the user has a security distance, we add the points to the public gps points
 						distanceFromStart := utils.Haversine(startPosition, currentPoint)
 						distanceFromEnd := utils.Haversine(endPosition, currentPoint)
+						fmt.Println(distanceFromStart, distanceFromEnd, securityDistance)
 						if distanceFromStart > securityDistance &&
 							distanceFromEnd > securityDistance {
 							activity.PublicGpsPoints = append(activity.PublicGpsPoints, types.GpsPoint{
@@ -232,6 +231,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 							activity.Powers = append(activity.Powers, record.Power)
 						}
 					}
+
 					if !math.IsNaN(record.SpeedScaled()) && record.SpeedScaled() > activity.MaxSpeed {
 						activity.MaxSpeed = record.SpeedScaled()
 						activity.MaxSpeedPosition = types.GpsPoint{
@@ -252,7 +252,12 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 				var slope float64
 				deltaDistance = stopmeters - startmeters
 				deltaAltitude = stopaltitude - startaltitude
-				speed := record.SpeedScaled()
+				var speed float64
+				if !math.IsNaN(record.EnhancedSpeedScaled()) {
+					speed = record.EnhancedSpeedScaled()
+				} else {
+					speed = record.SpeedScaled()
+				}
 				if deltaDistance > 10 && deltaDistance < 80 {
 					slope = deltaAltitude / deltaDistance
 				} else {
@@ -261,7 +266,12 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 				power := (utils.GravityFactor(float64(weight), slope) +
 					utils.RollingResistance(float64(weight), slope) +
 					utils.AerodynamicDrag(stopaltitude)) * speed / (1 - 0.045)
-				activity.Powers = append(activity.Powers, uint16(power))
+				if power > 0 {
+					activity.Powers = append(activity.Powers, uint16(power))
+				} else {
+					activity.Powers = append(activity.Powers, 0)
+				}
+				activity.PowerTS = append(activity.PowerTS, fmt.Sprintf("%f", fitActivity.Records[counter].Timestamp.Sub(fitActivity.Sessions[0].StartTime).Seconds()))
 
 			}
 		}
