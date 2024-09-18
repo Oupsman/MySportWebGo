@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/vars"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
@@ -304,6 +305,29 @@ func NormalizedAvg[T Number](arr []T) float64 {
 	return sum / float64(len(arr))
 }
 
+// degreesToRadians converts from degrees to radians.
+func degreesToRadians(d float64) float64 {
+	return d * math.Pi / 180
+}
+
 func GetUUID(param string) (uuid.UUID, error) {
 	return uuid.Parse(param)
+}
+
+// Haversine computes the distance between two points at the surface of the Earth. Returns the value in meters
+
+func Haversine(p, q types.GpsPoint) float64 {
+	latp := degreesToRadians(p.Lat)
+	lonp := degreesToRadians(p.Lon)
+	latq := degreesToRadians(q.Lat)
+	lonq := degreesToRadians(q.Lon)
+
+	diffLat := latq - latp
+	diffLon := lonq - lonp
+
+	a := math.Pow(math.Sin(diffLat/2), 2) + math.Cos(latp)*math.Cos(latq)*
+		math.Pow(math.Sin(diffLon/2), 2)
+
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	return c * 6371
 }

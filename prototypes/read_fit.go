@@ -30,7 +30,7 @@ func main() {
 		fmt.Printf("AvgSpeedScaled: %f\n", activity.Sessions[0].AvgSpeedScaled())
 		fmt.Printf("EnhancedAvgSpeed: %d\n", activity.Sessions[0].EnhancedAvgSpeed)
 		fmt.Printf("AvgSpeed: %d\n", activity.Sessions[0].AvgSpeed)
-
+		fmt.Printf("Timestamp: %d\n", activity.Records[100].Timestamp)
 	}
 
 }

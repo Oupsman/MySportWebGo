@@ -5,6 +5,7 @@ import (
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/internal/pkg/vars"
+	"fmt"
 	"github.com/muktihari/fit/decoder"
 	"github.com/muktihari/fit/profile/filedef"
 	"github.com/muktihari/fit/profile/mesgdef"
@@ -123,6 +124,8 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	var counter = 0
 	var recordsCount = len(fitActivity.Records)
 	var altitudes, filtered []float64
+	var securityDistance = float64(activity.User.SecurityDistance)
+	var startPosition, endPosition types.GpsPoint
 
 	distance := activity.Distance
 	weight := activity.TotalWeight
@@ -137,6 +140,31 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	if fitActivity.Sessions[0].AvgPower != math.MaxUint16 {
 		hasPower = true
 	}
+
+	// Find first valid GPS points in records
+
+	for fitActivity.Records[counter].PositionLat == math.MaxInt32 ||
+		fitActivity.Records[counter].PositionLong == math.MaxInt32 {
+		counter++
+	}
+
+	startPosition = types.GpsPoint{
+		Lat: utils.SemiCircleToDegres(fitActivity.Records[counter].PositionLat),
+		Lon: utils.SemiCircleToDegres(fitActivity.Records[counter].PositionLong),
+	}
+
+	endPosition = types.GpsPoint{
+		Lat: utils.SemiCircleToDegres(fitActivity.Records[recordsCount-1].PositionLat),
+		Lon: utils.SemiCircleToDegres(fitActivity.Records[recordsCount-1].PositionLong),
+	}
+
+	if utils.Haversine(startPosition, endPosition) < 300 {
+		// Activity is a loop so we double the security distance
+		securityDistance = 2 * securityDistance / 1000
+	} else {
+		securityDistance = securityDistance / 1000
+	}
+	counter = 0
 	for km < distance && counter < recordsCount-1 {
 		stopkm := km + 1.0
 		for km < stopkm && counter < recordsCount-1 {
@@ -149,7 +177,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 			for meters < stopmeters && counter < recordsCount-1 {
 				if counter < recordsCount-1 {
 					record = fitActivity.Records[counter]
-					activity.TimeStamps = append(activity.TimeStamps, record.Timestamp.Sub(fitActivity.Sessions[0].StartTime).String())
+					activity.TimeStamps = append(activity.TimeStamps, fmt.Sprintf("%f", record.Timestamp.Sub(fitActivity.Sessions[0].StartTime).Seconds()))
 					if record.HeartRate != math.MaxUint8 {
 						activity.Hearts = append(activity.Hearts, uint16(record.HeartRate))
 					}
@@ -181,13 +209,17 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 					if record.PositionLat != math.MaxInt32 && record.PositionLong != math.MaxInt32 {
 						activity.Lats = append(activity.Lats, utils.SemiCircleToDegres(record.PositionLat))
 						activity.Lons = append(activity.Lons, utils.SemiCircleToDegres(record.PositionLong))
-						activity.GpsPoints = append(activity.GpsPoints, types.GpsPoint{
+						currentPoint := types.GpsPoint{
 							Lat: utils.SemiCircleToDegres(record.PositionLat),
 							Lon: utils.SemiCircleToDegres(record.PositionLong),
-						})
+						}
+						activity.GpsPoints = append(activity.GpsPoints, currentPoint)
 
 						// if the user has a security distance, we add the points to the public gps points
-						if float64(activity.User.SecurityDistance) < record.DistanceScaled() && fitActivity.Sessions[0].TotalDistanceScaled()-record.DistanceScaled() > float64(activity.User.SecurityDistance) {
+						distanceFromStart := utils.Haversine(startPosition, currentPoint)
+						distanceFromEnd := utils.Haversine(endPosition, currentPoint)
+						if distanceFromStart > securityDistance &&
+							distanceFromEnd > securityDistance {
 							activity.PublicGpsPoints = append(activity.PublicGpsPoints, types.GpsPoint{
 								Lat: utils.SemiCircleToDegres(record.PositionLat),
 								Lon: utils.SemiCircleToDegres(record.PositionLong),
@@ -273,7 +305,6 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	if len(altitudes) > 2 {
 		ComputeElevation(&activity, filtered)
 	}
-
 	if len(activity.GpsPoints) > 2 {
 		activity.StartPosition = &types.GpsPoint{
 			Lat: utils.SemiCircleToDegres(fitActivity.Records[0].PositionLat),

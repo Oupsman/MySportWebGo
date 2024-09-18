@@ -8,7 +8,7 @@ import (
 
 func SwimPace(poolLength float64, time float64, strokes uint16) float64 {
 	if strokes == math.MaxUint16 {
-		return 30
+		return 0
 	}
 	return time * 100 / poolLength
 }

@@ -5,6 +5,7 @@ import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/services/activityService"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"net/http"
@@ -149,44 +150,53 @@ func UpdateActivity(c *gin.Context) {
 }
 
 func GetActivity(c *gin.Context) {
+	var userID uint
 	App := c.MustGet("App")
-	bearerToken := c.Request.Header.Get("Authorization")
-	userUUID, err := utils.GetUserUUID(bearerToken)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
 	db := App.(*app.App).DB
-	user, err := db.GetUserByUUID(userUUID)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
 
 	activityUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	activity, err := db.GetActivity(activityUUID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if activity.Visibility == 0 && activity.User.ID != user.ID {
+
+	bearerToken := c.Request.Header.Get("Authorization")
+	fmt.Println("Token: ", bearerToken)
+	if bearerToken != "Bearer null" {
+		userUUID, err := utils.GetUserUUID(bearerToken)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		user, err := db.GetUserByUUID(userUUID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		userID = user.ID
+		if activity.Visibility == 0 && activity.User.ID != user.ID {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You can't access this activity"})
+			return
+		}
+	} else if activity.Visibility != 2 {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You can't access this activity"})
 		return
 	}
-	if activity.User.ID != user.ID {
+	if activity.User.ID != userID {
 		// Deleting non-public datas if user is not the owner
 		activity.GpsPoints = nil
 		activity.StartPosition = nil
 		activity.EndPosition = nil
+		activity.User = models.Users{}
+		activity.Equipment = models.Equipments{}
 		// TODO : is there more fields that needs to be nilled ?
 
 	}
-
 	c.JSON(http.StatusOK, gin.H{"activity": activity})
 }
 
