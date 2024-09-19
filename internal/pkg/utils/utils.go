@@ -302,7 +302,25 @@ func NormalizedAvg[T Number](arr []T) float64 {
 	for _, val := range arr {
 		sum += math.Pow(float64(val), 4)
 	}
-	return sum / float64(len(arr))
+	res := math.Sqrt(math.Sqrt(sum / float64(len(arr))))
+	fmt.Println(res)
+	return res
+}
+func NormalizedAvgPositive[T Number](arr []T) float64 {
+	var sum float64
+	var nbval float64
+	if len(arr) == 0 {
+		return 0
+	}
+
+	for _, val := range arr {
+		if val > 0 {
+			sum += math.Pow(float64(val), 4)
+			nbval++
+		}
+	}
+	res := math.Sqrt(math.Sqrt(sum / nbval))
+	return res
 }
 
 // degreesToRadians converts from degrees to radians.

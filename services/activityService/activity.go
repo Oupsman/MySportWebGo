@@ -167,7 +167,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 		stopkm := km + 1.0
 		for km < stopkm && counter < recordsCount-1 {
 			var deltaDistance, deltaAltitude float64
-			stopmeters = meters + 30
+			stopmeters = meters + 10
 			startmeters = fitActivity.Records[counter].DistanceScaled()
 			startaltitude = fitActivity.Records[counter].EnhancedAltitudeScaled()
 			//record := fitActivity.Records[counter]
@@ -258,7 +258,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 				} else {
 					speed = record.SpeedScaled()
 				}
-				if deltaDistance > 10 && deltaDistance < 80 {
+				if deltaDistance > 5 && deltaDistance < 20 {
 					slope = deltaAltitude / deltaDistance
 				} else {
 					slope = 0
@@ -276,7 +276,9 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 			}
 		}
 		if len(activity.Powers) > 0 {
-			activity.AvgPower = uint16(utils.Avg(activity.Powers))
+			avgPower := utils.NormalizedAvgPositive(activity.Powers)
+			fmt.Println(avgPower)
+			activity.AvgPower = uint16(avgPower)
 
 		}
 		tsstopdist := fitActivity.Records[counter-1].DistanceScaled()
