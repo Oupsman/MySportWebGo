@@ -47,7 +47,7 @@ func UploadActivity(c *gin.Context) {
 	}
 
 	dstFile := baseDir + file.Filename
-
+	fmt.Println("DstFile : ", dstFile)
 	// Upload the file to specific dstFile.
 	err = c.SaveUploadedFile(file, dstFile)
 	if err != nil {

@@ -199,7 +199,7 @@ func UpdateUser(c *gin.Context) {
 }
 
 func Dashboard(c *gin.Context) {
-	var Dashboard types.Dashboard
+	var DashboardDatas types.Dashboard
 	var TotalDuration uint32
 	App := c.MustGet("App")
 	db := App.(*app.App).DB
@@ -211,25 +211,24 @@ func Dashboard(c *gin.Context) {
 		return
 	}
 
-	err = db.Table("activities").Where("user_id = ?", userID).Order("date desc").Limit(10).Scan(&Dashboard.Activities).Error
-	err = db.Table("equipments").Where("user_id = ?", userID).Count(&Dashboard.NbEquipments).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Count(&Dashboard.NbActivities).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(sum(distance), 0)").Scan(&Dashboard.TotalDistance).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Order("date desc").Limit(10).Scan(&DashboardDatas.Activities).Error
+	err = db.Table("equipments").Where("user_id = ?", userID).Count(&DashboardDatas.NbEquipments).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Count(&DashboardDatas.NbActivities).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(sum(distance), 0)").Scan(&DashboardDatas.TotalDistance).Error
 	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(sum(duration), 0)").Scan(&TotalDuration).Error
 
 	// get this month activities
-	err = db.Table("activities").Where("user_id = ?", userID).Where("date >=  DATE_TRUNC('month',  CURRENT_DATE)").Scan(&Dashboard.ActivitiesCalendar).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Where("date >=  DATE_TRUNC('month',  CURRENT_DATE)").Scan(&DashboardDatas.ActivitiesCalendar).Error
 	// get the maximum distance
-	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(max(distance), 0)").Scan(&Dashboard.MaxDistance).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(max(duration), 0)").Scan(&Dashboard.MaxDuration).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(max(positive_elevation), 0)").Scan(&Dashboard.MaxElevation).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(max(distance), 0)").Scan(&DashboardDatas.MaxDistance).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(max(duration), 0)").Scan(&DashboardDatas.MaxDuration).Error
+	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(max(positive_elevation), 0)").Scan(&DashboardDatas.MaxElevation).Error
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
-	Dashboard.TotalDuration = utils.ConvertTime(TotalDuration)
-	Dashboard.TotalDistance /= 1000
-
-	c.JSON(200, Dashboard)
+	DashboardDatas.TotalDuration = utils.ConvertTime(TotalDuration)
+	DashboardDatas.TotalDistance /= 1000
+	c.JSON(200, DashboardDatas)
 }

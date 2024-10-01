@@ -5,6 +5,7 @@ import (
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/internal/pkg/vars"
+	"errors"
 	"fmt"
 	"github.com/muktihari/fit/decoder"
 	"github.com/muktihari/fit/profile/filedef"
@@ -13,6 +14,7 @@ import (
 	"github.com/pconstantinou/savitzkygolay"
 	"math"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -25,13 +27,15 @@ func SumAnalyze(filePath string, user models.Users, equipment models.Equipments)
 		return models.Activity{}, err
 	}
 	defer f.Close()
-
-	dec := decoder.New(f)
+	// Some FIT files downloaded from Garmin Connect seems to be corrupted with wrong checksum
+	// So ignoring the checksum
+	// Maybe add an option to correct the FIT file.
+	dec := decoder.New(f, decoder.WithIgnoreChecksum())
 
 	for dec.Next() {
 		fit, err := dec.Decode()
 		if err != nil {
-			panic(err)
+			return models.Activity{}, err
 		}
 		activity, err = DecodeFit(fit, user, equipment)
 		if err != nil {
@@ -50,9 +54,12 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	activity.User = user
 	activity.Equipment = equipment
 	activity.Sport = fitActivity.Sessions[0].Sport.String()
+	if strings.Contains(activity.Sport, "Invalid") {
+		return models.Activity{}, errors.New("Invalid sport")
+	}
 	activity.Date = fitActivity.Sessions[0].StartTime
 	activity.Duration = fitActivity.Sessions[0].TotalTimerTime / 1000
-	if fitActivity.Sessions[0].TotalDistance > 0 {
+	if !math.IsNaN(fitActivity.Sessions[0].TotalDistanceScaled()) {
 		activity.Distance = fitActivity.Sessions[0].TotalDistanceScaled()
 	} else {
 		activity.Distance = 0
@@ -62,13 +69,17 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	}
 	if !math.IsNaN(fitActivity.Sessions[0].EnhancedAvgSpeedScaled()) {
 		activity.AvgSpeed = fitActivity.Sessions[0].EnhancedAvgSpeedScaled()
-	} else {
+	} else if !math.IsNaN(fitActivity.Sessions[0].AvgSpeedScaled()) {
 		activity.AvgSpeed = fitActivity.Sessions[0].AvgSpeedScaled()
+	} else {
+		activity.AvgSpeed = 0
 	}
 	if !math.IsNaN(fitActivity.Sessions[0].EnhancedMaxSpeedScaled()) {
 		activity.MaxSpeed = fitActivity.Sessions[0].EnhancedMaxSpeedScaled()
-	} else {
+	} else if !math.IsNaN(fitActivity.Sessions[0].MaxSpeedScaled()) {
 		activity.MaxSpeed = fitActivity.Sessions[0].MaxSpeedScaled()
+	} else {
+		activity.MaxSpeed = 0
 	}
 	if fitActivity.Sessions[0].AvgCadence != math.MaxUint8 {
 		activity.AvgRPM = fitActivity.Sessions[0].AvgCadence
@@ -101,15 +112,16 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	}
 
 	activity, err = AnalyzeRecords(fitActivity, activity)
+	if err != nil {
+		return models.Activity{}, err
+	}
 	if len(fitActivity.Lengths) > 0 {
 		activity.Lengths = AnalyzeLengths(fitActivity)
 	}
 	if activity.Sport == "cycling" {
 		activity.Co2 = Commute(activity)
 	}
-	if err != nil {
-		return models.Activity{}, err
-	}
+
 	return activity, nil
 }
 
@@ -142,25 +154,25 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	}
 
 	// Find first valid GPS points in records
-
-	for fitActivity.Records[counter].PositionLat == math.MaxInt32 ||
-		fitActivity.Records[counter].PositionLong == math.MaxInt32 {
-		counter++
-	}
-
-	startPosition = types.GpsPoint{
-		Lat: utils.SemiCircleToDegres(fitActivity.Records[counter].PositionLat),
-		Lon: utils.SemiCircleToDegres(fitActivity.Records[counter].PositionLong),
-	}
-
-	endPosition = types.GpsPoint{
-		Lat: utils.SemiCircleToDegres(fitActivity.Records[recordsCount-1].PositionLat),
-		Lon: utils.SemiCircleToDegres(fitActivity.Records[recordsCount-1].PositionLong),
-	}
-
-	if utils.Haversine(startPosition, endPosition) < securityDistance {
-		// Activity is a loop so we double the security distance
-		securityDistance = 2 * securityDistance
+	if distance > 0 {
+		for counter < recordsCount && (fitActivity.Records[counter].PositionLat == math.MaxInt32 ||
+			fitActivity.Records[counter].PositionLong == math.MaxInt32) {
+			counter++
+		}
+		if counter < recordsCount {
+			startPosition = types.GpsPoint{
+				Lat: utils.SemiCircleToDegres(fitActivity.Records[counter].PositionLat),
+				Lon: utils.SemiCircleToDegres(fitActivity.Records[counter].PositionLong),
+			}
+			endPosition = types.GpsPoint{
+				Lat: utils.SemiCircleToDegres(fitActivity.Records[recordsCount-1].PositionLat),
+				Lon: utils.SemiCircleToDegres(fitActivity.Records[recordsCount-1].PositionLong),
+			}
+			if utils.Haversine(startPosition, endPosition) < securityDistance {
+				// Activity is a loop so we double the security distance
+				securityDistance = 2 * securityDistance
+			}
+		}
 	}
 	counter = 0
 	for km < distance && counter < recordsCount-1 {
@@ -216,7 +228,6 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 						// if the user has a security distance, we add the points to the public gps points
 						distanceFromStart := utils.Haversine(startPosition, currentPoint)
 						distanceFromEnd := utils.Haversine(endPosition, currentPoint)
-						fmt.Println(distanceFromStart, distanceFromEnd, securityDistance)
 						if distanceFromStart > securityDistance &&
 							distanceFromEnd > securityDistance {
 							activity.PublicGpsPoints = append(activity.PublicGpsPoints, types.GpsPoint{
@@ -224,14 +235,12 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 								Lon: utils.SemiCircleToDegres(record.PositionLong),
 							})
 						}
-
 					}
 					if hasPower && activity.Sport == "cycling" {
 						if record.Power != math.MaxUint16 {
 							activity.Powers = append(activity.Powers, record.Power)
 						}
 					}
-
 					if !math.IsNaN(record.SpeedScaled()) && record.SpeedScaled() > activity.MaxSpeed {
 						activity.MaxSpeed = record.SpeedScaled()
 						activity.MaxSpeedPosition = types.GpsPoint{
@@ -242,10 +251,8 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 					if record.Cadence != math.MaxUint8 {
 						activity.Cadences = append(activity.Cadences, uint16(record.Cadence))
 					}
-
 				}
 				counter++
-
 			}
 			stopaltitude = record.EnhancedAltitudeScaled()
 			if activity.Sport == "cycling" && !hasPower {
@@ -277,7 +284,6 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 		}
 		if len(activity.Powers) > 0 {
 			avgPower := utils.NormalizedAvgPositive(activity.Powers)
-			fmt.Println(avgPower)
 			activity.AvgPower = uint16(avgPower)
 
 		}
