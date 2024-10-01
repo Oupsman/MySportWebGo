@@ -22,6 +22,7 @@ import (
 
 func SumAnalyze(filePath string, user models.Users, equipment models.Equipments) (models.Activity, error) {
 	var activity models.Activity
+	activity.Lastimport = true
 	f, err := os.Open(filePath)
 	if err != nil {
 		return models.Activity{}, err

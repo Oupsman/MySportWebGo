@@ -111,9 +111,17 @@ func (db *DB) DeleteActivity(id uuid.UUID) error {
 
 func (db *DB) GetActivitiesByUser(userID uint) ([]types.ActivitySummary, error) {
 	var activities []types.ActivitySummary
-	err := db.Debug().Table("activities").Preload("User").Preload("Equipment").Where("user_id = ?", userID).Scan(&activities).Error
+	err := db.Table("activities").Preload("User").Preload("Equipment").Where("user_id = ?", userID).Scan(&activities).Error
 	if err != nil {
 		return nil, err
 	}
 	return activities, nil
+}
+
+func (db *DB) ResetImportStatus(userID uint) error {
+	err := db.Table("activities").Update("lastimport", false).Where("user_id = ?", userID)
+	if err != nil {
+		return err.Error
+	}
+	return nil
 }
