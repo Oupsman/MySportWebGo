@@ -22,7 +22,6 @@ import (
 
 func SumAnalyze(filePath string, user models.Users, equipment models.Equipments) (models.Activity, error) {
 	var activity models.Activity
-	activity.Lastimport = true
 	f, err := os.Open(filePath)
 	if err != nil {
 		return models.Activity{}, err
@@ -55,6 +54,7 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	activity.User = user
 	activity.Equipment = equipment
 	activity.Sport = fitActivity.Sessions[0].Sport.String()
+	activity.Lastimport = true
 	if strings.Contains(activity.Sport, "Invalid") {
 		return models.Activity{}, errors.New("Invalid sport")
 	}

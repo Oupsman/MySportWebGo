@@ -12,7 +12,7 @@ require (
 	github.com/go-echarts/snapshot-chromedp v0.0.4
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
-	github.com/muktihari/fit v0.24.0
+	github.com/muktihari/fit v0.24.3
 	github.com/pconstantinou/savitzkygolay v0.0.1
 	github.com/rs/zerolog v1.33.0
 	golang.org/x/crypto v0.23.0

@@ -175,7 +175,7 @@ func GetActivity(c *gin.Context) {
 
 	bearerToken := c.Request.Header.Get("Authorization")
 	fmt.Println("Token: ", bearerToken)
-	if bearerToken != "Bearer null" {
+	if bearerToken != "" {
 		userUUID, err := utils.GetUserUUID(bearerToken)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})

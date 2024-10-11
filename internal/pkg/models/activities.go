@@ -119,7 +119,7 @@ func (db *DB) GetActivitiesByUser(userID uint) ([]types.ActivitySummary, error) 
 }
 
 func (db *DB) ResetImportStatus(userID uint) error {
-	err := db.Table("activities").Update("lastimport", false).Where("user_id = ?", userID)
+	err := db.Debug().Table("activities").Where("user_id = ?", userID).Update("lastimport", false)
 	if err != nil {
 		return err.Error
 	}
