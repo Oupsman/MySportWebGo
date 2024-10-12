@@ -8,7 +8,6 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
-	"net/http"
 )
 
 type WebServer struct {
@@ -32,20 +31,11 @@ func RunHttp(listenAddr string, App *app.App) error {
 	config.AllowHeaders = []string{"Authorization", "Content-Type"}
 	httpRouter.Use(cors.New(config))
 
-	httpRouter.LoadHTMLGlob("templates/*")
-	httpRouter.Use(static.Serve("/static", static.LocalFile("./static", true)))
 	httpRouter.Use(static.Serve("/MEDIA", static.LocalFile("./MEDIA", true)))
 	httpRouter.Use(AppHandler(App))
-	httpRouter.GET("/", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "index.tmpl", gin.H{
-			"title":    "MySportWeb",
-			"vapidkey": App.Notifications.PubKey,
-		})
-	})
+	httpRouter.GET("/", apicontrollers.HealthCheck)
 	httpRouter.GET("/login", controllers.Login)
 	httpRouter.GET("/signup", controllers.SignUp)
-
-	httpRouter.GET("/mewactivity", middlewares.IsAuthorized())
 
 	apiv1 := httpRouter.Group("/api/v1")
 	{
