@@ -3,6 +3,7 @@ package apicontrollers
 import (
 	"MySportWeb/internal/pkg/app"
 	"MySportWeb/internal/pkg/models"
+	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/services/activityService"
 	"fmt"
@@ -19,6 +20,8 @@ import (
 //
 
 func UploadActivity(c *gin.Context) {
+	var uploadParams types.ActivityUpload
+
 	App := c.MustGet("App")
 	bearerToken := c.Request.Header.Get("Authorization")
 	userUUID, err := utils.GetUserUUID(bearerToken)
@@ -37,8 +40,18 @@ func UploadActivity(c *gin.Context) {
 		return
 	}
 	// single file
-	file, _ := c.FormFile("file")
+	// file, _ := c.FormFile("file")
 
+	err = c.ShouldBind(&uploadParams)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	fmt.Println(uploadParams)
+	file := uploadParams.File
+	item := uploadParams.Item
+	// count := uploadParams.Count
 	// Create the dst directory
 	baseDir := "MEDIA/" + userUUID.String() + "/Activities/"
 	if err := os.MkdirAll(filepath.Dir(baseDir), 0770); err != nil {
@@ -61,12 +74,15 @@ func UploadActivity(c *gin.Context) {
 	}
 	activity.Filename = file.Filename
 	activity.FilePath = dstFile
-	// reset LastImport status
-	err = db.ResetImportStatus(user.ID)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	if item == 0 {
+		err = db.ResetImportStatus(user.ID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
 	}
+	// reset LastImport status
 
 	err = db.CreateActivity(&activity)
 	if err != nil {

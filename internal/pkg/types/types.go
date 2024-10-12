@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"mime/multipart"
 	"strconv"
 	"strings"
 	"time"
@@ -99,6 +100,13 @@ type Dashboard struct {
 	MaxDistance        float64            `json:"max_distance"`
 	MaxDuration        uint32             `json:"max_duration"`
 	MaxElevation       float64            `json:"max_elevation"`
+}
+
+type ActivityUpload struct {
+	File  *multipart.FileHeader `form:"file"`
+	Path  string                `form:"path"`
+	Item  uint16                `form:"item"`
+	Count uint16                `form:"count"`
 }
 
 type LengthArray []Length
