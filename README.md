@@ -21,7 +21,7 @@ For now the app can :
 
 ## TODO
 
-1. Support more devices
+1. Support more devices 
 2. Support more sports (skiing, snowboarding, etc)
 3. Handle multiple languages
 4. Support GPX & TCX files format 
