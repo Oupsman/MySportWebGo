@@ -187,6 +187,7 @@ func UpdateUser(c *gin.Context) {
 	updatedUser.MaxHR = user.MaxHR
 	updatedUser.Gender = user.Gender
 	updatedUser.SecurityDistance = user.SecurityDistance
+	updatedUser.HomeTown = user.HomeTown
 
 	err = db.UpdateUser(updatedUser)
 

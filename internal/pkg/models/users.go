@@ -23,6 +23,7 @@ type Users struct {
 	MaxHR            uint16    `json:"max_hr" gorm:"default:0"`
 	WeightObjective  uint16    `json:"weight_objective" gorm:"default:0"`
 	SecurityDistance uint16    `json:"security_distance" gorm:"default:500"`
+	HomeTown         string    `json:"home_town" gorm:"default:'Earth'"`
 }
 
 type Validations struct {
