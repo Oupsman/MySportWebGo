@@ -110,6 +110,13 @@ type ActivityUpload struct {
 	Count uint16                `form:"count"`
 }
 
+type HealthDatasUpload struct {
+	File      *multipart.FileHeader `form:"file"`
+	Path      string                `form:"path"`
+	Separator string                `form:"separator"`
+	Raw       bool                  `form:"raw"`
+}
+
 type LengthArray []Length
 
 type Int8Array []int8

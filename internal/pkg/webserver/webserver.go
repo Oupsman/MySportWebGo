@@ -65,6 +65,10 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.DELETE("/equipment/:id", middlewares.IsAuthorized(), apicontrollers.DeleteEquipment)
 	apiv1.POST("/equipment/:id", middlewares.IsAuthorized(), apicontrollers.UpdateEquipment)
 
+	// healthdatas
+	apiv1.POST("/healthdatas", middlewares.IsAuthorized(), apicontrollers.ImportHealthDatas)
+	apiv1.GET("/healthdatas", middlewares.IsAuthorized(), apicontrollers.GetHealthDatas)
+
 	// Start and run the server
 	err := httpRouter.Run(listenAddr)
 	return err

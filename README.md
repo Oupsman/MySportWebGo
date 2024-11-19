@@ -22,8 +22,10 @@ For now the app can :
 ## TODO
 
 1. Support more devices 
-2. Support more sports (skiing, snowboarding, etc)
-3. Handle multiple languages
-4. Support GPX & TCX files format 
-5. Support multisessions FIT files 
-6. Support laps and splits (I'm not using those)
+2. support Healthdatas
+2. Integrate with Withings API - Oauth2
+3. Support more sports (skiing, snowboarding, etc)
+4. Handle multiple languages
+5. Support GPX & TCX files format 
+6. Support multisessions FIT files 
+7. Support laps and splits (I'm not using those)
