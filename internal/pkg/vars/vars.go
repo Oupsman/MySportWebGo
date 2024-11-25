@@ -2,6 +2,7 @@ package vars
 
 import (
 	"fmt"
+	"github.com/joho/godotenv"
 	"os"
 )
 
@@ -19,7 +20,10 @@ func CheckVariable(Key string, mandatory bool) string {
 }
 
 func Init() {
-
+	err := godotenv.Load()
+	if err != nil {
+		fmt.Println("Error loading .env file")
+	}
 	dbhost := CheckVariable("DBHOST", true)
 	dbport := CheckVariable("DBPORT", true)
 	dbuser := CheckVariable("DBUSER", true)
