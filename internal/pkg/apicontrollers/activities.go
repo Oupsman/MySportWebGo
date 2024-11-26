@@ -74,6 +74,8 @@ func UploadActivity(c *gin.Context) {
 	}
 	activity.Filename = file.Filename
 	activity.FilePath = dstFile
+
+	// reset LastImport status
 	if item == 0 {
 		err = db.ResetImportStatus(user.ID)
 		if err != nil {
@@ -82,15 +84,14 @@ func UploadActivity(c *gin.Context) {
 		}
 
 	}
-	// reset LastImport status
 
-	err = db.CreateActivity(&activity)
+	err = activityService.GenerateThumbnail(activity)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	err = activityService.GenerateThumbnail(activity)
+	err = db.CreateActivity(&activity)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
