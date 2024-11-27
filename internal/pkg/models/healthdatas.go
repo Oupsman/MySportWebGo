@@ -7,14 +7,16 @@ import (
 
 type HealthData struct {
 	gorm.Model
-	User     Users
-	UserID   uint
-	Date     time.Time
-	Weight   float64
-	fatpc    float64
-	musclepc float64
-	resthr   uint16
-	vo2max   uint16
+	User      Users
+	UserID    uint
+	Date      time.Time
+	Weight    float64
+	Fat       float64
+	Muscle    float64
+	Bone      float64
+	BodyWater float64
+	Resthr    uint16
+	Vo2max    uint16
 }
 
 func (db *DB) CreateHealthData(healthData HealthData) error {

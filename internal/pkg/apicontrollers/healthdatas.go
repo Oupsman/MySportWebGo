@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"time"
 )
 
 func ImportHealthDatas(c *gin.Context) {
@@ -61,21 +63,45 @@ func ImportHealthDatas(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		healthData.Date =
+		healthData.Date, err = time.Parse("2006-01-02 15:04", row[0])
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		healthData.Weight, err = strconv.ParseFloat(row[1], 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		healthData.Fat, err = strconv.ParseFloat(row[2], 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		healthData.Bone, err = strconv.ParseFloat(row[3], 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		healthData.Muscle, err = strconv.ParseFloat(row[4], 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		healthData.BodyWater, err = strconv.ParseFloat(row[5], 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		err = db.CreateHealthData(healthData)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
 	}
 
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	err = db.CreateHealthData(healthData)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusCreated, healthData)
+	c.JSON(http.StatusCreated, gin.H{"message": "file successfully imported"})
 }
 
 func GetHealthDatas(c *gin.Context) {
