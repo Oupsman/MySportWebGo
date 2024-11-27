@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 // Directory structures :
@@ -72,6 +73,7 @@ func UploadActivity(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	activity.ID = uuid.New()
 	activity.Filename = file.Filename
 	activity.FilePath = dstFile
 
@@ -114,7 +116,18 @@ func ListActivities(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	activities, err := db.GetActivitiesByUser(user.ID)
+	start, err := strconv.Atoi((c.Param("start")))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	count, err := strconv.Atoi(c.Param("count"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	activities, err := db.GetActivitiesByUser(user.ID, start, count)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

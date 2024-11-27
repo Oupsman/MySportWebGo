@@ -109,9 +109,9 @@ func (db *DB) DeleteActivity(id uuid.UUID) error {
 	return nil
 }
 
-func (db *DB) GetActivitiesByUser(userID uint) ([]types.ActivitySummary, error) {
+func (db *DB) GetActivitiesByUser(userID uint, start, number int) ([]types.ActivitySummary, error) {
 	var activities []types.ActivitySummary
-	err := db.Table("activities").Preload("User").Preload("Equipment").Where("user_id = ?", userID).Order("date desc").Scan(&activities).Error
+	err := db.Table("activities").Preload("User").Preload("Equipment").Where("user_id = ?", userID).Order("date desc").Offset(start).Limit(number).Scan(&activities).Error
 	if err != nil {
 		return nil, err
 	}
