@@ -22,7 +22,7 @@ func main() {
 	}
 
 	var g errgroup.Group
-	var host = ""
+	var host = "127.0.0.1"
 	var listenAddr string
 	listenAddr = fmt.Sprintf("%s:%s", host, vars.ListenPort)
 	g.Go(func() error {
