@@ -1,1 +1,5 @@
 .idea/
+MEDIA/
+MEDIA.tgz
+tmp/
+prototypes/*.fit
