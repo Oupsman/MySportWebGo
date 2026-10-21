@@ -341,6 +341,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 			{Lat: utils.Min(activity.Lats), Lon: utils.Min(activity.Lons)},
 			{Lat: utils.Max(activity.Lats), Lon: utils.Max(activity.Lons)},
 		}
+		activity.SimplifiedGpsPoints = SimplifyTrace(activity.GpsPoints)
 	}
 	return activity, nil
 }

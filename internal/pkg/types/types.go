@@ -176,6 +176,10 @@ func (s FloatArray) Value() (driver.Value, error) {
 }
 
 func (s *GpsPointArray) Scan(src interface{}) error {
+	if src == nil {
+		*s = nil
+		return nil
+	}
 	return json.Unmarshal(src.([]byte), s)
 }
 

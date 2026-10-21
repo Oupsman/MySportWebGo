@@ -11,6 +11,7 @@ const Engine_version int = 1 // the version of the analysis engine
 var ListenPort string
 var Dsn string
 var SecretKey string
+var Domain string
 
 func CheckVariable(Key string, mandatory bool) string {
 	if os.Getenv(Key) == "" && mandatory {
@@ -34,4 +35,5 @@ func Init() {
 
 	ListenPort = CheckVariable("LISTEN_PORT", true)
 	SecretKey = CheckVariable("SECRET_KEY", true)
+	Domain = CheckVariable("DOMAIN", true)
 }

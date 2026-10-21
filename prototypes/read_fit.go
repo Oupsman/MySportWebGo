@@ -25,6 +25,12 @@ func main() {
 			panic(err)
 		}
 		activity := filedef.NewActivity(fit.Messages...)
+		fmt.Printf("Total Distance: %d\n", len(activity.DeviceInfos))
+		// get all Manufacturers :
+		for _, device := range activity.DeviceInfos {
+			fmt.Printf("Manufacturer: %s %d %d \n", device.Manufacturer, device.SerialNumber, device.Product)
+		}
+		//		fmt.Printf("Device: %s %d %s\n", activity.DeviceInfos[0].Manufacturer, activity.DeviceInfos[0].SerialNumber, activity.DeviceInfos[0].ProductName)
 		fmt.Printf("File Type: %s\n", activity.FileId.Type)
 		fmt.Printf("EnhancedAvgSpeedScaled: %f\n", activity.Sessions[0].EnhancedAvgSpeedScaled())
 		fmt.Printf("AvgSpeedScaled: %f\n", activity.Sessions[0].AvgSpeedScaled())

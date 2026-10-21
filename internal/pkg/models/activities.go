@@ -3,6 +3,7 @@ package models
 import (
 	"MySportWeb/internal/pkg/types"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 	"time"
 )
 
@@ -43,37 +44,39 @@ type Activity struct {
 	UserAge          uint8             `json:"user_age"` // age of the user at the time of the initial import of activity
 	Thumbnail        string            `json:"thumbnail"`
 	// precalculated FIT analysis results
-	Speeds             types.FloatArray    `json:"speeds"`
-	Hearts             types.Uint16Array   `json:"hearts"`
-	Powers             types.Uint16Array   `json:"powers"`
-	PowerTS            types.MultiString   `json:"power_ts"`
-	AvgPower           uint16              `json:"power_avg"`
-	PowerAxis          types.FloatArray    `json:"power_axis"`
-	Cadences           types.Uint16Array   `json:"cadences"`
-	Distances          types.FloatArray    `json:"dist_array"`
-	Lats               types.FloatArray    `json:"lats"`
-	Lons               types.FloatArray    `json:"lons"`
-	StepLengths        types.FloatArray    `json:"step_lengths"`
-	GpsPoints          types.GpsPointArray `json:"gps_points"`
-	PublicGpsPoints    types.GpsPointArray `json:"public_gps_points"`
-	VerticalOscis      types.FloatArray    `json:"vertical_oscis"`
-	VerticalRatios     types.FloatArray    `json:"vertical_ratios"`
-	Stances            types.FloatArray    `json:"stance"`
-	StanceTimes        types.FloatArray    `json:"stance_times"`
-	Temperatures       types.Int16Array    `json:"temperatures"`
-	TimeStamps         types.MultiString   `json:"time_stamps"`
-	PhysicalConditions types.FloatArray    `json:"physical_conditions"`
-	TotalAscent        uint16              `json:"total_ascent"`
-	TotalDescent       uint16              `json:"total_descent"`
-	Altitudes          types.FloatArray    `json:"altitudes"`
-	GpsCenter          *types.GpsPoint     `json:"gps_center"`
-	GpsBounds          types.GpsPointArray `json:"gps_bounds"`
-	Means              types.FloatArray    `json:"means"`
-	PositiveElevation  float64             `json:"positive_elevation"`
-	NegativeElevation  float64             `json:"negative_elevation"`
-	StartPosition      *types.GpsPoint     `json:"start_position"`
-	EndPosition        *types.GpsPoint     `json:"end_position"`
-	Lengths            types.LengthArray   `json:"lengths"`
+	Speeds              types.FloatArray    `json:"speeds"`
+	Hearts              types.Uint16Array   `json:"hearts"`
+	Powers              types.Uint16Array   `json:"powers"`
+	PowerTS             types.MultiString   `json:"power_ts"`
+	AvgPower            uint16              `json:"power_avg"`
+	PowerAxis           types.FloatArray    `json:"power_axis"`
+	Cadences            types.Uint16Array   `json:"cadences"`
+	Distances           types.FloatArray    `json:"dist_array"`
+	Lats                types.FloatArray    `json:"lats"`
+	Lons                types.FloatArray    `json:"lons"`
+	StepLengths         types.FloatArray    `json:"step_lengths"`
+	GpsPoints           types.GpsPointArray `json:"gps_points"`
+	PublicGpsPoints     types.GpsPointArray `json:"public_gps_points"`
+	SimplifiedGpsPoints types.GpsPointArray `json:"-"` // Douglas-Peucker simplified trace, used to find similar activities
+	RouteID             *uuid.UUID          `json:"route_id" gorm:"type:uuid;index"`
+	VerticalOscis       types.FloatArray    `json:"vertical_oscis"`
+	VerticalRatios      types.FloatArray    `json:"vertical_ratios"`
+	Stances             types.FloatArray    `json:"stance"`
+	StanceTimes         types.FloatArray    `json:"stance_times"`
+	Temperatures        types.Int16Array    `json:"temperatures"`
+	TimeStamps          types.MultiString   `json:"time_stamps"`
+	PhysicalConditions  types.FloatArray    `json:"physical_conditions"`
+	TotalAscent         uint16              `json:"total_ascent"`
+	TotalDescent        uint16              `json:"total_descent"`
+	Altitudes           types.FloatArray    `json:"altitudes"`
+	GpsCenter           *types.GpsPoint     `json:"gps_center"`
+	GpsBounds           types.GpsPointArray `json:"gps_bounds"`
+	Means               types.FloatArray    `json:"means"`
+	PositiveElevation   float64             `json:"positive_elevation"`
+	NegativeElevation   float64             `json:"negative_elevation"`
+	StartPosition       *types.GpsPoint     `json:"start_position"`
+	EndPosition         *types.GpsPoint     `json:"end_position"`
+	Lengths             types.LengthArray   `json:"lengths"`
 }
 
 func (db *DB) CreateActivity(activity *Activity) error {
@@ -101,12 +104,28 @@ func (db *DB) UpdateActivity(activity *Activity) error {
 	return nil
 }
 
+// DeleteActivity deletes the activity and updates its route, removing the route when it becomes empty
 func (db *DB) DeleteActivity(id uuid.UUID) error {
-	err := db.Delete(&Activity{}, "id = ?", id).Error
-	if err != nil {
-		return err
-	}
-	return nil
+	return db.Transaction(func(tx *gorm.DB) error {
+		var activity Activity
+		err := tx.Select("id", "route_id").First(&activity, "id = ?", id).Error
+		if err != nil {
+			return err
+		}
+		err = tx.Delete(&Activity{}, "id = ?", id).Error
+		if err != nil {
+			return err
+		}
+		if activity.RouteID == nil {
+			return nil
+		}
+		err = tx.Model(&Route{}).Where("id = ?", *activity.RouteID).
+			Update("activity_count", gorm.Expr("activity_count - 1")).Error
+		if err != nil {
+			return err
+		}
+		return tx.Where("id = ? AND activity_count <= 0", *activity.RouteID).Delete(&Route{}).Error
+	})
 }
 
 func (db *DB) GetActivitiesByUser(userID uint, start, number int) ([]types.ActivitySummary, error) {
@@ -124,4 +143,26 @@ func (db *DB) ResetImportStatus(userID uint) error {
 		return err.Error
 	}
 	return nil
+}
+
+// GetSimplifiedTrace returns the simplified trace of an activity, computing and saving it when missing
+// (activities imported before the trace was stored)
+func (db *DB) GetSimplifiedTrace(activity *Activity, simplify func([]types.GpsPoint) types.GpsPointArray) (types.GpsPointArray, error) {
+	if len(activity.SimplifiedGpsPoints) > 0 {
+		return activity.SimplifiedGpsPoints, nil
+	}
+	var full Activity
+	err := db.Select("id", "gps_points").First(&full, "id = ?", activity.ID).Error
+	if err != nil {
+		return nil, err
+	}
+	if len(full.GpsPoints) < 2 {
+		return nil, nil
+	}
+	activity.SimplifiedGpsPoints = simplify(full.GpsPoints)
+	err = db.Model(&Activity{}).Where("id = ?", activity.ID).Update("simplified_gps_points", activity.SimplifiedGpsPoints).Error
+	if err != nil {
+		return nil, err
+	}
+	return activity.SimplifiedGpsPoints, nil
 }

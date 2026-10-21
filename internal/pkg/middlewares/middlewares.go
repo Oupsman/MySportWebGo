@@ -2,10 +2,11 @@ package middlewares
 
 import (
 	"MySportWeb/internal/pkg/utils"
-	jwt "github.com/dgrijalva/jwt-go"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strings"
+
+	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/gin-gonic/gin"
 )
 
 func IsAuthorized() gin.HandlerFunc {
@@ -19,7 +20,7 @@ func IsAuthorized() gin.HandlerFunc {
 		if err != nil {
 			if err == jwt.ErrSignatureInvalid {
 				c.JSON(http.StatusUnauthorized, gin.H{
-					"message": "mdw nauthorized",
+					"message": "mdw unauthorized",
 				})
 				c.Abort()
 				return

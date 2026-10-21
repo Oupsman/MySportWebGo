@@ -3,6 +3,7 @@ package app
 import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/notifications"
+	"MySportWeb/services/activityService"
 	"github.com/rs/zerolog"
 	"net/http"
 )
@@ -32,6 +33,12 @@ func NewApp(logger zerolog.Logger, driver string, dsn string) (*App, error) {
 }
 
 func (app *App) Start() error {
+	go func() {
+		err := activityService.BackfillRoutes(&app.DB, app.Logger)
+		if err != nil {
+			app.Logger.Error().Err(err).Msg("failed to assign routes to activities")
+		}
+	}()
 	err := app.Notifications.Start(app.Logger, app.Client, app.DB)
 	if err != nil {
 		return err

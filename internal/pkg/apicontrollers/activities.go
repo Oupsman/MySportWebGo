@@ -93,7 +93,7 @@ func UploadActivity(c *gin.Context) {
 		return
 	}
 
-	err = db.CreateActivity(&activity)
+	err = activityService.CreateActivity(&db, &activity)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -274,4 +274,46 @@ func DeleteActivity(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
+}
+
+func GetSimilarActivities(c *gin.Context) {
+	App := c.MustGet("App")
+	bearerToken := c.Request.Header.Get("Authorization")
+	userUUID, err := utils.GetUserUUID(bearerToken)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	db := App.(*app.App).DB
+	user, err := db.GetUserByUUID(userUUID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	activityUUID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	activity, err := db.GetActivity(activityUUID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if activity.User.ID != user.ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You are not the owner of this activity"})
+		return
+	}
+
+	similar := []types.ActivitySummary{}
+	if activity.RouteID != nil {
+		similar, err = db.GetActivitiesByRoute(*activity.RouteID, activity.ID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"activities": similar})
 }
