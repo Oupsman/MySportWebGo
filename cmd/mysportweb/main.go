@@ -9,6 +9,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"os"
+	// timezones of the users, also where the system has no timezone database (containers)
+	_ "time/tzdata"
 )
 
 func main() {

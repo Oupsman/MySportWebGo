@@ -235,37 +235,57 @@ func UpdateUser(c *gin.Context) {
 	c.JSON(200, gin.H{"message": "user updated successfully"})
 }
 
+// currentUserLocation returns the user of the request and their timezone (UTC when unknown):
+// weeks and months start at midnight in it. It aborts the request on error.
+func currentUserLocation(c *gin.Context) (models.Users, *time.Location, bool) {
+	db := c.MustGet("App").(*app.App).DB
+	userID, err := utils.GetUserID(c.Request.Header.Get("Authorization"))
+	if err != nil {
+		c.AbortWithStatusJSON(401, gin.H{"error": err.Error()})
+		return models.Users{}, nil, false
+	}
+	user, err := db.GetUser(userID)
+	if err != nil {
+		c.AbortWithStatusJSON(400, gin.H{"error": err.Error()})
+		return models.Users{}, nil, false
+	}
+	location, err := time.LoadLocation(user.Timezone)
+	if err != nil || user.Timezone == "" {
+		location = time.UTC
+	}
+	return user, location, true
+}
+
 func Dashboard(c *gin.Context) {
-	var DashboardDatas types.Dashboard
-	var TotalDuration uint32
-	App := c.MustGet("App")
-	db := App.(*app.App).DB
-	bearerToken := c.Request.Header.Get("Authorization")
-	userID, err := utils.GetUserID(bearerToken)
-
-	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	db := c.MustGet("App").(*app.App).DB
+	user, location, ok := currentUserLocation(c)
+	if !ok {
 		return
 	}
-
-	err = db.Table("activities").Where("user_id = ?", userID).Order("date desc").Limit(10).Scan(&DashboardDatas.Activities).Error
-	err = db.Table("equipments").Where("user_id = ?", userID).Count(&DashboardDatas.NbEquipments).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Count(&DashboardDatas.NbActivities).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(sum(distance), 0)").Scan(&DashboardDatas.TotalDistance).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(sum(duration), 0)").Scan(&TotalDuration).Error
-
-	// get this month activities
-	err = db.Table("activities").Where("user_id = ?", userID).Where("date >=  DATE_TRUNC('month',  CURRENT_DATE)").Scan(&DashboardDatas.ActivitiesCalendar).Error
-	// get the maximum distance
-	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(max(distance), 0)").Scan(&DashboardDatas.MaxDistance).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(max(duration), 0)").Scan(&DashboardDatas.MaxDuration).Error
-	err = db.Table("activities").Where("user_id = ?", userID).Select("coalesce(max(positive_elevation), 0)").Scan(&DashboardDatas.MaxElevation).Error
+	dashboard, err := db.GetDashboard(user.ID, time.Now().In(location))
 	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
+	c.JSON(200, dashboard)
+}
 
-	DashboardDatas.TotalDuration = utils.ConvertTime(TotalDuration)
-	DashboardDatas.TotalDistance /= 1000
-	c.JSON(200, DashboardDatas)
+// Calendar returns the activities of a month, ?month=YYYY-MM
+func Calendar(c *gin.Context) {
+	db := c.MustGet("App").(*app.App).DB
+	user, location, ok := currentUserLocation(c)
+	if !ok {
+		return
+	}
+	month, err := time.ParseInLocation("2006-01", c.Query("month"), location)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "month must be YYYY-MM"})
+		return
+	}
+	calendar, err := db.GetCalendar(user.ID, month)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"month": month.Format("2006-01"), "activities": calendar})
 }

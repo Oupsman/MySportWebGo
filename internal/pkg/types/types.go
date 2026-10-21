@@ -108,20 +108,75 @@ type RouteActivity struct {
 type ActivityCalendar struct {
 	ID       uuid.UUID `json:"id"`
 	Title    string    `json:"title"`
-	Date     string    `json:"start"`
+	Date     time.Time `json:"start"`
+	Sport    string    `json:"sport"`
+	Distance float64   `json:"distance"`
 	Duration int       `json:"duration"`
 }
 
+// PeriodTotals sums the activities of a period: distance and elevation in meters, duration in seconds
+type PeriodTotals struct {
+	Activities int64   `json:"activities"`
+	Distance   float64 `json:"distance"`
+	Duration   int64   `json:"duration"`
+	Elevation  float64 `json:"elevation"`
+}
+
+// DashboardTotals compares the current periods with the previous complete ones
+type DashboardTotals struct {
+	ThisWeek  PeriodTotals `json:"this_week"`
+	LastWeek  PeriodTotals `json:"last_week"`
+	ThisMonth PeriodTotals `json:"this_month"`
+	LastMonth PeriodTotals `json:"last_month"`
+	ThisYear  PeriodTotals `json:"this_year"`
+	AllTime   PeriodTotals `json:"all_time"`
+}
+
+// WeeklyVolume sums the activities of a sport during a week (week: its Monday, YYYY-MM-DD)
+type WeeklyVolume struct {
+	Week       string  `json:"week"`
+	Sport      string  `json:"sport"`
+	Activities int64   `json:"activities"`
+	Distance   float64 `json:"distance"`
+	Duration   int64   `json:"duration"`
+}
+
+// SportRecord is the activity holding a record, Value in the record unit (meters or seconds)
+type SportRecord struct {
+	ID    uuid.UUID `json:"id"`
+	Title string    `json:"title"`
+	Date  time.Time `json:"date"`
+	Value float64   `json:"value"`
+}
+
+type SportSummary struct {
+	Sport           string       `json:"sport"`
+	Totals          PeriodTotals `json:"totals"`
+	LongestDistance *SportRecord `json:"longest_distance"`
+	LongestDuration *SportRecord `json:"longest_duration"`
+	BiggestClimb    *SportRecord `json:"biggest_climb"`
+}
+
+type RecentActivity struct {
+	ID        uuid.UUID `json:"id"`
+	Title     string    `json:"title"`
+	Date      time.Time `json:"date"`
+	Sport     string    `json:"sport"`
+	Distance  float64   `json:"distance"`
+	Duration  uint32    `json:"duration"`
+	AvgSpeed  float64   `json:"avg_speed"`
+	Elevation float64   `json:"elevation"`
+}
+
 type Dashboard struct {
-	Activities         []ActivitySummary  `json:"activities"`
-	ActivitiesCalendar []ActivityCalendar `json:"activities_calendar"`
-	NbEquipments       int64              `json:"nb_equipments"`
-	NbActivities       int64              `json:"nb_activities"`
-	TotalDistance      float64            `json:"total_distance"`
-	TotalDuration      string             `json:"total_duration"`
-	MaxDistance        float64            `json:"max_distance"`
-	MaxDuration        uint32             `json:"max_duration"`
-	MaxElevation       float64            `json:"max_elevation"`
+	Totals       DashboardTotals    `json:"totals"`
+	WeekStarts   []string           `json:"week_starts"` // the Mondays of the weeks of Weekly, oldest first
+	Weekly       []WeeklyVolume     `json:"weekly"`
+	Sports       []SportSummary     `json:"sports"`
+	Recent       []RecentActivity   `json:"recent"`
+	Calendar     []ActivityCalendar `json:"calendar"` // the activities of the current month
+	NbEquipments int64              `json:"nb_equipments"`
+	Timezone     string             `json:"timezone"`
 }
 
 type ActivityUpload struct {

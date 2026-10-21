@@ -132,7 +132,7 @@ func CmToKm(cm uint32) float64 {
 func ConvertTime(time uint32) string {
 	result := ""
 	day := time / 86400
-	hour := time / 3600
+	hour := (time % 86400) / 3600
 	minute := (time % 3600) / 60
 	second := time % 60
 
