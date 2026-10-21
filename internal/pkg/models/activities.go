@@ -136,7 +136,9 @@ func (db *DB) DeleteActivity(id uuid.UUID) error {
 
 func (db *DB) GetActivitiesByUser(userID uint, start, number int) ([]types.ActivitySummary, error) {
 	var activities []types.ActivitySummary
-	err := db.Table("activities").Preload("User").Preload("Equipment").Where("user_id = ?", userID).Order("date desc").Offset(start).Limit(number).Scan(&activities).Error
+	// only the listed columns: a full row holds every record of the FIT file
+	err := db.Table("activities").Select("id", "title", "date", "sport", "thumbnail").
+		Where("user_id = ?", userID).Order("date desc").Offset(start).Limit(number).Scan(&activities).Error
 	if err != nil {
 		return nil, err
 	}
@@ -201,4 +203,23 @@ func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, version
 		updates["power_ts"] = analysed.PowerTS
 	}
 	return db.Model(&Activity{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// CountActivitiesWithFile returns the number of activities analysed from the FIT file at path
+func (db *DB) CountActivitiesWithFile(path string) (int64, error) {
+	var count int64
+	err := db.Model(&Activity{}).Where("file_path = ?", path).Count(&count).Error
+	return count, err
+}
+
+// FindDuplicateActivity returns the id of the user's activity of the same sport starting at the same time,
+// nil when there is none: the same FIT file, or another export of it
+func (db *DB) FindDuplicateActivity(userID uint, sport string, date time.Time) (*uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := db.Model(&Activity{}).Where("user_id = ? AND sport = ? AND date = ?", userID, sport, date).
+		Limit(1).Pluck("id", &ids).Error
+	if err != nil || len(ids) == 0 {
+		return nil, err
+	}
+	return &ids[0], nil
 }

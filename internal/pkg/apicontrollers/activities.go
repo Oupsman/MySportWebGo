@@ -6,6 +6,7 @@ import (
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/services/activityService"
+	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -49,33 +50,47 @@ func UploadActivity(c *gin.Context) {
 		return
 	}
 
-	fmt.Println(uploadParams)
 	file := uploadParams.File
 	item := uploadParams.Item
 	// count := uploadParams.Count
-	// Create the dst directory
-	baseDir := "MEDIA/" + userUUID.String() + "/Activities/"
-	if err := os.MkdirAll(filepath.Dir(baseDir), 0770); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	baseDir := filepath.Join(activityService.MediaDir, userUUID.String(), "Activities")
+	if err := os.MkdirAll(baseDir, 0770); err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	dstFile := baseDir + file.Filename
-	fmt.Println("DstFile : ", dstFile)
-	// Upload the file to specific dstFile.
-	err = c.SaveUploadedFile(file, dstFile)
+	// analysed from a temporary file: a refused upload must not overwrite the FIT file of an activity
+	// with the same file name, nor stay on disk
+	tmp, err := os.CreateTemp(baseDir, "upload-*.fit")
 	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	tmpPath := tmp.Name()
+	tmp.Close()
+	defer os.Remove(tmpPath) // fails harmlessly once the file is moved in place
+	if err = c.SaveUploadedFile(file, tmpPath); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	activity, err := activityService.SumAnalyze(dstFile, user, equipment)
+	activity, err := activityService.SumAnalyze(tmpPath, user, equipment)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	activity.ID = uuid.New()
-	activity.Filename = file.Filename
-	activity.FilePath = dstFile
+	activity.Filename = filepath.Base(file.Filename)
+
+	// checked again when saving; checked here to answer before generating the thumbnail, which is slow
+	existing, err := db.FindDuplicateActivity(user.ID, activity.Sport, activity.Date)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if existing != nil {
+		c.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": "this activity was already imported", "id": existing.String()})
+		return
+	}
 
 	// reset LastImport status
 	if item == 0 {
@@ -93,8 +108,22 @@ func UploadActivity(c *gin.Context) {
 		return
 	}
 
-	err = activityService.CreateActivity(&db, &activity)
+	// the FIT file keeps its name, prefixed by the activity id when another file has it
+	store := func(activity *models.Activity) error {
+		activity.FilePath = filepath.Join(baseDir, activity.Filename)
+		if _, err := os.Stat(activity.FilePath); err == nil {
+			activity.FilePath = filepath.Join(baseDir, activity.ID.String()+"_"+activity.Filename)
+		}
+		return os.Rename(tmpPath, activity.FilePath)
+	}
+	err = activityService.CreateActivity(&db, &activity, store)
 	if err != nil {
+		os.Remove(activityService.ThumbnailPath(userUUID, activity.ID))
+		var duplicate *activityService.DuplicateError
+		if errors.As(err, &duplicate) {
+			c.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": err.Error(), "id": duplicate.ExistingID.String()})
+			return
+		}
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -281,7 +310,7 @@ func DeleteActivity(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "You are not the owner of this activity"})
 		return
 	}
-	err = db.DeleteActivity(activityUUID)
+	err = activityService.DeleteActivity(&db, activity, App.(*app.App).Logger)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

@@ -2,6 +2,8 @@ package activityService
 
 import (
 	"MySportWeb/internal/pkg/models"
+
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"gorm.io/gorm"
 )
@@ -81,15 +83,41 @@ func assignRoute(db *models.DB, activity *models.Activity) error {
 	return nil
 }
 
-// CreateActivity saves a new activity, linked to the route it follows
-func CreateActivity(db *models.DB, activity *models.Activity) error {
+// DuplicateError is returned when the user already imported the activity
+type DuplicateError struct {
+	ExistingID uuid.UUID
+}
+
+func (e *DuplicateError) Error() string {
+	return "this activity was already imported"
+}
+
+// CreateActivity saves a new activity, linked to the route it follows. It refuses duplicates with a
+// *DuplicateError. store, when not nil, is called before saving, while the user's imports are serialized:
+// it puts the FIT file in place and sets activity.FilePath; it can't be overwritten by a concurrent upload.
+func CreateActivity(db *models.DB, activity *models.Activity, store func(activity *models.Activity) error) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		txDB := &models.DB{DB: *tx}
 		// UserID is only filled by gorm when saving the User association
 		activity.UserID = activity.User.ID
-		err := assignRoute(txDB, activity)
+		// one import at a time per user: two uploads of the same file can't both pass the duplicate check
+		if err := txDB.LockUserRoutes(activity.UserID); err != nil {
+			return err
+		}
+		existing, err := txDB.FindDuplicateActivity(activity.UserID, activity.Sport, activity.Date)
 		if err != nil {
 			return err
+		}
+		if existing != nil {
+			return &DuplicateError{ExistingID: *existing}
+		}
+		if err := assignRoute(txDB, activity); err != nil {
+			return err
+		}
+		if store != nil {
+			if err := store(activity); err != nil {
+				return err
+			}
 		}
 		return txDB.CreateActivity(activity)
 	})

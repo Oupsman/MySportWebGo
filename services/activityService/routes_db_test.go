@@ -88,14 +88,14 @@ func TestRoutesDatabase(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := CreateActivity(db, &activity); err != nil {
+			if err := CreateActivity(db, &activity, nil); err != nil {
 				t.Error(err)
 			}
 		}()
 	}
 	wg.Wait()
 	other := importFit(t, otherRouteFile, user, equipment)
-	if err := CreateActivity(db, &other); err != nil {
+	if err := CreateActivity(db, &other, nil); err != nil {
 		t.Fatal(err)
 	}
 

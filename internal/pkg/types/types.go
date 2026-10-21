@@ -90,7 +90,7 @@ type Length struct {
 type ActivitySummary struct {
 	ID        uuid.UUID `json:"id"`
 	Title     string    `json:"title"`
-	Date      string    `json:"date"`
+	Date      time.Time `json:"date"`
 	Sport     string    `json:"sport"`
 	Thumbnail string    `json:"thumbnail"`
 }
