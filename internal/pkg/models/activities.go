@@ -9,7 +9,7 @@ import (
 )
 
 type Activity struct {
-	ID               uuid.UUID `gorm:"type:uuid;default:gen_random_uuid()"`
+	ID               uuid.UUID `gorm:"type:uuid;default:gen_random_uuid()" json:"id"`
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	DeletedAt        *time.Time        `sql:"index"`
@@ -66,18 +66,22 @@ type Activity struct {
 	StanceTimes         types.FloatArray    `json:"stance_times"`
 	Temperatures        types.Int16Array    `json:"temperatures"`
 	TimeStamps          types.MultiString   `json:"time_stamps"`
-	PhysicalConditions  types.FloatArray    `json:"physical_conditions"`
-	TotalAscent         uint16              `json:"total_ascent"`
-	TotalDescent        uint16              `json:"total_descent"`
-	Altitudes           types.FloatArray    `json:"altitudes"`
-	GpsCenter           *types.GpsPoint     `json:"gps_center"`
-	GpsBounds           types.GpsPointArray `json:"gps_bounds"`
-	Means               types.FloatArray    `json:"means"`
-	PositiveElevation   float64             `json:"positive_elevation"`
-	NegativeElevation   float64             `json:"negative_elevation"`
-	StartPosition       *types.GpsPoint     `json:"start_position"`
-	EndPosition         *types.GpsPoint     `json:"end_position"`
-	Lengths             types.LengthArray   `json:"lengths"`
+	// seconds since the start of each value of the sparse series, which skip the records without a value
+	GpsTimeStamps      types.FloatArray    `json:"gps_time_stamps"`
+	HeartTimeStamps    types.FloatArray    `json:"heart_time_stamps"`
+	CadenceTimeStamps  types.FloatArray    `json:"cadence_time_stamps"`
+	PhysicalConditions types.FloatArray    `json:"physical_conditions"`
+	TotalAscent        uint16              `json:"total_ascent"`
+	TotalDescent       uint16              `json:"total_descent"`
+	Altitudes          types.FloatArray    `json:"altitudes"`
+	GpsCenter          *types.GpsPoint     `json:"gps_center"`
+	GpsBounds          types.GpsPointArray `json:"gps_bounds"`
+	Means              types.FloatArray    `json:"means"`
+	PositiveElevation  float64             `json:"positive_elevation"`
+	NegativeElevation  float64             `json:"negative_elevation"`
+	StartPosition      *types.GpsPoint     `json:"start_position"`
+	EndPosition        *types.GpsPoint     `json:"end_position"`
+	Lengths            types.LengthArray   `json:"lengths"`
 }
 
 func (db *DB) CreateActivity(activity *Activity) error {
@@ -167,4 +171,34 @@ func (db *DB) GetSimplifiedTrace(activity *Activity, simplify func([]types.GpsPo
 		return nil, err
 	}
 	return activity.SimplifiedGpsPoints, nil
+}
+
+// GetActivitiesBelowEngine returns the ids of the activities analysed by an engine older than version
+func (db *DB) GetActivitiesBelowEngine(version int) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := db.Model(&Activity{}).Where("engine_version < ? OR engine_version IS NULL", version).
+		Order("date asc").Pluck("id", &ids).Error
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// GetActivityFilePath returns the path of the FIT file of an activity
+func (db *DB) GetActivityFilePath(id uuid.UUID) (string, error) {
+	var activity Activity
+	err := db.Select("id", "file_path").First(&activity, "id = ?", id).Error
+	return activity.FilePath, err
+}
+
+// UpdateActivityTimeStamps saves the time stamps of the sparse series and the engine version
+func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, version int) error {
+	updates := map[string]interface{}{"engine_version": version}
+	if analysed != nil {
+		updates["gps_time_stamps"] = analysed.GpsTimeStamps
+		updates["heart_time_stamps"] = analysed.HeartTimeStamps
+		updates["cadence_time_stamps"] = analysed.CadenceTimeStamps
+		updates["power_ts"] = analysed.PowerTS
+	}
+	return db.Model(&Activity{}).Where("id = ?", id).Updates(updates).Error
 }

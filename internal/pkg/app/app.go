@@ -38,6 +38,10 @@ func (app *App) Start() error {
 		if err != nil {
 			app.Logger.Error().Err(err).Msg("failed to assign routes to activities")
 		}
+		err = activityService.BackfillTimeStamps(&app.DB, app.Logger)
+		if err != nil {
+			app.Logger.Error().Err(err).Msg("failed to re-analyse activities")
+		}
 	}()
 	err := app.Notifications.Start(app.Logger, app.Client, app.DB)
 	if err != nil {

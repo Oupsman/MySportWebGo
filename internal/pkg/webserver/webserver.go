@@ -30,6 +30,15 @@ func RunHttp(listenAddr string, App *app.App) error {
 	httpRouter.Use(static.Serve("/MEDIA", static.LocalFile("./MEDIA", true)))
 	httpRouter.Use(AppHandler(App))
 
+	// the cors middleware refuses other origins silently (403, or a missing header in the browser)
+	httpRouter.Use(func(c *gin.Context) {
+		if origin := c.GetHeader("Origin"); origin != "" && origin != vars.Domain {
+			App.Logger.Warn().Str("origin", origin).Str("allowed_origin", vars.Domain).
+				Str("method", c.Request.Method).Str("path", c.Request.URL.Path).
+				Msg("CORS: request from an origin that is not allowed, the browser will block it (set DOMAIN in .env)")
+		}
+		c.Next()
+	})
 	httpRouter.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{vars.Domain},
 		AllowMethods:     []string{"GET", "OPTIONS", "POST", "DELETE"},

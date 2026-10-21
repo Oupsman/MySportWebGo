@@ -188,9 +188,13 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 			for meters < stopmeters && counter < recordsCount-1 {
 				if counter < recordsCount-1 {
 					record = fitActivity.Records[counter]
-					activity.TimeStamps = append(activity.TimeStamps, fmt.Sprintf("%f", record.Timestamp.Sub(fitActivity.Sessions[0].StartTime).Seconds()))
+					// seconds since the start: sparse series (GPS, heart rate, cadence, power) skip the records
+					// without a value, they keep their own time stamps to stay aligned with the others
+					offset := record.Timestamp.Sub(fitActivity.Sessions[0].StartTime).Seconds()
+					activity.TimeStamps = append(activity.TimeStamps, fmt.Sprintf("%f", offset))
 					if record.HeartRate != math.MaxUint8 {
 						activity.Hearts = append(activity.Hearts, uint16(record.HeartRate))
+						activity.HeartTimeStamps = append(activity.HeartTimeStamps, offset)
 					}
 					if record.Temperature != math.MaxInt8 {
 						activity.Temperatures = append(activity.Temperatures, int16(record.Temperature))
@@ -225,6 +229,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 							Lon: utils.SemiCircleToDegres(record.PositionLong),
 						}
 						activity.GpsPoints = append(activity.GpsPoints, currentPoint)
+						activity.GpsTimeStamps = append(activity.GpsTimeStamps, offset)
 
 						// if the user has a security distance, we add the points to the public gps points
 						distanceFromStart := utils.Haversine(startPosition, currentPoint)
@@ -240,6 +245,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 					if hasPower && activity.Sport == "cycling" {
 						if record.Power != math.MaxUint16 {
 							activity.Powers = append(activity.Powers, record.Power)
+							activity.PowerTS = append(activity.PowerTS, fmt.Sprintf("%f", offset))
 						}
 					}
 					if !math.IsNaN(record.SpeedScaled()) && record.SpeedScaled() > activity.MaxSpeed {
@@ -251,6 +257,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 					}
 					if record.Cadence != math.MaxUint8 {
 						activity.Cadences = append(activity.Cadences, uint16(record.Cadence))
+						activity.CadenceTimeStamps = append(activity.CadenceTimeStamps, offset)
 					}
 				}
 				counter++

@@ -6,40 +6,76 @@ import (
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/internal/pkg/vars"
+	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"gorm.io/gorm"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // /MEDIA/user uuid/profile pictures/profile picture.png
+
+// describeSecret returns facts about a secret that help diagnose a login failure without revealing it
+func describeSecret(secret string) map[string]interface{} {
+	nonASCII := false
+	for _, r := range secret {
+		if r > unicode.MaxASCII {
+			nonASCII = true
+			break
+		}
+	}
+	return map[string]interface{}{
+		"length":               utf8.RuneCountInString(secret),
+		"bytes":                len(secret),
+		"surrounding_spaces":   strings.TrimSpace(secret) != secret,
+		"non_ascii_characters": nonASCII,
+	}
+}
 
 func Login(c *gin.Context) {
 
 	var user types.LoginBody
 
-	App := c.MustGet("App")
-	db := App.(*app.App).DB
+	App := c.MustGet("App").(*app.App)
+	db := App.DB
+	// never log the password nor the hash, only facts about them
+	logger := App.Logger.With().Str("handler", "login").Str("origin", c.GetHeader("Origin")).
+		Str("client_ip", c.ClientIP()).Logger()
 
 	if err := c.ShouldBindJSON(&user); err != nil {
+		logger.Debug().Err(err).Str("content_type", c.ContentType()).Msg("login refused: invalid request body")
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+	logger = logger.With().Str("username", user.Username).Logger()
+	logger.Debug().Interface("username_facts", describeSecret(user.Username)).
+		Interface("password_facts", describeSecret(user.Password)).Msg("login attempt")
 
 	var existingUser models.Users
 
-	db.Where("Username = ?", user.Username).First(&existingUser)
+	err := db.Where("Username = ?", user.Username).First(&existingUser).Error
 
 	if existingUser.ID == 0 {
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			logger.Error().Err(err).Msg("login refused: database error while looking up the user")
+		} else {
+			logger.Debug().Msg("login refused: no user with this username (it is case sensitive, the email does not work)")
+		}
 		c.JSON(400, gin.H{"error": "user does not exist"})
 		return
 	}
+	logger.Debug().Uint("user_id", existingUser.ID).Int("stored_hash_length", len(existingUser.Password)).
+		Bool("stored_hash_is_bcrypt", strings.HasPrefix(existingUser.Password, "$2")).Msg("user found")
 
-	errHash := utils.CompareHashPassword(user.Password, existingUser.Password)
-
-	if !errHash {
+	if err := utils.CheckPassword(user.Password, existingUser.Password); err != nil {
+		logger.Debug().Err(err).Uint("user_id", existingUser.ID).Msg("login refused: password check failed")
 		c.JSON(400, gin.H{"error": "invalid password"})
 		return
 	}
+	logger.Debug().Uint("user_id", existingUser.ID).Msg("password ok, issuing token")
 
 	expirationTime := time.Now().Add(720 * time.Hour)
 

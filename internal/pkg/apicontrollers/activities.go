@@ -240,6 +240,7 @@ func GetActivity(c *gin.Context) {
 	if activity.User.ID != userID {
 		// Deleting non-public datas if user is not the owner
 		activity.GpsPoints = nil
+		activity.GpsTimeStamps = nil
 		activity.StartPosition = nil
 		activity.EndPosition = nil
 		activity.User = models.Users{}
@@ -318,7 +319,7 @@ func GetSimilarActivities(c *gin.Context) {
 		return
 	}
 
-	similar := []types.ActivitySummary{}
+	similar := []types.RouteActivity{}
 	if activity.RouteID != nil {
 		similar, err = db.GetActivitiesByRoute(*activity.RouteID, activity.ID)
 		if err != nil {

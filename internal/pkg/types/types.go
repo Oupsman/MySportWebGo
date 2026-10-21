@@ -95,6 +95,16 @@ type ActivitySummary struct {
 	Thumbnail string    `json:"thumbnail"`
 }
 
+// RouteActivity is an activity of a route, with what is needed to compare it to the others
+type RouteActivity struct {
+	ID       uuid.UUID `json:"id"`
+	Title    string    `json:"title"`
+	Date     time.Time `json:"date"`
+	Distance float64   `json:"distance"`
+	Duration uint32    `json:"duration"`
+	AvgSpeed float64   `json:"avg_speed"`
+}
+
 type ActivityCalendar struct {
 	ID       uuid.UUID `json:"id"`
 	Title    string    `json:"title"`

@@ -27,6 +27,12 @@ func CompareHashPassword(password, hash string) bool {
 	return err == nil
 }
 
+// CheckPassword is CompareHashPassword returning bcrypt's reason on failure
+// (ErrMismatchedHashAndPassword, ErrHashTooShort, wrong version...), for diagnostics
+func CheckPassword(password, hash string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+}
+
 func ParseToken(tokenString string) (claims jwt.MapClaims, err error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return []byte(vars.SecretKey), nil
