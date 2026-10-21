@@ -15,7 +15,7 @@ import (
 
 func Login(c *gin.Context) {
 
-	var user models.Users
+	var user types.LoginBody
 
 	App := c.MustGet("App")
 	db := App.(*app.App).DB
@@ -65,14 +65,15 @@ func Login(c *gin.Context) {
 
 func Register(c *gin.Context) {
 
-	var user models.Users
+	var body types.RegisterBody
 	App := c.MustGet("App")
 	db := App.(*app.App).DB
 
-	if err := c.ShouldBindJSON(&user); err != nil {
+	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+	user := models.Users{Username: body.Username, Password: body.Password, Email: body.Email}
 
 	if user.Username == "" || user.Password == "" || user.Email == "" {
 		c.JSON(400, gin.H{"error": "missing required fields"})
@@ -128,8 +129,8 @@ func GetUser(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(400, gin.H{"error": "user not found"})
+		return
 	}
-	user.Password = ""
 	c.JSON(200, user)
 }
 
@@ -152,7 +153,6 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 
-	updatedUser.ID = uint(UserID)
 	currentUser, err := db.GetUser(UserID)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -166,22 +166,22 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 
-	updatedUser.ID = uint(UserID)
-	updatedUser.Email = user.Email
-	updatedUser.Username = currentUser.Username
-	updatedUser.Role = currentUser.Role
+	// start from the stored user: id, uuid, username, role and timestamps can't be changed here
+	updatedUser = currentUser
 	if user.Password != "" {
+		if user.Password != user.PasswordConfirmation {
+			c.JSON(400, gin.H{"error": "passwords don't match"})
+			return
+		}
 		newHash, err := utils.GenerateHashPassword(user.Password)
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
 		updatedUser.Password = newHash
-	} else {
-		updatedUser.Password = currentUser.Password
 	}
+	updatedUser.Email = user.Email
 	updatedUser.DateOfBirth = user.DateOfBirth
-	updatedUser.UUID = user.UUID
 	updatedUser.Height = user.Height
 	updatedUser.Weight = user.Weight
 	updatedUser.MaxHR = user.MaxHR

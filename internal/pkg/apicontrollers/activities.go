@@ -169,16 +169,28 @@ func UpdateActivity(c *gin.Context) {
 		return
 	}
 	err = c.ShouldBindJSON(&newActivity)
-	activity.Title = newActivity.Title
-	activity.CanComments = newActivity.CanComments
-	activity.IsCommute = newActivity.IsCommute
-	activity.EquipmentID = newActivity.EquipmentID
-	activity.Visibility = newActivity.Visibility
-
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if newActivity.EquipmentID != nil {
+		equipment, err := db.GetEquipment(*newActivity.EquipmentID)
+		if err != nil || equipment.UserID != int(user.ID) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "unknown equipment"})
+			return
+		}
+	}
+	if newActivity.Visibility < 0 || newActivity.Visibility > 2 {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid visibility"})
+		return
+	}
+	activity.Title = newActivity.Title
+	activity.CanComments = newActivity.CanComments
+	activity.IsCommute = newActivity.IsCommute
+	activity.EquipmentID = newActivity.EquipmentID
+	// the preloaded association would override EquipmentID when saving
+	activity.Equipment = models.Equipments{}
+	activity.Visibility = newActivity.Visibility
 	err = db.UpdateActivity(activity)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})

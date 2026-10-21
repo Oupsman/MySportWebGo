@@ -2,16 +2,17 @@ package models
 
 import (
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 	"time"
 )
 
 // /MEDIA/user uuid/equipments/equipment uuid/pic filename.pic extension
 
 type Equipments struct {
-	ID                  uuid.UUID `gorm:"type:uuid;default:gen_random_uuid()"`
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
-	DeletedAt           *time.Time `sql:"index"`
+	ID                  uuid.UUID  `gorm:"type:uuid;default:gen_random_uuid()" json:"id"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+	DeletedAt           *time.Time `sql:"index" json:"-"`
 	Name                string     `json:"name"`
 	Brand               string     `json:"brand"`
 	EquipmentModel      string     `json:"model"`
@@ -19,18 +20,23 @@ type Equipments struct {
 	InitialMileage      int        `json:"initial_mileage"`
 	Mileage             int        `json:"mileage"`
 	Weight              int        `json:"weight"`
-	User                Users
-	UserID              int
-	MaintenanceInterval int  `json:"maintenance_interval"`
-	IsDefault           bool `json:"is_default"`
+	User                Users      `json:"-"`
+	UserID              int        `json:"user_id"`
+	MaintenanceInterval int        `json:"maintenance_interval"`
+	IsDefault           bool       `json:"is_default"`
 }
 
-func (db *DB) CreateEquipment(equipment Equipments) error {
-	result := db.Create(&equipment)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+// CreateEquipment saves a new equipment, it becomes the only default one of the user when IsDefault is set
+func (db *DB) CreateEquipment(equipment *Equipments) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if equipment.IsDefault {
+			err := tx.Model(&Equipments{}).Where("user_id = ?", equipment.UserID).Update("is_default", false).Error
+			if err != nil {
+				return err
+			}
+		}
+		return tx.Omit("User").Create(equipment).Error
+	})
 }
 
 func (db *DB) GetDefaultEquipment(userID uint) Equipments {
@@ -42,12 +48,18 @@ func (db *DB) GetDefaultEquipment(userID uint) Equipments {
 	return equipment
 }
 
-func (db *DB) UpdateEquipment(equipment Equipments) error {
-	result := db.Save(&equipment)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+// UpdateEquipment saves an equipment, it becomes the only default one of the user when IsDefault is set
+func (db *DB) UpdateEquipment(equipment *Equipments) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if equipment.IsDefault {
+			err := tx.Model(&Equipments{}).Where("user_id = ? AND id <> ?", equipment.UserID, equipment.ID).
+				Update("is_default", false).Error
+			if err != nil {
+				return err
+			}
+		}
+		return tx.Omit("User").Save(equipment).Error
+	})
 }
 
 func (db *DB) GetEquipment(uuid uuid.UUID) (Equipments, error) {
@@ -66,11 +78,13 @@ func (db *DB) GetEquipments(id uint) []Equipments {
 	return equipments
 }
 
+// DeleteEquipment deletes an equipment, its activities are kept without equipment
 func (db *DB) DeleteEquipment(uuid uuid.UUID) error {
-	var equipment Equipments
-	result := db.Where("id = ?", uuid).Delete(&equipment)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return db.Transaction(func(tx *gorm.DB) error {
+		err := tx.Model(&Activity{}).Where("equipment_id = ?", uuid).Update("equipment_id", nil).Error
+		if err != nil {
+			return err
+		}
+		return tx.Where("id = ?", uuid).Delete(&Equipments{}).Error
+	})
 }

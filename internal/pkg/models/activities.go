@@ -4,6 +4,7 @@ import (
 	"MySportWeb/internal/pkg/types"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"time"
 )
 
@@ -30,7 +31,7 @@ type Activity struct {
 	Timezone         string            `json:"timezone" gorm:"default:'Europe/Paris'"`
 	Masked           bool              `json:"masked" gorm:"default:true"`
 	Equipment        Equipments        `json:"equipment" gorm:"null"`
-	EquipmentID      uuid.UUID         `json:"equipment_id"`
+	EquipmentID      *uuid.UUID        `json:"equipment_id" gorm:"type:uuid"` // nil when the user has no equipment
 	Serialnumber     string            `json:"serialnumber"`
 	Lastimport       bool              `json:"lastimport"`
 	Visibility       int               `json:"visibility" gorm:"default:0"`
@@ -97,7 +98,8 @@ func (db *DB) GetActivity(id uuid.UUID) (*Activity, error) {
 }
 
 func (db *DB) UpdateActivity(activity *Activity) error {
-	err := db.Save(activity).Error
+	// don't save the preloaded user and equipment along
+	err := db.Omit(clause.Associations).Save(activity).Error
 	if err != nil {
 		return err
 	}

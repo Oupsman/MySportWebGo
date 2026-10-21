@@ -11,7 +11,7 @@ type Users struct {
 	gorm.Model
 	UUID             uuid.UUID `gorm:"type:uuid;default:gen_random_uuid()"`
 	Username         string    `gorm:"unique" json:"username"`
-	Password         string    `json:"password"`
+	Password         string    `json:"-"`
 	Role             string    `json:"role"`
 	Email            string    `json:"email" gorm:"unique"`
 	DateOfBirth      time.Time `json:"date_of_birth"`

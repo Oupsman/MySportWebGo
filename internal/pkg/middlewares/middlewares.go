@@ -3,32 +3,18 @@ package middlewares
 import (
 	"MySportWeb/internal/pkg/utils"
 	"net/http"
-	"strings"
 
-	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 )
 
 func IsAuthorized() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
-
-		bearerToken := c.GetHeader("Authorization")
-		reqToken := strings.Split(bearerToken, " ")[1]
-		_, err := utils.ParseToken(reqToken)
-
+		_, err := utils.ParseBearerToken(c.GetHeader("Authorization"))
 		if err != nil {
-			if err == jwt.ErrSignatureInvalid {
-				c.JSON(http.StatusUnauthorized, gin.H{
-					"message": "mdw unauthorized",
-				})
-				c.Abort()
-				return
-			}
-			c.JSON(http.StatusBadRequest, gin.H{
-				"message": "mdw bad request: " + err.Error(),
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"message": "unauthorized: " + err.Error(),
 			})
-			c.Abort()
 			return
 		}
 
@@ -39,31 +25,18 @@ func IsAuthorized() gin.HandlerFunc {
 func IsAdmin() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
-
-		bearerToken := c.GetHeader("Authorization")
-		reqToken := strings.Split(bearerToken, " ")[1]
-		claims, err := utils.ParseToken(reqToken)
-
+		claims, err := utils.ParseBearerToken(c.GetHeader("Authorization"))
 		if err != nil {
-			if err == jwt.ErrSignatureInvalid {
-				c.JSON(http.StatusUnauthorized, gin.H{
-					"message": "mdw nauthorized",
-				})
-				c.Abort()
-				return
-			}
-			c.JSON(http.StatusBadRequest, gin.H{
-				"message": "mdw bad request",
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"message": "unauthorized: " + err.Error(),
 			})
-			c.Abort()
 			return
 		}
 
 		if claims["role"] != "Admin" {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"message": "mdw unauthorized",
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"message": "forbidden",
 			})
-			c.Abort()
 			return
 		}
 

@@ -3,8 +3,9 @@ package utils
 import (
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/vars"
+	"errors"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/exp/constraints"
@@ -29,38 +30,64 @@ func CompareHashPassword(password, hash string) bool {
 func ParseToken(tokenString string) (claims jwt.MapClaims, err error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return []byte(vars.SecretKey), nil
-	})
-
+	},
+		// tokens are only signed with HS256 by Login, refuse any other algorithm
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithExpirationRequired(),
+		jwt.WithIssuer("mysportweb"),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	claims = token.Claims.(jwt.MapClaims)
-	/*if !ok {
-		return nil, err
-	}*/
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return nil, errors.New("invalid token")
+	}
 
 	return claims, nil
 }
 
-func GetUserID(tokenString string) (uint64, error) {
-	reqToken := strings.Split(tokenString, " ")[1]
+// BearerToken extracts the token from an "Authorization: Bearer <token>" header
+func BearerToken(header string) (string, error) {
+	token, found := strings.CutPrefix(header, "Bearer ")
+	if !found || token == "" {
+		return "", errors.New("missing bearer token")
+	}
+	return token, nil
+}
 
-	claims, err := ParseToken(reqToken)
+// ParseBearerToken returns the claims of the token of an Authorization header
+func ParseBearerToken(header string) (jwt.MapClaims, error) {
+	token, err := BearerToken(header)
+	if err != nil {
+		return nil, err
+	}
+	return ParseToken(token)
+}
+
+func GetUserID(tokenString string) (uint64, error) {
+	claims, err := ParseBearerToken(tokenString)
 	if err != nil {
 		return 0, err
 	}
-	return uint64(claims["sub"].(float64)), nil
+	sub, ok := claims["sub"].(float64)
+	if !ok {
+		return 0, errors.New("invalid token subject")
+	}
+	return uint64(sub), nil
 }
 
 func GetUserUUID(tokenString string) (uuid.UUID, error) {
-	reqToken := strings.Split(tokenString, " ")[1]
-
-	claims, err := ParseToken(reqToken)
+	claims, err := ParseBearerToken(tokenString)
 	if err != nil {
 		return uuid.UUID{}, err
 	}
-	return uuid.Parse(claims["uuid"].(string))
+	userUUID, ok := claims["uuid"].(string)
+	if !ok {
+		return uuid.UUID{}, errors.New("invalid token uuid")
+	}
+	return uuid.Parse(userUUID)
 }
 
 func StringInSlice(a string, list []string) bool {
@@ -73,13 +100,15 @@ func StringInSlice(a string, list []string) bool {
 }
 
 func GetUserRole(tokenString string) (string, error) {
-	reqToken := strings.Split(tokenString, " ")[1]
-
-	claims, err := ParseToken(reqToken)
+	claims, err := ParseBearerToken(tokenString)
 	if err != nil {
 		return "", err
 	}
-	return claims["role"].(string), nil
+	role, ok := claims["role"].(string)
+	if !ok {
+		return "", errors.New("invalid token role")
+	}
+	return role, nil
 }
 
 func SemiCircleToDegres(semi int32) float64 {

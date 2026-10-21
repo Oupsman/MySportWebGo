@@ -73,7 +73,8 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.POST("/equipment/:id", middlewares.IsAuthorized(), apicontrollers.UpdateEquipment)
 
 	// healthdatas
-	apiv1.POST("/healthdatas", middlewares.IsAuthorized(), apicontrollers.ImportHealthDatas)
+	apiv1.POST("/healthdatas", middlewares.IsAuthorized(), apicontrollers.CreateHealthData)
+	apiv1.POST("/healthdatas/import", middlewares.IsAuthorized(), apicontrollers.ImportHealthDatas)
 	apiv1.GET("/healthdatas", middlewares.IsAuthorized(), apicontrollers.GetHealthDatas)
 
 	// Start and run the server

@@ -61,6 +61,17 @@ type UserBody struct {
 	HomeTown             string    `json:"home_town"`
 }
 
+type LoginBody struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type RegisterBody struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Email    string `json:"email"`
+}
+
 type Device struct {
 	Model  string `json:"model"`
 	Brand  string `json:"brand"`
