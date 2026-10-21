@@ -168,6 +168,31 @@ type RecentActivity struct {
 	Elevation float64   `json:"elevation"`
 }
 
+// ActivityRow is an activity of the activities table
+type ActivityRow struct {
+	ID            uuid.UUID  `json:"id"`
+	Title         string     `json:"title"`
+	Date          time.Time  `json:"date"`
+	Sport         string     `json:"sport"`
+	Distance      float64    `json:"distance"`
+	Duration      uint32     `json:"duration"`
+	AvgSpeed      float64    `json:"avg_speed"`
+	Elevation     float64    `json:"elevation"`
+	IsCommute     bool       `json:"is_commute"`
+	EquipmentID   *uuid.UUID `json:"equipment_id"`
+	EquipmentName *string    `json:"equipment_name"`
+}
+
+// ActivitySearch is a page of the user's activities matching a filter, with the totals of all of them
+type ActivitySearch struct {
+	Activities []ActivityRow `json:"activities"`
+	Total      int64         `json:"total"`
+	Totals     PeriodTotals  `json:"totals"`
+	// what the filters can offer: the user's sports and the years with activities, most recent first
+	Sports []string `json:"sports"`
+	Years  []int    `json:"years"`
+}
+
 type Dashboard struct {
 	Totals       DashboardTotals    `json:"totals"`
 	WeekStarts   []string           `json:"week_starts"` // the Mondays of the weeks of Weekly, oldest first

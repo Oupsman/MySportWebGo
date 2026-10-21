@@ -14,6 +14,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 )
 
 // Directory structures :
@@ -358,4 +360,78 @@ func GetSimilarActivities(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"activities": similar})
+}
+
+// SearchActivities returns a page of the user's activities:
+// ?sport=a&sport=b&from=YYYY-MM-DD&to=YYYY-MM-DD (included, in the user's timezone)&q=title
+// &equipment=<id>|none&commute=true&sort=date|title|distance|duration|speed|elevation&order=asc|desc
+// &page=1&per_page=25 (100 at most)
+func SearchActivities(c *gin.Context) {
+	db := c.MustGet("App").(*app.App).DB
+	user, location, ok := currentUserLocation(c)
+	if !ok {
+		return
+	}
+	bad := func(message string) {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": message})
+	}
+
+	filter := models.ActivityFilter{Sports: c.QueryArray("sport"), Query: strings.TrimSpace(c.Query("q"))}
+	if from := c.Query("from"); from != "" {
+		date, err := time.ParseInLocation(time.DateOnly, from, location)
+		if err != nil {
+			bad("from must be YYYY-MM-DD")
+			return
+		}
+		filter.From = date
+	}
+	if to := c.Query("to"); to != "" {
+		date, err := time.ParseInLocation(time.DateOnly, to, location)
+		if err != nil {
+			bad("to must be YYYY-MM-DD")
+			return
+		}
+		filter.To = date.AddDate(0, 0, 1)
+	}
+	switch equipment := c.Query("equipment"); equipment {
+	case "":
+	case "none":
+		filter.NoEquipment = true
+	default:
+		id, err := uuid.Parse(equipment)
+		if err != nil {
+			bad("equipment must be an id or none")
+			return
+		}
+		filter.EquipmentID = &id
+	}
+	filter.CommuteOnly = c.Query("commute") == "true"
+
+	sort := c.DefaultQuery("sort", "date")
+	if _, ok := models.SortColumns[sort]; !ok {
+		bad("unknown sort " + sort)
+		return
+	}
+	order := c.DefaultQuery("order", "desc")
+	if order != "asc" && order != "desc" {
+		bad("order must be asc or desc")
+		return
+	}
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		bad("page must be a positive number")
+		return
+	}
+	perPage, err := strconv.Atoi(c.DefaultQuery("per_page", "25"))
+	if err != nil || perPage < 1 || perPage > 100 {
+		bad("per_page must be between 1 and 100")
+		return
+	}
+
+	search, err := db.SearchActivities(user.ID, filter, sort, order == "desc", page, perPage, location)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, search)
 }

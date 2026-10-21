@@ -70,6 +70,7 @@ func RunHttp(listenAddr string, App *app.App) error {
 	// Activities
 	apiv1.POST("/activity", middlewares.IsAuthorized(), apicontrollers.UploadActivity)
 	apiv1.GET("/activity/list/:start/:count", middlewares.IsAuthorized(), apicontrollers.ListActivities)
+	apiv1.GET("/activity/search", middlewares.IsAuthorized(), apicontrollers.SearchActivities)
 	apiv1.GET("/activity/:id", apicontrollers.GetActivity)
 	apiv1.GET("/activity/:id/similar", middlewares.IsAuthorized(), apicontrollers.GetSimilarActivities)
 	apiv1.DELETE("/activity/:id", middlewares.IsAuthorized(), apicontrollers.DeleteActivity)
