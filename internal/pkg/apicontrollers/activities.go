@@ -2,12 +2,11 @@ package apicontrollers
 
 import (
 	"MySportWeb/internal/pkg/app"
+	"MySportWeb/internal/pkg/middlewares"
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
-	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/services/activityService"
 	"errors"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"net/http"
@@ -26,27 +25,14 @@ import (
 func UploadActivity(c *gin.Context) {
 	var uploadParams types.ActivityUpload
 
-	App := c.MustGet("App")
-	bearerToken := c.Request.Header.Get("Authorization")
-	userUUID, err := utils.GetUserUUID(bearerToken)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	db := App.(*app.App).DB
-
-	user, err := db.GetUserByUUID(userUUID)
-
+	db := c.MustGet("App").(*app.App).DB
+	user := middlewares.CurrentUser(c)
 	equipment := db.GetDefaultEquipment(user.ID)
 
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
 	// single file
 	// file, _ := c.FormFile("file")
 
-	err = c.ShouldBind(&uploadParams)
+	err := c.ShouldBind(&uploadParams)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -55,7 +41,7 @@ func UploadActivity(c *gin.Context) {
 	file := uploadParams.File
 	item := uploadParams.Item
 	// count := uploadParams.Count
-	baseDir := filepath.Join(activityService.MediaDir, userUUID.String(), "Activities")
+	baseDir := filepath.Join(activityService.MediaDir, user.UUID.String(), "Activities")
 	if err := os.MkdirAll(baseDir, 0770); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -120,7 +106,7 @@ func UploadActivity(c *gin.Context) {
 	}
 	err = activityService.CreateActivity(&db, &activity, store)
 	if err != nil {
-		os.Remove(activityService.ThumbnailPath(userUUID, activity.ID))
+		os.Remove(activityService.ThumbnailPath(user.UUID, activity.ID))
 		var duplicate *activityService.DuplicateError
 		if errors.As(err, &duplicate) {
 			c.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": err.Error(), "id": duplicate.ExistingID.String()})
@@ -134,19 +120,8 @@ func UploadActivity(c *gin.Context) {
 }
 
 func ListActivities(c *gin.Context) {
-	App := c.MustGet("App")
-	bearerToken := c.Request.Header.Get("Authorization")
-	userUUID, err := utils.GetUserUUID(bearerToken)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	db := App.(*app.App).DB
-	user, err := db.GetUserByUUID(userUUID)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	db := c.MustGet("App").(*app.App).DB
+	user := middlewares.CurrentUser(c)
 	start, err := strconv.Atoi((c.Param("start")))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -170,19 +145,8 @@ func ListActivities(c *gin.Context) {
 func UpdateActivity(c *gin.Context) {
 	var newActivity models.Activity
 
-	App := c.MustGet("App")
-	bearerToken := c.Request.Header.Get("Authorization")
-	userUUID, err := utils.GetUserUUID(bearerToken)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	db := App.(*app.App).DB
-	user, err := db.GetUserByUUID(userUUID)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	db := c.MustGet("App").(*app.App).DB
+	user := middlewares.CurrentUser(c)
 
 	activityUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -234,9 +198,7 @@ func UpdateActivity(c *gin.Context) {
 }
 
 func GetActivity(c *gin.Context) {
-	var userID uint
-	App := c.MustGet("App")
-	db := App.(*app.App).DB
+	db := c.MustGet("App").(*app.App).DB
 
 	activityUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -249,20 +211,9 @@ func GetActivity(c *gin.Context) {
 		return
 	}
 
-	bearerToken := c.Request.Header.Get("Authorization")
-	fmt.Println("Token: ", bearerToken)
-	if bearerToken != "" {
-		userUUID, err := utils.GetUserUUID(bearerToken)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		user, err := db.GetUserByUUID(userUUID)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		userID = user.ID
+	// user is empty (ID 0) for an anonymous request
+	user, authenticated := middlewares.LookupUser(c)
+	if authenticated {
 		if activity.Visibility == 0 && activity.User.ID != user.ID {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You can't access this activity"})
 			return
@@ -271,7 +222,7 @@ func GetActivity(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You can't access this activity"})
 		return
 	}
-	if activity.User.ID != userID {
+	if activity.User.ID != user.ID {
 		// Deleting non-public datas if user is not the owner
 		activity.GpsPoints = nil
 		activity.GpsTimeStamps = nil
@@ -286,19 +237,9 @@ func GetActivity(c *gin.Context) {
 }
 
 func DeleteActivity(c *gin.Context) {
-	App := c.MustGet("App")
-	bearerToken := c.Request.Header.Get("Authorization")
-	userUUID, err := utils.GetUserUUID(bearerToken)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	db := App.(*app.App).DB
-	user, err := db.GetUserByUUID(userUUID)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	App := c.MustGet("App").(*app.App)
+	db := App.DB
+	user := middlewares.CurrentUser(c)
 
 	activityUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -315,7 +256,7 @@ func DeleteActivity(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "You are not the owner of this activity"})
 		return
 	}
-	err = activityService.DeleteActivity(&db, activity, App.(*app.App).Logger)
+	err = activityService.DeleteActivity(&db, activity, App.Logger)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -324,19 +265,8 @@ func DeleteActivity(c *gin.Context) {
 }
 
 func GetSimilarActivities(c *gin.Context) {
-	App := c.MustGet("App")
-	bearerToken := c.Request.Header.Get("Authorization")
-	userUUID, err := utils.GetUserUUID(bearerToken)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	db := App.(*app.App).DB
-	user, err := db.GetUserByUUID(userUUID)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	db := c.MustGet("App").(*app.App).DB
+	user := middlewares.CurrentUser(c)
 
 	activityUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -377,10 +307,7 @@ func GetSimilarActivities(c *gin.Context) {
 // &page=1&per_page=25 (100 at most)
 func SearchActivities(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
-	user, location, ok := currentUserLocation(c)
-	if !ok {
-		return
-	}
+	user, location := currentUserLocation(c)
 	bad := func(message string) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": message})
 	}
@@ -457,19 +384,8 @@ func SetRouteCommute(c *gin.Context) {
 	var body struct {
 		IsCommute *bool `json:"is_commute" binding:"required"`
 	}
-	App := c.MustGet("App")
-	bearerToken := c.Request.Header.Get("Authorization")
-	userUUID, err := utils.GetUserUUID(bearerToken)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	db := App.(*app.App).DB
-	user, err := db.GetUserByUUID(userUUID)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	db := c.MustGet("App").(*app.App).DB
+	user := middlewares.CurrentUser(c)
 
 	routeUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -501,10 +417,7 @@ func SetRouteCommute(c *gin.Context) {
 // FindDuplicates returns the user's groups of duplicate activities, see models.FindDuplicates
 func FindDuplicates(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
-	user, _, ok := currentUserLocation(c)
-	if !ok {
-		return
-	}
+	user := middlewares.CurrentUser(c)
 	groups, err := db.FindDuplicates(user.ID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

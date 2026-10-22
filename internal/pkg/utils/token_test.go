@@ -2,6 +2,7 @@ package utils
 
 import (
 	"MySportWeb/internal/pkg/vars"
+	"strings"
 	"testing"
 	"time"
 
@@ -100,5 +101,22 @@ func TestClaimsWithWrongTypes(t *testing.T) {
 	}
 	if _, err := GetUserID(header); err == nil {
 		t.Error("non numeric sub accepted")
+	}
+}
+
+func TestNewDeviceToken(t *testing.T) {
+	token, hash := NewDeviceToken()
+	if !strings.HasPrefix(token, DeviceTokenPrefix) || len(token) != len(DeviceTokenPrefix)+43 {
+		t.Fatalf("token %q", token)
+	}
+	if hash != HashDeviceToken(token) || hash == token {
+		t.Fatal("the hash doesn't match the token")
+	}
+	if other, _ := NewDeviceToken(); other == token {
+		t.Fatal("two identical tokens")
+	}
+	// a device token is not a JWT
+	if _, err := ParseBearerToken("Bearer " + token); err == nil {
+		t.Fatal("a device token parsed as a session token")
 	}
 }

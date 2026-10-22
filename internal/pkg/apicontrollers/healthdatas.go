@@ -2,8 +2,8 @@ package apicontrollers
 
 import (
 	"MySportWeb/internal/pkg/app"
+	"MySportWeb/internal/pkg/middlewares"
 	"MySportWeb/internal/pkg/models"
-	"MySportWeb/internal/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -16,18 +16,9 @@ func ImportHealthDatas(c *gin.Context) {
 
 func CreateHealthData(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
-	userUUID, err := utils.GetUserUUID(c.Request.Header.Get("Authorization"))
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
-	user, err := db.GetUserByUUID(userUUID)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	user := middlewares.CurrentUser(c)
 	var healthData models.HealthData
-	err = c.ShouldBindJSON(&healthData)
+	err := c.ShouldBindJSON(&healthData)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -46,19 +37,8 @@ func CreateHealthData(c *gin.Context) {
 }
 
 func GetHealthDatas(c *gin.Context) {
-	App := c.MustGet("App").(*app.App)
-	db := App.DB
-	bearerToken := c.Request.Header.Get("Authorization")
-	userUUID, err := utils.GetUserUUID(bearerToken)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	user, err := db.GetUserByUUID(userUUID)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	db := c.MustGet("App").(*app.App).DB
+	user := middlewares.CurrentUser(c)
 	healthDatas, err := db.GetHealthDatas(user.ID)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})

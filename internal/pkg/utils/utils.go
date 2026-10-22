@@ -3,6 +3,10 @@ package utils
 import (
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/vars"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
@@ -70,6 +74,24 @@ func ParseBearerToken(header string) (jwt.MapClaims, error) {
 		return nil, err
 	}
 	return ParseToken(token)
+}
+
+// DeviceTokenPrefix starts the device tokens, it tells them from the session tokens (JWT)
+const DeviceTokenPrefix = "msw_"
+
+// NewDeviceToken returns a random device token and the hash to store
+func NewDeviceToken() (token string, hash string) {
+	b := make([]byte, 32)
+	rand.Read(b) // never fails since Go 1.24
+	token = DeviceTokenPrefix + base64.RawURLEncoding.EncodeToString(b)
+	return token, HashDeviceToken(token)
+}
+
+// HashDeviceToken returns the stored form of a device token. A fast hash is enough:
+// the token holds 256 random bits, there is nothing to brute force unlike a password.
+func HashDeviceToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 func GetUserID(tokenString string) (uint64, error) {

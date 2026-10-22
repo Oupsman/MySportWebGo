@@ -2,6 +2,7 @@ package apicontrollers
 
 import (
 	"MySportWeb/internal/pkg/app"
+	"MySportWeb/internal/pkg/middlewares"
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/utils"
@@ -153,22 +154,7 @@ func Logout(c *gin.Context) {
 }
 
 func GetUser(c *gin.Context) {
-	App := c.MustGet("App")
-	db := App.(*app.App).DB
-	bearerToken := c.Request.Header.Get("Authorization")
-	userUUID, err := utils.GetUserUUID(bearerToken)
-	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
-
-	user, err := db.GetUserByUUID(userUUID)
-
-	if err != nil {
-		c.JSON(400, gin.H{"error": "user not found"})
-		return
-	}
-	c.JSON(200, user)
+	c.JSON(200, middlewares.CurrentUser(c))
 }
 
 func UpdateUser(c *gin.Context) {
@@ -183,18 +169,7 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 
-	bearerToken := c.Request.Header.Get("Authorization")
-	UserID, err := utils.GetUserID(bearerToken)
-	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
-
-	currentUser, err := db.GetUser(UserID)
-	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
+	currentUser := middlewares.CurrentUser(c)
 
 	if !utils.CompareHashPassword(user.OldPassword, currentUser.Password) {
 		c.JSON(401, gin.H{
@@ -245,28 +220,15 @@ func UpdateUser(c *gin.Context) {
 }
 
 // currentUserLocation returns the user of the request and their timezone (UTC when unknown):
-// weeks and months start at midnight in it. It aborts the request on error.
-func currentUserLocation(c *gin.Context) (models.Users, *time.Location, bool) {
-	db := c.MustGet("App").(*app.App).DB
-	userID, err := utils.GetUserID(c.Request.Header.Get("Authorization"))
-	if err != nil {
-		c.AbortWithStatusJSON(401, gin.H{"error": err.Error()})
-		return models.Users{}, nil, false
-	}
-	user, err := db.GetUser(userID)
-	if err != nil {
-		c.AbortWithStatusJSON(400, gin.H{"error": err.Error()})
-		return models.Users{}, nil, false
-	}
-	return user, activityService.UserLocation(user.Timezone), true
+// weeks and months start at midnight in it
+func currentUserLocation(c *gin.Context) (models.Users, *time.Location) {
+	user := middlewares.CurrentUser(c)
+	return user, activityService.UserLocation(user.Timezone)
 }
 
 func Dashboard(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
-	user, location, ok := currentUserLocation(c)
-	if !ok {
-		return
-	}
+	user, location := currentUserLocation(c)
 	dashboard, err := db.GetDashboard(user.ID, time.Now().In(location))
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -278,10 +240,7 @@ func Dashboard(c *gin.Context) {
 // Calendar returns the activities of a month, ?month=YYYY-MM
 func Calendar(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
-	user, location, ok := currentUserLocation(c)
-	if !ok {
-		return
-	}
+	user, location := currentUserLocation(c)
 	month, err := time.ParseInLocation("2006-01", c.Query("month"), location)
 	if err != nil {
 		c.JSON(400, gin.H{"error": "month must be YYYY-MM"})

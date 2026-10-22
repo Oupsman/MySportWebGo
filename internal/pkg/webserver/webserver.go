@@ -5,6 +5,7 @@ import (
 	"MySportWeb/internal/pkg/app"
 	"MySportWeb/internal/pkg/controllers"
 	"MySportWeb/internal/pkg/middlewares"
+	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/vars"
 	"time"
 
@@ -61,36 +62,42 @@ func RunHttp(listenAddr string, App *app.App) error {
 	// Users
 	apiv1.POST("/user/login", apicontrollers.Login)
 	apiv1.POST("/user/register", apicontrollers.Register)
+	// Routes given permissions are also open to device tokens holding them, the others to sessions only
 	apiv1.GET("/user/logout", middlewares.IsAuthorized(), apicontrollers.Logout)
-	apiv1.GET("/user/dashboard", middlewares.IsAuthorized(), apicontrollers.Dashboard)
-	apiv1.GET("/user/calendar", middlewares.IsAuthorized(), apicontrollers.Calendar)
+	apiv1.GET("/user/dashboard", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.Dashboard)
+	apiv1.GET("/user/calendar", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.Calendar)
 	apiv1.GET("/user", middlewares.IsAuthorized(), apicontrollers.GetUser)
 	apiv1.POST("/user", middlewares.IsAuthorized(), apicontrollers.UpdateUser)
 
+	// device tokens, managed from a session only: a device token can't create nor extend tokens
+	apiv1.GET("/user/tokens", middlewares.IsAuthorized(), apicontrollers.GetDeviceTokens)
+	apiv1.POST("/user/tokens", middlewares.IsAuthorized(), apicontrollers.CreateDeviceToken)
+	apiv1.DELETE("/user/tokens/:id", middlewares.IsAuthorized(), apicontrollers.DeleteDeviceToken)
+
 	// Activities
-	apiv1.POST("/activity", middlewares.IsAuthorized(), apicontrollers.UploadActivity)
-	apiv1.GET("/activity/list/:start/:count", middlewares.IsAuthorized(), apicontrollers.ListActivities)
-	apiv1.GET("/activity/search", middlewares.IsAuthorized(), apicontrollers.SearchActivities)
-	apiv1.GET("/activity/duplicates", middlewares.IsAuthorized(), apicontrollers.FindDuplicates)
-	apiv1.GET("/activity/:id", apicontrollers.GetActivity)
-	apiv1.GET("/activity/:id/similar", middlewares.IsAuthorized(), apicontrollers.GetSimilarActivities)
-	apiv1.DELETE("/activity/:id", middlewares.IsAuthorized(), apicontrollers.DeleteActivity)
-	apiv1.POST("/activity/:id", middlewares.IsAuthorized(), apicontrollers.UpdateActivity)
+	apiv1.POST("/activity", middlewares.IsAuthorized(models.ActivitiesCreate), apicontrollers.UploadActivity)
+	apiv1.GET("/activity/list/:start/:count", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.ListActivities)
+	apiv1.GET("/activity/search", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.SearchActivities)
+	apiv1.GET("/activity/duplicates", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.FindDuplicates)
+	apiv1.GET("/activity/:id", middlewares.OptionalUser(models.ActivitiesRead), apicontrollers.GetActivity)
+	apiv1.GET("/activity/:id/similar", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.GetSimilarActivities)
+	apiv1.DELETE("/activity/:id", middlewares.IsAuthorized(models.ActivitiesDelete), apicontrollers.DeleteActivity)
+	apiv1.POST("/activity/:id", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.UpdateActivity)
 
 	// routes
-	apiv1.POST("/route/:id/commute", middlewares.IsAuthorized(), apicontrollers.SetRouteCommute)
+	apiv1.POST("/route/:id/commute", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.SetRouteCommute)
 
 	// equipments
-	apiv1.POST("/equipment", middlewares.IsAuthorized(), apicontrollers.CreateEquipment)
-	apiv1.GET("/equipment/:id", middlewares.IsAuthorized(), apicontrollers.GetEquipment)
-	apiv1.GET("/equipment/all", middlewares.IsAuthorized(), apicontrollers.GetEquipments)
-	apiv1.DELETE("/equipment/:id", middlewares.IsAuthorized(), apicontrollers.DeleteEquipment)
-	apiv1.POST("/equipment/:id", middlewares.IsAuthorized(), apicontrollers.UpdateEquipment)
+	apiv1.POST("/equipment", middlewares.IsAuthorized(models.EquipmentsCreate), apicontrollers.CreateEquipment)
+	apiv1.GET("/equipment/:id", middlewares.IsAuthorized(models.EquipmentsRead), apicontrollers.GetEquipment)
+	apiv1.GET("/equipment/all", middlewares.IsAuthorized(models.EquipmentsRead), apicontrollers.GetEquipments)
+	apiv1.DELETE("/equipment/:id", middlewares.IsAuthorized(models.EquipmentsDelete), apicontrollers.DeleteEquipment)
+	apiv1.POST("/equipment/:id", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.UpdateEquipment)
 
 	// healthdatas
-	apiv1.POST("/healthdatas", middlewares.IsAuthorized(), apicontrollers.CreateHealthData)
-	apiv1.POST("/healthdatas/import", middlewares.IsAuthorized(), apicontrollers.ImportHealthDatas)
-	apiv1.GET("/healthdatas", middlewares.IsAuthorized(), apicontrollers.GetHealthDatas)
+	apiv1.POST("/healthdatas", middlewares.IsAuthorized(models.HealthDatasCreate), apicontrollers.CreateHealthData)
+	apiv1.POST("/healthdatas/import", middlewares.IsAuthorized(models.HealthDatasCreate), apicontrollers.ImportHealthDatas)
+	apiv1.GET("/healthdatas", middlewares.IsAuthorized(models.HealthDatasRead), apicontrollers.GetHealthDatas)
 
 	// Start and run the server
 	err := httpRouter.Run(listenAddr)
