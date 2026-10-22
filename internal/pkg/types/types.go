@@ -195,6 +195,20 @@ type ActivityRow struct {
 	EquipmentName *string    `json:"equipment_name"`
 }
 
+// DuplicateActivity is an activity of a group of duplicates, ImportedAt telling which copy came first
+type DuplicateActivity struct {
+	ActivityRow
+	ImportedAt time.Time `json:"imported_at"`
+}
+
+// DuplicateGroup gathers activities of the same sport recorded at the same time. Identical ones start
+// at the same second: the same file imported twice. The others may be the same activity recorded by
+// two devices.
+type DuplicateGroup struct {
+	Identical  bool                `json:"identical"`
+	Activities []DuplicateActivity `json:"activities"`
+}
+
 // ActivitySearch is a page of the user's activities matching a filter, with the totals of all of them
 type ActivitySearch struct {
 	Activities []ActivityRow `json:"activities"`

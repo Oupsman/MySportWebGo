@@ -497,3 +497,18 @@ func SetRouteCommute(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"updated": updated})
 }
+
+// FindDuplicates returns the user's groups of duplicate activities, see models.FindDuplicates
+func FindDuplicates(c *gin.Context) {
+	db := c.MustGet("App").(*app.App).DB
+	user, _, ok := currentUserLocation(c)
+	if !ok {
+		return
+	}
+	groups, err := db.FindDuplicates(user.ID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"groups": groups})
+}
