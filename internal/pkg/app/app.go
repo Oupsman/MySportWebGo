@@ -42,6 +42,10 @@ func (app *App) Start() error {
 		if err != nil {
 			app.Logger.Error().Err(err).Msg("failed to re-analyse activities")
 		}
+		err = activityService.BackfillTitles(&app.DB, app.Logger)
+		if err != nil {
+			app.Logger.Error().Err(err).Msg("failed to rename activities")
+		}
 	}()
 	err := app.Notifications.Start(app.Logger, app.Client, app.DB)
 	if err != nil {

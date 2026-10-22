@@ -218,6 +218,9 @@ func UpdateActivity(c *gin.Context) {
 	activity.Title = newActivity.Title
 	activity.CanComments = newActivity.CanComments
 	activity.IsCommute = newActivity.IsCommute
+	if activity.IsCommute && activity.Co2 == 0 {
+		activity.Co2 = activityService.Commute(*activity)
+	}
 	activity.EquipmentID = newActivity.EquipmentID
 	// the preloaded association would override EquipmentID when saving
 	activity.Equipment = models.Equipments{}
@@ -351,20 +354,26 @@ func GetSimilarActivities(c *gin.Context) {
 	}
 
 	similar := []types.RouteActivity{}
+	var route *models.Route
 	if activity.RouteID != nil {
 		similar, err = db.GetActivitiesByRoute(*activity.RouteID, activity.ID)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		route, err = db.GetRoute(*activity.RouteID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"activities": similar})
+	c.JSON(http.StatusOK, gin.H{"activities": similar, "route": route})
 }
 
 // SearchActivities returns a page of the user's activities:
 // ?sport=a&sport=b&from=YYYY-MM-DD&to=YYYY-MM-DD (included, in the user's timezone)&q=title
-// &equipment=<id>|none&commute=true&sort=date|title|distance|duration|speed|elevation&order=asc|desc
+// &equipment=<id>|none&commute=true|false&sort=date|title|distance|duration|speed|elevation&order=asc|desc
 // &page=1&per_page=25 (100 at most)
 func SearchActivities(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
@@ -405,7 +414,14 @@ func SearchActivities(c *gin.Context) {
 		}
 		filter.EquipmentID = &id
 	}
-	filter.CommuteOnly = c.Query("commute") == "true"
+	if commute := c.Query("commute"); commute != "" {
+		isCommute, err := strconv.ParseBool(commute)
+		if err != nil {
+			bad("commute must be true or false")
+			return
+		}
+		filter.Commute = &isCommute
+	}
 
 	sort := c.DefaultQuery("sort", "date")
 	if _, ok := models.SortColumns[sort]; !ok {
@@ -434,4 +450,50 @@ func SearchActivities(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, search)
+}
+
+// SetRouteCommute marks all the activities of a route, and the ones imported later, as commutes or not
+func SetRouteCommute(c *gin.Context) {
+	var body struct {
+		IsCommute *bool `json:"is_commute" binding:"required"`
+	}
+	App := c.MustGet("App")
+	bearerToken := c.Request.Header.Get("Authorization")
+	userUUID, err := utils.GetUserUUID(bearerToken)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	db := App.(*app.App).DB
+	user, err := db.GetUserByUUID(userUUID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	routeUUID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	route, err := db.GetRoute(routeUUID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "unknown route"})
+		return
+	}
+	if route.UserID != user.ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You are not the owner of this route"})
+		return
+	}
+
+	updated, err := db.SetRouteCommute(route.ID, *body.IsCommute)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"updated": updated})
 }

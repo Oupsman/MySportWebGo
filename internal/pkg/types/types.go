@@ -132,6 +132,18 @@ type DashboardTotals struct {
 	AllTime   PeriodTotals `json:"all_time"`
 }
 
+// CommuteTotals sums the commutes of a period: distance in meters, CO2 saved compared to driving in grams
+type CommuteTotals struct {
+	Activities int64   `json:"activities"`
+	Distance   float64 `json:"distance"`
+	Co2        float64 `json:"co2"`
+}
+
+type DashboardCommutes struct {
+	ThisYear CommuteTotals `json:"this_year"`
+	AllTime  CommuteTotals `json:"all_time"`
+}
+
 // WeeklyVolume sums the activities of a sport during a week (week: its Monday, YYYY-MM-DD)
 type WeeklyVolume struct {
 	Week       string  `json:"week"`
@@ -195,6 +207,7 @@ type ActivitySearch struct {
 
 type Dashboard struct {
 	Totals       DashboardTotals    `json:"totals"`
+	Commutes     DashboardCommutes  `json:"commutes"`
 	WeekStarts   []string           `json:"week_starts"` // the Mondays of the weeks of Weekly, oldest first
 	Weekly       []WeeklyVolume     `json:"weekly"`
 	Sports       []SportSummary     `json:"sports"`

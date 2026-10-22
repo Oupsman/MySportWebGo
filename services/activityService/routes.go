@@ -80,6 +80,12 @@ func assignRoute(db *models.DB, activity *models.Activity) error {
 		return err
 	}
 	activity.RouteID = &route.ID
+	if route.IsCommute {
+		activity.IsCommute = true
+		if activity.Co2 == 0 {
+			activity.Co2 = Commute(*activity)
+		}
+	}
 	return nil
 }
 

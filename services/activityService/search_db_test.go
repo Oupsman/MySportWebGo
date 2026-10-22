@@ -83,7 +83,10 @@ func TestSearchActivities(t *testing.T) {
 	expect("case insensitive", search(models.ActivityFilter{Query: "LONG"}, "date", true, 1, 25), "Long run")
 	expect("equipment", search(models.ActivityFilter{EquipmentID: &bike.ID}, "date", true, 1, 25), "Commute to work", "100% climbing")
 	expect("no equipment", search(models.ActivityFilter{NoEquipment: true}, "date", true, 1, 25), "100x intervals", "Long run", "Pool")
-	expect("commute", search(models.ActivityFilter{CommuteOnly: true}, "date", true, 1, 25), "Commute to work")
+	commute, notCommute := true, false
+	expect("commute", search(models.ActivityFilter{Commute: &commute}, "date", true, 1, 25), "Commute to work")
+	expect("not commute", search(models.ActivityFilter{Commute: &notCommute}, "date", true, 1, 25),
+		"100% climbing", "100x intervals", "Long run", "Pool")
 	expect("distance ascending", search(models.ActivityFilter{}, "distance", false, 1, 25),
 		"Pool", "100x intervals", "Commute to work", "Long run", "100% climbing")
 

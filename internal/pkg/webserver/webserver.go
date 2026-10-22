@@ -76,6 +76,9 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.DELETE("/activity/:id", middlewares.IsAuthorized(), apicontrollers.DeleteActivity)
 	apiv1.POST("/activity/:id", middlewares.IsAuthorized(), apicontrollers.UpdateActivity)
 
+	// routes
+	apiv1.POST("/route/:id/commute", middlewares.IsAuthorized(), apicontrollers.SetRouteCommute)
+
 	// equipments
 	apiv1.POST("/equipment", middlewares.IsAuthorized(), apicontrollers.CreateEquipment)
 	apiv1.GET("/equipment/:id", middlewares.IsAuthorized(), apicontrollers.GetEquipment)

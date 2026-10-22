@@ -17,6 +17,8 @@ type Route struct {
 	Sport         string    `json:"sport"`
 	Distance      float64   `json:"distance"`
 	ActivityCount int       `json:"activity_count"`
+	// the activities of a commute route are commutes, including the ones imported later
+	IsCommute bool `json:"is_commute"`
 	// reference trace, taken from the first activity of the route
 	StartPosition       *types.GpsPoint     `json:"-"`
 	EndPosition         *types.GpsPoint     `json:"-"`
@@ -40,6 +42,35 @@ func (db *DB) GetRouteCandidates(userID uint, sport string, minDistance, maxDist
 		return nil, err
 	}
 	return routes, nil
+}
+
+func (db *DB) GetRoute(id uuid.UUID) (*Route, error) {
+	var route Route
+	err := db.First(&route, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &route, nil
+}
+
+// SetRouteCommute flags a route and all its activities as commutes or not. The commutes without a saved
+// CO2 (the ones that aren't rides) get one. It returns the number of activities of the route.
+func (db *DB) SetRouteCommute(routeID uuid.UUID, isCommute bool) (int64, error) {
+	var count int64
+	err := db.Transaction(func(tx *gorm.DB) error {
+		err := tx.Model(&Route{}).Where("id = ?", routeID).Update("is_commute", isCommute).Error
+		if err != nil {
+			return err
+		}
+		updates := map[string]interface{}{"is_commute": isCommute}
+		if isCommute {
+			updates["co2"] = gorm.Expr("CASE WHEN co2 > 0 THEN co2 ELSE distance * ? END", Co2PerMeter)
+		}
+		result := tx.Model(&Activity{}).Where("route_id = ?", routeID).Updates(updates)
+		count = result.RowsAffected
+		return result.Error
+	})
+	return count, err
 }
 
 func (db *DB) CreateRoute(route *Route) error {

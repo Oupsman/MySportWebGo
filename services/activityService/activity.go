@@ -100,22 +100,12 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	// TODO : one day, I'll get the weight of the user and its equipment
 	activity.TotalWeight = 110
 
-	if activity.Date.Hour() > 0 && activity.Date.Hour() < 12 {
-		activity.Title = "Morning " + activity.Sport
-	} else if activity.Date.Hour() >= 12 && activity.Date.Hour() < 14 {
-		activity.Title = "Lunch " + activity.Sport
-	} else if activity.Date.Hour() >= 14 && activity.Date.Hour() < 18 {
-		activity.Title = "Afternoon " + activity.Sport
-	} else if activity.Date.Hour() >= 18 && activity.Date.Hour() < 22 {
-		activity.Title = "Evening " + activity.Sport
-	} else {
-		activity.Title = "Night " + activity.Sport
-	}
-
 	activity, err = AnalyzeRecords(fitActivity, activity)
 	if err != nil {
 		return models.Activity{}, err
 	}
+	// FIT times are in UTC: the time of the day is the user's one
+	activity.Title = Title(activity.Sport, activity.Date, UserLocation(user.Timezone), activity.StartPosition)
 	if len(fitActivity.Lengths) > 0 {
 		activity.Lengths = AnalyzeLengths(fitActivity)
 	}

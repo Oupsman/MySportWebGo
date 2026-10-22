@@ -16,7 +16,7 @@ type ActivityFilter struct {
 	Query       string    // in the title, case insensitive
 	EquipmentID *uuid.UUID
 	NoEquipment bool
-	CommuteOnly bool
+	Commute     *bool // only the commutes, or only the other activities
 }
 
 // SortColumns are the columns the activities can be sorted by
@@ -50,8 +50,8 @@ func (f ActivityFilter) apply(query *gorm.DB, userID uint) *gorm.DB {
 	} else if f.EquipmentID != nil {
 		query = query.Where("activities.equipment_id = ?", *f.EquipmentID)
 	}
-	if f.CommuteOnly {
-		query = query.Where("activities.is_commute")
+	if f.Commute != nil {
+		query = query.Where("activities.is_commute = ?", *f.Commute)
 	}
 	return query
 }

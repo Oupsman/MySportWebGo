@@ -2,6 +2,7 @@ package activityService
 
 import (
 	"MySportWeb/internal/pkg/models"
+	"math"
 	"testing"
 	"time"
 )
@@ -18,18 +19,27 @@ func TestDashboard(t *testing.T) {
 	}
 	// Wednesday 21 October 2026, the week starts on Monday 19
 	now := time.Date(2026, 10, 21, 12, 0, 0, 0, paris)
-	add := func(date time.Time, sport string, km float64, minutes uint32, climb float64) {
+	add := func(date time.Time, sport string, km float64, minutes uint32, climb float64) *models.Activity {
 		a := models.Activity{UserID: user.ID, Date: date, Sport: sport, Title: sport, Distance: km * 1000,
 			Duration: minutes * 60, PositiveElevation: climb}
+		if sport == "cycling" {
+			a.Co2 = Commute(a)
+		}
 		if err := db.Omit("User", "Equipment").Create(&a).Error; err != nil {
 			t.Fatal(err)
 		}
+		return &a
 	}
-	add(time.Date(2026, 10, 19, 8, 0, 0, 0, paris), "cycling", 10, 30, 100) // this week
-	add(time.Date(2026, 10, 19, 0, 30, 0, 0, paris), "running", 5, 25, 20)  // this week in Paris, Sunday in UTC
-	add(time.Date(2026, 10, 18, 20, 0, 0, 0, paris), "cycling", 20, 60, 50) // last week, this month
-	add(time.Date(2026, 9, 30, 18, 0, 0, 0, paris), "cycling", 30, 90, 300) // last month
-	add(time.Date(2025, 12, 31, 10, 0, 0, 0, paris), "cycling", 40, 80, 10) // last year
+	commute := func(a *models.Activity) {
+		if err := db.Model(a).Update("is_commute", true).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	commute(add(time.Date(2026, 10, 19, 8, 0, 0, 0, paris), "cycling", 10, 30, 100)) // this week
+	add(time.Date(2026, 10, 19, 0, 30, 0, 0, paris), "running", 5, 25, 20)           // this week in Paris, Sunday in UTC
+	add(time.Date(2026, 10, 18, 20, 0, 0, 0, paris), "cycling", 20, 60, 50)          // last week, this month, not a commute
+	add(time.Date(2026, 9, 30, 18, 0, 0, 0, paris), "cycling", 30, 90, 300)          // last month
+	commute(add(time.Date(2025, 12, 31, 10, 0, 0, 0, paris), "cycling", 40, 80, 10)) // last year
 
 	d, err := db.GetDashboard(user.ID, now)
 	if err != nil {
@@ -55,6 +65,14 @@ func TestDashboard(t *testing.T) {
 	}
 	if d.Totals.ThisWeek.Duration != 55*60 || d.Totals.ThisWeek.Elevation != 120 {
 		t.Errorf("this week: %d s, %.0f m climbed", d.Totals.ThisWeek.Duration, d.Totals.ThisWeek.Elevation)
+	}
+
+	// 10 km this year, 10 + 40 km all time, 221.7 g per km
+	if c := d.Commutes.ThisYear; c.Activities != 1 || c.Distance != 10000 || math.Round(c.Co2) != 2217 {
+		t.Errorf("commutes this year: %+v", c)
+	}
+	if c := d.Commutes.AllTime; c.Activities != 2 || c.Distance != 50000 || math.Round(c.Co2) != 11085 {
+		t.Errorf("commutes all time: %+v", c)
 	}
 
 	if len(d.WeekStarts) != models.DashboardWeeks || d.WeekStarts[0] != "2026-08-03" || d.WeekStarts[11] != "2026-10-19" {

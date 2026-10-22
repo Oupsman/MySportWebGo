@@ -6,6 +6,7 @@ import (
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/internal/pkg/vars"
+	"MySportWeb/services/activityService"
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -224,6 +225,14 @@ func UpdateUser(c *gin.Context) {
 	updatedUser.Gender = user.Gender
 	updatedUser.SecurityDistance = user.SecurityDistance
 	updatedUser.HomeTown = user.HomeTown
+	// weeks, months and the time of the day in titles depend on it: an empty one keeps the current one
+	if user.Timezone != "" {
+		if _, err := time.LoadLocation(user.Timezone); err != nil {
+			c.JSON(400, gin.H{"error": "unknown timezone"})
+			return
+		}
+		updatedUser.Timezone = user.Timezone
+	}
 
 	err = db.UpdateUser(updatedUser)
 
@@ -249,11 +258,7 @@ func currentUserLocation(c *gin.Context) (models.Users, *time.Location, bool) {
 		c.AbortWithStatusJSON(400, gin.H{"error": err.Error()})
 		return models.Users{}, nil, false
 	}
-	location, err := time.LoadLocation(user.Timezone)
-	if err != nil || user.Timezone == "" {
-		location = time.UTC
-	}
-	return user, location, true
+	return user, activityService.UserLocation(user.Timezone), true
 }
 
 func Dashboard(c *gin.Context) {

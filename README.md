@@ -30,3 +30,7 @@ For now the app can :
 6. Support multisessions FIT files 
 7. Support laps and splits (I'm not using those)
 8. Plugin system
+
+## Credits
+
+City names come from [GeoNames](https://www.geonames.org/) (cities with more than 15000 inhabitants), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

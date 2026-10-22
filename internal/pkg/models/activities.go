@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+// Co2PerMeter is the CO2 (in grams) a commute saves per meter compared to driving
+const Co2PerMeter = 0.2217
+
 type Activity struct {
 	ID               uuid.UUID `gorm:"type:uuid;default:gen_random_uuid()" json:"id"`
 	CreatedAt        time.Time
@@ -184,6 +187,41 @@ func (db *DB) GetActivitiesBelowEngine(version int) ([]uuid.UUID, error) {
 		return nil, err
 	}
 	return ids, nil
+}
+
+// ActivityToRetitle holds what naming an activity needs
+type ActivityToRetitle struct {
+	ID            uuid.UUID
+	Title         string
+	Sport         string
+	Date          time.Time
+	StartPosition *types.GpsPoint
+	Timezone      string // the user's one
+}
+
+// GetActivitiesToRetitle returns the activities whose title is one of titles(their sport)
+func (db *DB) GetActivitiesToRetitle(titles func(sport string) []string) ([]ActivityToRetitle, error) {
+	var sports []string
+	if err := db.Model(&Activity{}).Distinct().Pluck("sport", &sports).Error; err != nil {
+		return nil, err
+	}
+	activities := []ActivityToRetitle{}
+	if len(sports) == 0 {
+		return activities, nil
+	}
+	condition := db.Where("1 = 0")
+	for _, sport := range sports {
+		condition = condition.Or("activities.sport = ? AND activities.title IN ?", sport, titles(sport))
+	}
+	err := db.Table("activities").Joins("JOIN users ON users.id = activities.user_id").
+		Select("activities.id, activities.title, activities.sport, activities.date, activities.start_position, users.timezone").
+		Where(condition).Order("activities.date").Scan(&activities).Error
+	return activities, err
+}
+
+// SetActivityTitle renames an activity, unless its title isn't oldTitle anymore
+func (db *DB) SetActivityTitle(id uuid.UUID, oldTitle, title string) error {
+	return db.Model(&Activity{}).Where("id = ? AND title = ?", id, oldTitle).Update("title", title).Error
 }
 
 // GetActivityFilePath returns the path of the FIT file of an activity

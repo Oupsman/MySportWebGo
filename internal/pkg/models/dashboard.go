@@ -35,6 +35,19 @@ func (db *DB) periodTotals(userID uint, from, to time.Time) (types.PeriodTotals,
 	return totals, err
 }
 
+// commuteTotals sums the user's commutes since from, a zero time meaning no bound
+func (db *DB) commuteTotals(userID uint, from time.Time) (types.CommuteTotals, error) {
+	var totals types.CommuteTotals
+	query := db.Table("activities").
+		Select("count(*) AS activities, coalesce(sum(distance), 0) AS distance, coalesce(sum(co2), 0) AS co2").
+		Where("user_id = ? AND is_commute", userID)
+	if !from.IsZero() {
+		query = query.Where("date >= ?", from)
+	}
+	err := query.Scan(&totals).Error
+	return totals, err
+}
+
 // sportRecords returns, for each sport, the activity with the highest value of column
 func (db *DB) sportRecords(userID uint, column string) (map[string]*types.SportRecord, error) {
 	var rows []struct {
@@ -86,6 +99,13 @@ func (db *DB) GetDashboard(userID uint, now time.Time) (types.Dashboard, error) 
 		if *period.totals, err = db.periodTotals(userID, period.from, period.to); err != nil {
 			return dashboard, err
 		}
+	}
+
+	if dashboard.Commutes.ThisYear, err = db.commuteTotals(userID, year); err != nil {
+		return dashboard, err
+	}
+	if dashboard.Commutes.AllTime, err = db.commuteTotals(userID, time.Time{}); err != nil {
+		return dashboard, err
 	}
 
 	// weekly volume per sport, weeks computed in the user's timezone
