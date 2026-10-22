@@ -87,6 +87,28 @@ type Length struct {
 	TimeStamp float64 `json:"timeStamp"`
 }
 
+// Leg is a session of a multi-session activity (a triathlon...). The transitions (T1, T2) are not legs:
+// their time is in the TransitionTime of the leg after them, and in the duration of the activity.
+type Leg struct {
+	Sport          string  `json:"sport"`
+	StartOffset    float64 `json:"start_offset"` // seconds since the start of the activity
+	Duration       float64 `json:"duration"`     // timer time, in seconds
+	Distance       float64 `json:"distance"`     // meters
+	AvgSpeed       float64 `json:"avg_speed"`    // m/s
+	MaxSpeed       float64 `json:"max_speed"`
+	AvgHR          uint8   `json:"avg_hr"`
+	MaxHR          uint8   `json:"max_hr"`
+	AvgCadence     uint8   `json:"avg_cadence"`
+	AvgPower       uint16  `json:"avg_power"`
+	PowerEstimated bool    `json:"power_estimated"` // from the speed and the slope, without power meter
+	Calories       uint16  `json:"kcal"`
+	Ascent         uint16  `json:"ascent"`
+	Descent        uint16  `json:"descent"`
+	TransitionTime float64 `json:"transition_time"` // seconds of the transitions just before the leg
+}
+
+type LegArray []Leg
+
 type ActivitySummary struct {
 	ID        uuid.UUID `json:"id"`
 	Title     string    `json:"title"`
@@ -300,6 +322,19 @@ func (s *FloatArray) Scan(src interface{}) error {
 }
 
 func (s FloatArray) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+// Scan accepts NULL: the activities imported before the legs existed have none
+func (s *LegArray) Scan(src interface{}) error {
+	if src == nil {
+		*s = nil
+		return nil
+	}
+	return json.Unmarshal(src.([]byte), s)
+}
+
+func (s LegArray) Value() (driver.Value, error) {
 	return json.Marshal(s)
 }
 

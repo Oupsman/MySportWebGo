@@ -96,20 +96,27 @@ func UpdateEquipment(c *gin.Context) {
 }
 
 func GetEquipment(c *gin.Context) {
-	_, equipment, ok := equipmentOwner(c)
+	db := c.MustGet("App").(*app.App).DB
+	user, equipment, ok := equipmentOwner(c)
 	if !ok {
 		return
 	}
-	c.JSON(http.StatusOK, equipment)
+	stats, err := db.GetEquipmentStats(user.ID, equipment.ID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, stats)
 }
 
 func GetEquipments(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
 	user := middlewares.CurrentUser(c)
 
-	equipments := db.GetEquipments(user.ID)
-	if equipments == nil {
-		equipments = []models.Equipments{}
+	equipments, err := db.GetEquipmentsStats(user.ID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, equipments)

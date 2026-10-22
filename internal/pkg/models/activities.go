@@ -85,6 +85,7 @@ type Activity struct {
 	StartPosition      *types.GpsPoint     `json:"start_position"`
 	EndPosition        *types.GpsPoint     `json:"end_position"`
 	Lengths            types.LengthArray   `json:"lengths"`
+	Legs               types.LegArray      `json:"legs"` // the sessions of a multi-session file, empty for one session
 }
 
 func (db *DB) CreateActivity(activity *Activity) error {

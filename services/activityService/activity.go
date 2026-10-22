@@ -14,6 +14,7 @@ import (
 	"github.com/pconstantinou/savitzkygolay"
 	"math"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -50,52 +51,36 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	var activity models.Activity
 	var err error
 	fitActivity := filedef.NewActivity(fit.Messages...)
+	if len(fitActivity.Sessions) == 0 {
+		return models.Activity{}, errors.New("no session in the FIT file")
+	}
+	// the analysis starts at the first session
+	sort.SliceStable(fitActivity.Sessions, func(i, j int) bool {
+		return fitActivity.Sessions[i].StartTime.Before(fitActivity.Sessions[j].StartTime)
+	})
 	activity.EngineVersion = vars.Engine_version
 	activity.User = user
 	activity.Equipment = equipment
-	activity.Sport = fitActivity.Sessions[0].Sport.String()
 	activity.Lastimport = true
+	if len(fitActivity.Sessions) == 1 {
+		summarizeSession(&activity, fitActivity.Sessions[0])
+	} else {
+		legs := AnalyzeLegs(fitActivity.Sessions)
+		if len(legs) == 0 {
+			return models.Activity{}, errors.New("no session other than transitions in the FIT file")
+		}
+		for _, leg := range legs {
+			if strings.Contains(leg.Sport, "Invalid") {
+				return models.Activity{}, errors.New("Invalid sport")
+			}
+		}
+		activity.Legs = legs
+		summarizeLegs(&activity, fitActivity.Sessions, legs)
+		continuousDistances(fitActivity.Records, fitActivity.Sessions)
+	}
 	if strings.Contains(activity.Sport, "Invalid") {
 		return models.Activity{}, errors.New("Invalid sport")
 	}
-	activity.Date = fitActivity.Sessions[0].StartTime
-	activity.Duration = fitActivity.Sessions[0].TotalTimerTime / 1000
-	if !math.IsNaN(fitActivity.Sessions[0].TotalDistanceScaled()) {
-		activity.Distance = fitActivity.Sessions[0].TotalDistanceScaled()
-	} else {
-		activity.Distance = 0
-	}
-	if fitActivity.Sessions[0].TotalCalories != math.MaxUint16 {
-		activity.Calories = fitActivity.Sessions[0].TotalCalories
-	}
-	if !math.IsNaN(fitActivity.Sessions[0].EnhancedAvgSpeedScaled()) {
-		activity.AvgSpeed = fitActivity.Sessions[0].EnhancedAvgSpeedScaled()
-	} else if !math.IsNaN(fitActivity.Sessions[0].AvgSpeedScaled()) {
-		activity.AvgSpeed = fitActivity.Sessions[0].AvgSpeedScaled()
-	} else {
-		activity.AvgSpeed = 0
-	}
-	if !math.IsNaN(fitActivity.Sessions[0].EnhancedMaxSpeedScaled()) {
-		activity.MaxSpeed = fitActivity.Sessions[0].EnhancedMaxSpeedScaled()
-	} else if !math.IsNaN(fitActivity.Sessions[0].MaxSpeedScaled()) {
-		activity.MaxSpeed = fitActivity.Sessions[0].MaxSpeedScaled()
-	} else {
-		activity.MaxSpeed = 0
-	}
-	if fitActivity.Sessions[0].AvgCadence != math.MaxUint8 {
-		activity.AvgRPM = fitActivity.Sessions[0].AvgCadence
-	}
-	if fitActivity.Sessions[0].AvgHeartRate != math.MaxUint8 {
-		activity.AvgHR = fitActivity.Sessions[0].AvgHeartRate
-	}
-	if fitActivity.Sessions[0].AvgPower != math.MaxUint16 {
-		activity.AvgPower = fitActivity.Sessions[0].AvgPower
-	}
-	if fitActivity.Sessions[0].AvgPower > 0 && fitActivity.Sessions[0].AvgPower != math.MaxUint16 {
-		activity.AvgPower = fitActivity.Sessions[0].AvgPower
-	}
-	activity.TotalAscent = fitActivity.Sessions[0].TotalAscent
-	activity.TotalDescent = fitActivity.Sessions[0].TotalDescent
 
 	// TODO : one day, I'll get the weight of the user and its equipment
 	activity.TotalWeight = 110
@@ -103,6 +88,9 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	activity, err = AnalyzeRecords(fitActivity, activity)
 	if err != nil {
 		return models.Activity{}, err
+	}
+	if len(activity.Legs) > 0 {
+		estimateLegsPower(&activity)
 	}
 	// FIT times are in UTC: the time of the day is the user's one
 	activity.Title = Title(activity.Sport, activity.Date, UserLocation(user.Timezone), activity.StartPosition)
@@ -116,12 +104,54 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	return activity, nil
 }
 
+// summarizeSession sets the totals of a single-session activity
+func summarizeSession(activity *models.Activity, session *mesgdef.Session) {
+	activity.Sport = session.Sport.String()
+	activity.Date = session.StartTime
+	activity.Duration = session.TotalTimerTime / 1000
+	if !math.IsNaN(session.TotalDistanceScaled()) {
+		activity.Distance = session.TotalDistanceScaled()
+	} else {
+		activity.Distance = 0
+	}
+	if session.TotalCalories != math.MaxUint16 {
+		activity.Calories = session.TotalCalories
+	}
+	if !math.IsNaN(session.EnhancedAvgSpeedScaled()) {
+		activity.AvgSpeed = session.EnhancedAvgSpeedScaled()
+	} else if !math.IsNaN(session.AvgSpeedScaled()) {
+		activity.AvgSpeed = session.AvgSpeedScaled()
+	} else {
+		activity.AvgSpeed = 0
+	}
+	if !math.IsNaN(session.EnhancedMaxSpeedScaled()) {
+		activity.MaxSpeed = session.EnhancedMaxSpeedScaled()
+	} else if !math.IsNaN(session.MaxSpeedScaled()) {
+		activity.MaxSpeed = session.MaxSpeedScaled()
+	} else {
+		activity.MaxSpeed = 0
+	}
+	if session.AvgCadence != math.MaxUint8 {
+		activity.AvgRPM = session.AvgCadence
+	}
+	if session.AvgHeartRate != math.MaxUint8 {
+		activity.AvgHR = session.AvgHeartRate
+	}
+	if session.AvgPower != math.MaxUint16 {
+		activity.AvgPower = session.AvgPower
+	}
+	if session.AvgPower > 0 && session.AvgPower != math.MaxUint16 {
+		activity.AvgPower = session.AvgPower
+	}
+	activity.TotalAscent = session.TotalAscent
+	activity.TotalDescent = session.TotalDescent
+}
+
 func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (models.Activity, error) {
 	var startmeters, stopmeters, meters = 0.0, 0.0, 0.0
 	var startaltitude, stopaltitude = 0.0, 0.0
 	var avgSpeedT = 0.0
 	var km = 0.0
-	var hasPower = false
 	var tsstartkm time.Time
 	var tsstartdist float64
 	var counter = 0
@@ -140,9 +170,8 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	if distance == 0 {
 		distance = 1
 	}
-	if fitActivity.Sessions[0].AvgPower != math.MaxUint16 {
-		hasPower = true
-	}
+	// the power is read or estimated per session: only the bike leg of a triathlon has some
+	sessions := sessionCursor{sessions: fitActivity.Sessions}
 
 	// Find first valid GPS points in records
 	if distance > 0 {
@@ -232,7 +261,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 							})
 						}
 					}
-					if hasPower && activity.Sport == "cycling" {
+					if session := sessions.at(record.Timestamp); isCycling(session) && hasPowerMeter(session) {
 						if record.Power != math.MaxUint16 {
 							activity.Powers = append(activity.Powers, record.Power)
 							activity.PowerTS = append(activity.PowerTS, fmt.Sprintf("%f", offset))
@@ -253,7 +282,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 				counter++
 			}
 			stopaltitude = record.EnhancedAltitudeScaled()
-			if activity.Sport == "cycling" && !hasPower {
+			if session := sessions.at(record.Timestamp); isCycling(session) && !hasPowerMeter(session) {
 				var slope float64
 				deltaDistance = stopmeters - startmeters
 				deltaAltitude = stopaltitude - startaltitude
@@ -280,7 +309,8 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 
 			}
 		}
-		if len(activity.Powers) > 0 {
+		// a triathlon has the power of its bike leg only, it goes on that leg
+		if len(activity.Powers) > 0 && activity.Sport == "cycling" {
 			avgPower := utils.NormalizedAvgPositive(activity.Powers)
 			activity.AvgPower = uint16(avgPower)
 
