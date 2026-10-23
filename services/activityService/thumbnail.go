@@ -11,6 +11,22 @@ import (
 	"time"
 )
 
+// chromeContext returns a context running a headless Chromium. With CHROMIUM_NO_SANDBOX=true (the
+// Docker image sets it), Chromium runs without its own sandbox: Docker's default seccomp profile forbids
+// the namespaces it needs, the container isolates it instead. /dev/shm is small in a container too.
+func chromeContext() (context.Context, context.CancelFunc) {
+	if os.Getenv("CHROMIUM_NO_SANDBOX") != "true" {
+		return chromedp.NewContext(context.Background())
+	}
+	options := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.NoSandbox, chromedp.Flag("disable-dev-shm-usage", true))
+	allocator, cancelAllocator := chromedp.NewExecAllocator(context.Background(), options...)
+	ctx, cancel := chromedp.NewContext(allocator)
+	return ctx, func() {
+		cancel()
+		cancelAllocator()
+	}
+}
+
 func GenerateThumbnail(activity models.Activity) error {
 	gpsPoints := "["
 
@@ -39,8 +55,10 @@ func GenerateThumbnail(activity models.Activity) error {
 	htmlPage += "</body></html>"
 	htmlFile.Write([]byte(htmlPage))
 	htmlFile.Close()
+	// only read by Chromium below
+	defer os.Remove(fileName)
 
-	ctx, cancel := chromedp.NewContext(context.Background())
+	ctx, cancel := chromeContext()
 	defer cancel()
 	var screenshotBuffer []byte
 

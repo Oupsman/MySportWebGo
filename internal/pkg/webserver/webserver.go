@@ -93,11 +93,17 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.GET("/equipment/all", middlewares.IsAuthorized(models.EquipmentsRead), apicontrollers.GetEquipments)
 	apiv1.DELETE("/equipment/:id", middlewares.IsAuthorized(models.EquipmentsDelete), apicontrollers.DeleteEquipment)
 	apiv1.POST("/equipment/:id", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.UpdateEquipment)
+	apiv1.POST("/equipment/:id/picture", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.UploadEquipmentPicture)
+	apiv1.DELETE("/equipment/:id/picture", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.DeleteEquipmentPicture)
+	apiv1.POST("/equipment/:id/commutes", middlewares.IsAuthorized(models.EquipmentsWrite, models.ActivitiesWrite),
+		apicontrollers.AssignCommuteEquipment)
 
 	// healthdatas
 	apiv1.POST("/healthdatas", middlewares.IsAuthorized(models.HealthDatasCreate), apicontrollers.CreateHealthData)
 	apiv1.POST("/healthdatas/import", middlewares.IsAuthorized(models.HealthDatasCreate), apicontrollers.ImportHealthDatas)
 	apiv1.GET("/healthdatas", middlewares.IsAuthorized(models.HealthDatasRead), apicontrollers.GetHealthDatas)
+	apiv1.POST("/healthdatas/:id", middlewares.IsAuthorized(models.HealthDatasWrite), apicontrollers.UpdateHealthData)
+	apiv1.DELETE("/healthdatas/:id", middlewares.IsAuthorized(models.HealthDatasDelete), apicontrollers.DeleteHealthData)
 
 	// Start and run the server
 	err := httpRouter.Run(listenAddr)

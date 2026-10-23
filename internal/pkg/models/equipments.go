@@ -25,19 +25,62 @@ type Equipments struct {
 	UserID              int        `json:"user_id"`
 	MaintenanceInterval int        `json:"maintenance_interval"`
 	IsDefault           bool       `json:"is_default"`
+	IsCommute           bool       `json:"is_commute"` // given to the commute rides, one per user
+	Picture             string     `json:"picture"`    // URL path of its picture under /MEDIA, empty without
 }
 
-// CreateEquipment saves a new equipment, it becomes the only default one of the user when IsDefault is set
+// CommuteSport is the sport of the activities getting the commute equipment
+const CommuteSport = "cycling"
+
+// keepOnlyFlag clears flag (is_default, is_commute) on the other equipments of the user of equipment
+func keepOnlyFlag(tx *gorm.DB, equipment *Equipments, flag string) error {
+	query := tx.Model(&Equipments{}).Where("user_id = ?", equipment.UserID)
+	if equipment.ID != uuid.Nil {
+		query = query.Where("id <> ?", equipment.ID)
+	}
+	return query.Update(flag, false).Error
+}
+
+// CreateEquipment saves a new equipment, it becomes the only default one of the user when IsDefault is set,
+// and the only commute one when IsCommute is set
 func (db *DB) CreateEquipment(equipment *Equipments) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		if equipment.IsDefault {
-			err := tx.Model(&Equipments{}).Where("user_id = ?", equipment.UserID).Update("is_default", false).Error
-			if err != nil {
-				return err
-			}
+		if err := keepOnlyFlags(tx, equipment); err != nil {
+			return err
 		}
 		return tx.Omit("User").Create(equipment).Error
 	})
+}
+
+func keepOnlyFlags(tx *gorm.DB, equipment *Equipments) error {
+	if equipment.IsDefault {
+		if err := keepOnlyFlag(tx, equipment, "is_default"); err != nil {
+			return err
+		}
+	}
+	if equipment.IsCommute {
+		return keepOnlyFlag(tx, equipment, "is_commute")
+	}
+	return nil
+}
+
+// GetCommuteEquipment returns the equipment of the user's commutes, nil when there is none
+func (db *DB) GetCommuteEquipment(userID uint) (*Equipments, error) {
+	var equipments []Equipments
+	err := db.Where("user_id = ? AND is_commute", userID).Limit(1).Find(&equipments).Error
+	if err != nil || len(equipments) == 0 {
+		return nil, err
+	}
+	return &equipments[0], nil
+}
+
+// AssignCommuteEquipment gives an equipment to the user's commute rides, it returns how many changed
+func (db *DB) AssignCommuteEquipment(userID uint, equipmentID uuid.UUID) (int64, error) {
+	result := db.Model(&Activity{}).
+		Where("user_id = ? AND is_commute AND sport = ? AND (equipment_id IS NULL OR equipment_id <> ?)",
+			userID, CommuteSport, equipmentID).
+		Update("equipment_id", equipmentID)
+	return result.RowsAffected, result.Error
 }
 
 func (db *DB) GetDefaultEquipment(userID uint) Equipments {
@@ -49,18 +92,20 @@ func (db *DB) GetDefaultEquipment(userID uint) Equipments {
 	return equipment
 }
 
-// UpdateEquipment saves an equipment, it becomes the only default one of the user when IsDefault is set
+// UpdateEquipment saves an equipment, it becomes the only default one of the user when IsDefault is set,
+// and the only commute one when IsCommute is set
 func (db *DB) UpdateEquipment(equipment *Equipments) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		if equipment.IsDefault {
-			err := tx.Model(&Equipments{}).Where("user_id = ? AND id <> ?", equipment.UserID, equipment.ID).
-				Update("is_default", false).Error
-			if err != nil {
-				return err
-			}
+		if err := keepOnlyFlags(tx, equipment); err != nil {
+			return err
 		}
 		return tx.Omit("User").Save(equipment).Error
 	})
+}
+
+// SetEquipmentPicture saves the URL path of the picture of an equipment, empty to remove it
+func (db *DB) SetEquipmentPicture(id uuid.UUID, picture string) error {
+	return db.Model(&Equipments{}).Where("id = ?", id).Update("picture", picture).Error
 }
 
 func (db *DB) GetEquipment(uuid uuid.UUID) (Equipments, error) {

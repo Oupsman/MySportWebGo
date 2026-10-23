@@ -2,7 +2,6 @@ package models
 
 import (
 	"database/sql"
-	"fmt"
 	"gorm.io/driver/postgres"
 	_ "gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -18,8 +17,6 @@ func ConnectToDB(driver string, dsn string) (*DB, error) {
 	var err error
 	var sqlDB *sql.DB
 	var db *gorm.DB
-
-	fmt.Println("Driver: ", driver, "DSN: ", dsn)
 
 	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 

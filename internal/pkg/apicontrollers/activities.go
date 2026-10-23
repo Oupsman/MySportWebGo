@@ -179,6 +179,11 @@ func UpdateActivity(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid visibility"})
 		return
 	}
+	newActivity.EquipmentID, err = activityService.EquipmentOnUpdate(&db, *activity, newActivity.IsCommute, newActivity.EquipmentID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	activity.Title = newActivity.Title
 	activity.CanComments = newActivity.CanComments
 	activity.IsCommute = newActivity.IsCommute

@@ -85,6 +85,17 @@ func assignRoute(db *models.DB, activity *models.Activity) error {
 		if activity.Co2 == 0 {
 			activity.Co2 = Commute(*activity)
 		}
+		// instead of the default equipment
+		if activity.Sport == models.CommuteSport {
+			bike, err := db.GetCommuteEquipment(activity.UserID)
+			if err != nil {
+				return err
+			}
+			if bike != nil {
+				activity.Equipment = *bike
+				activity.EquipmentID = &bike.ID
+			}
+		}
 	}
 	return nil
 }

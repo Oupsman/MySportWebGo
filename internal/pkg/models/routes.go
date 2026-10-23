@@ -54,7 +54,8 @@ func (db *DB) GetRoute(id uuid.UUID) (*Route, error) {
 }
 
 // SetRouteCommute flags a route and all its activities as commutes or not. The commutes without a saved
-// CO2 (the ones that aren't rides) get one. It returns the number of activities of the route.
+// CO2 (the ones that aren't rides) get one, the rides get the user's commute equipment when there is one.
+// It returns the number of activities of the route.
 func (db *DB) SetRouteCommute(routeID uuid.UUID, isCommute bool) (int64, error) {
 	var count int64
 	err := db.Transaction(func(tx *gorm.DB) error {
@@ -68,7 +69,17 @@ func (db *DB) SetRouteCommute(routeID uuid.UUID, isCommute bool) (int64, error) 
 		}
 		result := tx.Model(&Activity{}).Where("route_id = ?", routeID).Updates(updates)
 		count = result.RowsAffected
-		return result.Error
+		if result.Error != nil || !isCommute {
+			return result.Error
+		}
+		var bikes []Equipments
+		err = tx.Where("is_commute AND user_id = (SELECT user_id FROM routes WHERE id = ?)", routeID).
+			Limit(1).Find(&bikes).Error
+		if err != nil || len(bikes) == 0 {
+			return err
+		}
+		return tx.Model(&Activity{}).Where("route_id = ? AND sport = ?", routeID, CommuteSport).
+			Update("equipment_id", bikes[0].ID).Error
 	})
 	return count, err
 }

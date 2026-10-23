@@ -30,8 +30,13 @@ func Init() {
 	dbuser := CheckVariable("DBUSER", true)
 	dbpass := CheckVariable("DBPASSWORD", true)
 	dbname := CheckVariable("DBNAME", true)
+	// an external database often requires TLS: require, verify-ca or verify-full
+	sslmode := CheckVariable("DBSSLMODE", false)
+	if sslmode == "" {
+		sslmode = "disable"
+	}
 
-	Dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable", dbhost, dbuser, dbpass, dbname, dbport)
+	Dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s", dbhost, dbuser, dbpass, dbname, dbport, sslmode)
 
 	ListenPort = CheckVariable("LISTEN_PORT", true)
 	SecretKey = CheckVariable("SECRET_KEY", true)

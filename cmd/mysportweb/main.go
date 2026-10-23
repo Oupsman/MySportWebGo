@@ -20,7 +20,8 @@ func main() {
 	dsn := vars.Dsn
 	App, err := app.NewApp(log.Logger, driver, dsn)
 	if err != nil {
-		log.Panic().Err(err)
+		// never the DSN: it holds the password of the database
+		log.Fatal().Err(err).Msg("cannot connect to the database")
 	}
 
 	var g errgroup.Group
