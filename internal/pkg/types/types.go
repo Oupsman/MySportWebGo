@@ -72,10 +72,12 @@ type RegisterBody struct {
 	Email    string `json:"email"`
 }
 
+// Device is the device that recorded an activity, as its FIT file tells
 type Device struct {
-	Model  string `json:"model"`
-	Brand  string `json:"brand"`
-	Serial string `json:"serial_number"`
+	Model    string `json:"model"`
+	Brand    string `json:"brand"`
+	Serial   string `json:"serial_number"`
+	Software string `json:"software"` // the version of its firmware
 }
 
 type Length struct {
@@ -215,6 +217,13 @@ type ActivityRow struct {
 	IsCommute     bool       `json:"is_commute"`
 	EquipmentID   *uuid.UUID `json:"equipment_id"`
 	EquipmentName *string    `json:"equipment_name"`
+	DeviceName    string     `json:"device_name"`
+}
+
+// DeviceCount is a device of the user and how many activities it recorded
+type DeviceCount struct {
+	Name       string `json:"name"`
+	Activities int64  `json:"activities"`
 }
 
 // DuplicateActivity is an activity of a group of duplicates, ImportedAt telling which copy came first
@@ -236,9 +245,11 @@ type ActivitySearch struct {
 	Activities []ActivityRow `json:"activities"`
 	Total      int64         `json:"total"`
 	Totals     PeriodTotals  `json:"totals"`
-	// what the filters can offer: the user's sports and the years with activities, most recent first
-	Sports []string `json:"sports"`
-	Years  []int    `json:"years"`
+	// what the filters can offer: the user's sports, the years with activities, most recent first,
+	// and the recording devices, most used first
+	Sports  []string      `json:"sports"`
+	Years   []int         `json:"years"`
+	Devices []DeviceCount `json:"devices"`
 }
 
 type Dashboard struct {

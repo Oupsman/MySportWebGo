@@ -16,7 +16,9 @@ type ActivityFilter struct {
 	Query       string    // in the title, case insensitive
 	EquipmentID *uuid.UUID
 	NoEquipment bool
-	Commute     *bool // only the commutes, or only the other activities
+	Device      string // the name of the recording device
+	NoDevice    bool   // the activities whose file doesn't tell it
+	Commute     *bool  // only the commutes, or only the other activities
 }
 
 // SortColumns are the columns the activities can be sorted by
@@ -50,6 +52,12 @@ func (f ActivityFilter) apply(query *gorm.DB, userID uint) *gorm.DB {
 	} else if f.EquipmentID != nil {
 		query = query.Where("activities.equipment_id = ?", *f.EquipmentID)
 	}
+	if f.NoDevice {
+		// NULL: imported before the devices were read, until the re-analysis
+		query = query.Where("activities.device_name IS NULL OR activities.device_name = ''")
+	} else if f.Device != "" {
+		query = query.Where("activities.device_name = ?", f.Device)
+	}
 	if f.Commute != nil {
 		query = query.Where("activities.is_commute = ?", *f.Commute)
 	}
@@ -60,7 +68,8 @@ func (f ActivityFilter) apply(query *gorm.DB, userID uint) *gorm.DB {
 // SortColumns), and the totals of all the matching activities. Years are computed in loc.
 func (db *DB) SearchActivities(userID uint, filter ActivityFilter, sort string, descending bool,
 	page, perPage int, loc *time.Location) (types.ActivitySearch, error) {
-	search := types.ActivitySearch{Activities: []types.ActivityRow{}, Sports: []string{}, Years: []int{}}
+	search := types.ActivitySearch{Activities: []types.ActivityRow{}, Sports: []string{}, Years: []int{},
+		Devices: []types.DeviceCount{}}
 
 	err := filter.apply(db.Table("activities"), userID).Select(totalsColumns).Scan(&search.Totals).Error
 	if err != nil {
@@ -79,7 +88,8 @@ func (db *DB) SearchActivities(userID uint, filter ActivityFilter, sort string, 
 	err = filter.apply(db.Table("activities"), userID).
 		Select("activities.id, activities.title, activities.date, activities.sport, activities.distance, " +
 			"activities.duration, activities.avg_speed, activities.positive_elevation AS elevation, " +
-			"activities.is_commute, activities.equipment_id, equipments.name AS equipment_name").
+			"activities.is_commute, activities.equipment_id, equipments.name AS equipment_name, " +
+			"COALESCE(activities.device_name, '') AS device_name").
 		Joins("LEFT JOIN equipments ON equipments.id = activities.equipment_id").
 		// the date, then the id, keep the order stable between pages
 		Order(order).Order("activities.date DESC").Order("activities.id").
@@ -90,6 +100,13 @@ func (db *DB) SearchActivities(userID uint, filter ActivityFilter, sort string, 
 
 	err = db.Table("activities").Where("user_id = ?", userID).Distinct("sport").Order("sport").
 		Pluck("sport", &search.Sports).Error
+	if err != nil {
+		return search, err
+	}
+	// the most used first
+	err = db.Table("activities").Select("device_name AS name, COUNT(*) AS activities").
+		Where("user_id = ? AND device_name <> ''", userID).Group("device_name").
+		Order("COUNT(*) DESC").Order("device_name").Scan(&search.Devices).Error
 	if err != nil {
 		return search, err
 	}

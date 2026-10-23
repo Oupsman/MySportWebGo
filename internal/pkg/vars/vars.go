@@ -6,7 +6,8 @@ import (
 	"os"
 )
 
-const Engine_version int = 2 // the version of the analysis engine, 2: time stamps of the sparse series
+// the version of the analysis engine, 2: time stamps of the sparse series, 3: the recording device
+const Engine_version int = 3
 
 var ListenPort string
 var Dsn string

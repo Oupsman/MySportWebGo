@@ -59,6 +59,7 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 		return fitActivity.Sessions[i].StartTime.Before(fitActivity.Sessions[j].StartTime)
 	})
 	activity.EngineVersion = vars.Engine_version
+	activity.Device, activity.DeviceName = AnalyzeDevice(fitActivity)
 	activity.User = user
 	activity.Equipment = equipment
 	activity.Lastimport = true

@@ -45,7 +45,8 @@ type Activity struct {
 	MaxSpeedPosition types.GpsPoint    `json:"max_speed_position"`
 	TotalWeight      uint16            `json:"total_weight"` // weight of the user + equipment at the time of the initial import of activity
 	Device           types.Device      `json:"device"`
-	UserAge          uint8             `json:"user_age"` // age of the user at the time of the initial import of activity
+	DeviceName       string            `json:"device_name" gorm:"index"` // "Garmin Edge 530", to filter on it
+	UserAge          uint8             `json:"user_age"`                 // age of the user at the time of the initial import of activity
 	Thumbnail        string            `json:"thumbnail"`
 	// precalculated FIT analysis results
 	Speeds              types.FloatArray    `json:"speeds"`
@@ -232,10 +233,13 @@ func (db *DB) GetActivityFilePath(id uuid.UUID) (string, error) {
 	return activity.FilePath, err
 }
 
-// UpdateActivityTimeStamps saves the time stamps of the sparse series and the engine version
+// UpdateActivityTimeStamps saves what an engine upgrade re-analyses (the time stamps of the sparse
+// series, the recording device) and the engine version
 func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, version int) error {
 	updates := map[string]interface{}{"engine_version": version}
 	if analysed != nil {
+		updates["device"] = analysed.Device
+		updates["device_name"] = analysed.DeviceName
 		updates["gps_time_stamps"] = analysed.GpsTimeStamps
 		updates["heart_time_stamps"] = analysed.HeartTimeStamps
 		updates["cadence_time_stamps"] = analysed.CadenceTimeStamps
