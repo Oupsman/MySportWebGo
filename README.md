@@ -34,10 +34,24 @@ docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_POR
   `MSW_DBNAME`, and `MSW_DBSSLMODE` (`require`...) when it needs TLS. The tables are created at the first start.
 * `MSW_DOMAIN` is the URL users open: the API refuses requests from any other origin.
 * The uploaded files are in the `media` volume.
-* `docker compose build` builds both images, the frontend one from `MSW_FRONTEND_PATH` (`../mysportweb-vuetify`);
-  otherwise they are pulled from `MSW_REGISTRY` (`ghcr.io/oupsman`) with the tag `MSW_TAG` (`latest`).
+* The images are pulled from `MSW_REGISTRY` with the tag `MSW_TAG` (`latest`, a short commit sha, or a version
+  `1.2.3`, `1.2`, `1`): run `docker login` to the registry first. `docker compose build` builds them instead, the
+  frontend one from `MSW_FRONTEND_PATH` (`../mysportweb-vuetify`).
 
 The variables are prefixed `MSW_` because docker compose also reads the `.env` used for development.
+
+## CI with Woodpecker
+
+`.woodpecker.yaml` (the frontend repository has its own) tests every push and pull request, then builds the image.
+The default branch pushes `latest` and the short commit sha; a version tag `v1.2.3` pushes `1.2.3`, `1.2` and `1`
+(`ci/image-tags.sh`). Pull requests and other branches build the image without pushing it.
+
+* Secrets of each repository: `docker_registry` (the host, e.g. `registry.example.com`), `docker_repo` (the image,
+  e.g. `registry.example.com/oupsman/mysportwebgo`), `docker_username`, `docker_password`.
+* The server must allow the build plugin to run privileged:
+  `WOODPECKER_PLUGINS_PRIVILEGED=docker.io/woodpeckerci/plugin-docker-buildx:6.1.2` (the exact image).
+* A registry without TLS or with a self-signed certificate needs the `-insecure` variant of the plugin and
+  `insecure: true` in its settings, or its CA certificate mounted in the agent (see the plugin documentation).
 
 ## TODO
 

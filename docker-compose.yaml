@@ -45,7 +45,7 @@ services:
         condition: service_healthy
 
   db:
-    image: postgres:16-alpine
+    image: postgres:16-bookworm
     profiles: [db]
     restart: unless-stopped
     environment:
