@@ -59,6 +59,18 @@ func TestEstimateStatuses(t *testing.T) {
 	}
 }
 
+func TestEstimateNotEnoughData(t *testing.T) {
+	// three measures over 4 days: the count is there, not the span
+	got := EstimateWeight(series(3, 2, 80, -0.2), 75, now)
+	if got.Status != NotEnoughData || got.Measures != 3 || got.Days != 4 {
+		t.Fatalf("%+v", got)
+	}
+	// the first one was 4 days ago: 14 days after it, a measure makes the trend
+	if got.Available == nil || math.Abs(days(got.Available)-10) > 0.01 {
+		t.Errorf("available in %v days, want 10", got.Available)
+	}
+}
+
 func TestEstimateDate(t *testing.T) {
 	// 0.5 kg a week, 76.5 kg today: 74 kg in 5 weeks
 	got := EstimateWeight(series(8, 7, 80, -0.5), 74, now)

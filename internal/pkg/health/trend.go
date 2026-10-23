@@ -44,6 +44,9 @@ type Estimate struct {
 	PerWeek  float64    `json:"per_week"` // the pace of the trend, kg per week, negative when losing
 	Date     *time.Time `json:"date"`     // when the trend meets the target, only on track
 	Measures int        `json:"measures"` // the measures of the trend
+	// not enough data: the days the measures cover, and from when they cover MinSpan
+	Days      float64    `json:"days"`
+	Available *time.Time `json:"available"`
 }
 
 // EstimateWeight fits a line on the measures of the last Window (least squares) and tells when it meets
@@ -89,8 +92,13 @@ func EstimateWeight(measures []Measure, target float64, now time.Time) Estimate 
 		estimate.Current = latest.Weight
 		return estimate
 	}
+	estimate.Days = latest.Date.Sub(earliest.Date).Hours() / 24
 	if len(recent) < MinMeasures || latest.Date.Sub(earliest.Date) < MinSpan {
 		estimate.Status = NotEnoughData
+		// measuring again from then makes the span, if the first measure is still in the window
+		if available := earliest.Date.Add(MinSpan); available.Before(earliest.Date.Add(Window)) {
+			estimate.Available = &available
+		}
 		return estimate
 	}
 
