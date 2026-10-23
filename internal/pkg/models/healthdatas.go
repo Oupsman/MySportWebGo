@@ -72,6 +72,11 @@ func (db *DB) DeleteHealthData(userID uint, id uint) error {
 	return db.Where("user_id = ? AND id = ?", userID, id).Delete(&HealthData{}).Error
 }
 
+// SetWeightObjective saves the target weight of a user, 0 to remove it
+func (db *DB) SetWeightObjective(userID uint, target float64) error {
+	return db.Model(&Users{}).Where("id = ?", userID).Update("weight_objective", target).Error
+}
+
 func (db *DB) GetHealthDatas(userID uint) ([]HealthData, error) {
 	healthDatas := []HealthData{}
 	err := db.Where("user_id = ?", userID).Order("date desc").Find(&healthDatas).Error

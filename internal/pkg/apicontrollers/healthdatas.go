@@ -2,6 +2,7 @@ package apicontrollers
 
 import (
 	"MySportWeb/internal/pkg/app"
+	"MySportWeb/internal/pkg/health"
 	"MySportWeb/internal/pkg/middlewares"
 	"MySportWeb/internal/pkg/models"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"gorm.io/gorm"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 func ImportHealthDatas(c *gin.Context) {
@@ -112,4 +114,56 @@ func GetHealthDatas(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, healthDatas)
+}
+
+// weightEstimate returns when the user reaches their target weight at the pace of their measures
+func weightEstimate(db *models.DB, user models.Users) (health.Estimate, error) {
+	datas, err := db.GetHealthDatas(user.ID)
+	if err != nil {
+		return health.Estimate{}, err
+	}
+	measures := make([]health.Measure, len(datas))
+	for i, d := range datas {
+		measures[i] = health.Measure{Date: d.Date, Weight: d.Weight}
+	}
+	return health.EstimateWeight(measures, user.WeightObjective, time.Now()), nil
+}
+
+// GetWeightTarget returns the target weight and when it is reached at the pace of the recent measures
+func GetWeightTarget(c *gin.Context) {
+	db := c.MustGet("App").(*app.App).DB
+	estimate, err := weightEstimate(&db, middlewares.CurrentUser(c))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, estimate)
+}
+
+// SetWeightTarget sets the target weight, {"target": 72.5}, 0 removes it
+func SetWeightTarget(c *gin.Context) {
+	var body struct {
+		Target *float64 `json:"target" binding:"required"`
+	}
+	db := c.MustGet("App").(*app.App).DB
+	user := middlewares.CurrentUser(c)
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if *body.Target != 0 && (*body.Target < 20 || *body.Target > 500) {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "the target weight is in kg, between 20 and 500"})
+		return
+	}
+	if err := db.SetWeightObjective(user.ID, *body.Target); err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	user.WeightObjective = *body.Target
+	estimate, err := weightEstimate(&db, user)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, estimate)
 }

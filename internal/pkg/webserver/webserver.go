@@ -105,6 +105,8 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.POST("/healthdatas", middlewares.IsAuthorized(models.HealthDatasCreate), apicontrollers.CreateHealthData)
 	apiv1.POST("/healthdatas/import", middlewares.IsAuthorized(models.HealthDatasCreate), apicontrollers.ImportHealthDatas)
 	apiv1.GET("/healthdatas", middlewares.IsAuthorized(models.HealthDatasRead), apicontrollers.GetHealthDatas)
+	apiv1.GET("/healthdatas/target", middlewares.IsAuthorized(models.HealthDatasRead), apicontrollers.GetWeightTarget)
+	apiv1.POST("/healthdatas/target", middlewares.IsAuthorized(models.HealthDatasWrite), apicontrollers.SetWeightTarget)
 	apiv1.POST("/healthdatas/:id", middlewares.IsAuthorized(models.HealthDatasWrite), apicontrollers.UpdateHealthData)
 	apiv1.DELETE("/healthdatas/:id", middlewares.IsAuthorized(models.HealthDatasDelete), apicontrollers.DeleteHealthData)
 

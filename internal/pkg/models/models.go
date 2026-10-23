@@ -5,6 +5,7 @@ import (
 	"gorm.io/driver/postgres"
 	_ "gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"strings"
 	"time"
 )
 
@@ -54,6 +55,25 @@ func CreateOrMigrate(db *DB) error {
 	err := db.AutoMigrate(&Users{}, &Equipments{}, &Activity{}, &Route{}, &HealthData{}, &Validations{}, &Keys{}, &Notifications{}, &DeviceTokens{})
 	if err != nil {
 		return err
+	}
+	// AutoMigrate doesn't change the type of an existing column: the target weight was whole kilos
+	return alterIntegerColumn(db, &Users{}, "WeightObjective", "weight_objective")
+}
+
+// alterIntegerColumn gives a column its type in the model when the database still has it as an integer
+func alterIntegerColumn(db *DB, model interface{}, field, column string) error {
+	columns, err := db.Migrator().ColumnTypes(model)
+	if err != nil {
+		return err
+	}
+	for _, c := range columns {
+		if c.Name() != column {
+			continue
+		}
+		switch strings.ToLower(c.DatabaseTypeName()) {
+		case "int2", "int4", "int8", "smallint", "integer", "bigint":
+			return db.Migrator().AlterColumn(model, field)
+		}
 	}
 	return nil
 }

@@ -56,7 +56,7 @@ type UserBody struct {
 	Gender               int       `json:"gender"`
 	Height               uint16    `json:"height"`
 	MaxHR                uint16    `json:"max_hr"`
-	WeightObjective      uint16    `json:"weight_objective"`
+	WeightObjective      float64   `json:"weight_objective"`
 	SecurityDistance     uint16    `json:"security_distance"`
 	HomeTown             string    `json:"home_town"`
 }
