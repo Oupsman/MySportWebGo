@@ -1,0 +1,13 @@
+# secrets and data: never in an image
+.env
+MEDIA/
+MEDIA.tgz
+tmp/
+# not needed to build
+.git/
+.idea/
+prototypes/
+hashpw/
+mysportweb
+Dockerfile
+docker-compose.yaml

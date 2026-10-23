@@ -1,0 +1,69 @@
+# Checks every push and pull request, builds the image, and pushes it for the default branch
+# (latest + short sha) and the version tags (X.Y.Z, X.Y, X), see ci/image-tags.sh.
+#
+# Secrets: docker_registry (the host of the registry, to log in), docker_repo (the image,
+# registry/namespace/mysportwebgo), docker_username, docker_password.
+# The server must run the plugin privileged:
+#   WOODPECKER_PLUGINS_PRIVILEGED=docker.io/woodpeckerci/plugin-docker-buildx:6.1.2
+when:
+  - event: [push, pull_request, tag, manual]
+
+services:
+  # the database tests: they skip without MYSPORTWEB_TEST_DSN, and refuse a database not named *test*
+  postgres:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_PASSWORD: ci
+      POSTGRES_DB: mysportweb_test
+
+steps:
+  - name: test
+    image: golang:1.24-bookworm
+    environment:
+      MYSPORTWEB_TEST_DSN: host=postgres user=postgres password=ci dbname=mysportweb_test sslmode=disable
+    commands:
+      - test -z "$(gofmt -l cmd internal services)" || (gofmt -l cmd internal services && exit 1)
+      - go vet ./cmd/... ./internal/... ./services/...
+      # Postgres opens its port once initialized
+      - bash -c 'for i in $(seq 60); do (echo > /dev/tcp/postgres/5432) 2>/dev/null && exit 0; sleep 1; done; exit 1'
+      # prototypes/ is not tested: its files each have their own main. -p 1: the packages share the
+      # database, two of them would create its tables and empty them at the same time
+      - go test -p 1 ./cmd/... ./internal/... ./services/...
+
+  - name: tags
+    image: debian:bookworm-slim
+    commands:
+      - sh ci/image-tags.sh
+
+  - name: publish
+    image: docker.io/woodpeckerci/plugin-docker-buildx:6.1.2
+    settings:
+      registry:
+        from_secret: docker_registry
+      repo:
+        from_secret: docker_repo
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      platforms: linux/amd64
+      tags_file: .tags
+    when:
+      # a manual run publishes only from the default branch: elsewhere it would replace latest
+      - event: [push, manual]
+        branch: ${CI_REPO_DEFAULT_BRANCH}
+      - event: tag
+
+  # the other branches and the pull requests: the image must still build, nothing is pushed
+  - name: build
+    image: docker.io/woodpeckerci/plugin-docker-buildx:6.1.2
+    settings:
+      repo: mysportwebgo
+      platforms: linux/amd64
+      tags_file: .tags
+      dry_run: true
+    when:
+      - event: [push, manual]
+        branch:
+          exclude: ${CI_REPO_DEFAULT_BRANCH}
+      - event: pull_request
