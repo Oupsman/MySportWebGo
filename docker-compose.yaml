@@ -1,0 +1,65 @@
+# MySportWeb: the frontend (nginx) on MSW_HTTP_PORT, the API behind it, and an optional Postgres.
+#
+# With the bundled database:  COMPOSE_PROFILES=db in .env (or --profile db on each command)
+# With an external database:  no profile, MSW_DBHOST & co pointing to it (see compose.env.sample)
+#
+# The variables are prefixed MSW_: the .env of the backend for development (DBHOST=127.0.0.1...)
+# is read by docker compose too and must not configure the containers.
+name: mysportweb
+
+services:
+  backend:
+    image: ${MSW_REGISTRY:-ghcr.io/oupsman}/mysportwebgo:${MSW_TAG:-latest}
+    build: .
+    restart: unless-stopped
+    environment:
+      DBHOST: ${MSW_DBHOST:-db}
+      DBPORT: ${MSW_DBPORT:-5432}
+      DBUSER: ${MSW_DBUSER:-mysportweb}
+      DBPASSWORD: ${MSW_DBPASSWORD:?set MSW_DBPASSWORD}
+      DBNAME: ${MSW_DBNAME:-mysportweb}
+      DBSSLMODE: ${MSW_DBSSLMODE:-disable}
+      SECRET_KEY: ${MSW_SECRET_KEY:?set MSW_SECRET_KEY, a long random string signing the sessions}
+      # the public URL of the app: the API refuses the requests of any other origin
+      DOMAIN: ${MSW_DOMAIN:?set MSW_DOMAIN, the URL users open, e.g. https://sport.example.com}
+      LISTEN_PORT: "8080"
+    volumes:
+      # the uploaded FIT files, thumbnails and pictures
+      - media:/app/MEDIA
+    depends_on:
+      db:
+        condition: service_healthy
+        # absent with an external database
+        required: false
+
+  frontend:
+    image: ${MSW_REGISTRY:-ghcr.io/oupsman}/mysportweb-vuetify:${MSW_TAG:-latest}
+    build: ${MSW_FRONTEND_PATH:-../mysportweb-vuetify}
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "${MSW_HTTP_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    profiles: [db]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${MSW_DBUSER:-mysportweb}
+      POSTGRES_PASSWORD: ${MSW_DBPASSWORD:?set MSW_DBPASSWORD}
+      POSTGRES_DB: ${MSW_DBNAME:-mysportweb}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  media:
+  db:
