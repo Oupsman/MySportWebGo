@@ -75,6 +75,9 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.DELETE("/user/tokens/:id", middlewares.IsAuthorized(), apicontrollers.DeleteDeviceToken)
 
 	// Activities
+	// the browsers' ad blockers refuse /api/v1/activity (EasyPrivacy: "/api/v1/activity|$~third-party,xmlhttprequest"):
+	// the frontend uploads to /activities/upload, /activity stays for the API clients (device tokens)
+	apiv1.POST("/activities/upload", middlewares.IsAuthorized(models.ActivitiesCreate), apicontrollers.UploadActivity)
 	apiv1.POST("/activity", middlewares.IsAuthorized(models.ActivitiesCreate), apicontrollers.UploadActivity)
 	apiv1.GET("/activity/list/:start/:count", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.ListActivities)
 	apiv1.GET("/activity/search", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.SearchActivities)
