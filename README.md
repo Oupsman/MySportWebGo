@@ -35,8 +35,10 @@ docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_POR
 * `MSW_DOMAIN` is the URL users open: the API refuses requests from any other origin.
 * The uploaded files are in the `media` volume.
 * The images are pulled from `MSW_REGISTRY` with the tag `MSW_TAG` (`latest`, a short commit sha, or a version
-  `1.2.3`, `1.2`, `1`): run `docker login` to the registry first. `docker compose build` builds them instead, the
-  frontend one from `MSW_FRONTEND_PATH` (`../mysportweb-vuetify`).
+  `1.2.3`, `1.2`, `1`), at each deployment: run `docker login` to the registry first (with Portainer: add the
+  registry in its Registries). `docker-compose.yaml` never builds them, Portainer can't build.
+* To build the images locally instead: `docker compose -f docker-compose.yaml -f docker-compose.build.yaml up --build`,
+  the frontend one from `MSW_FRONTEND_PATH` (`../mysportweb-vuetify`).
 
 The variables are prefixed `MSW_` because docker compose also reads the `.env` used for development.
 

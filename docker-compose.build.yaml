@@ -1,0 +1,11 @@
+# Builds the images locally instead of pulling them, added to docker-compose.yaml:
+#   docker compose -f docker-compose.yaml -f docker-compose.build.yaml up --build
+# Not for Portainer: it can't build.
+services:
+  backend:
+    build: .
+    pull_policy: build
+
+  frontend:
+    build: ${MSW_FRONTEND_PATH:-../mysportweb-vuetify}
+    pull_policy: build

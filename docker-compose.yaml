@@ -5,12 +5,16 @@
 #
 # The variables are prefixed MSW_: the .env of the backend for development (DBHOST=127.0.0.1...)
 # is read by docker compose too and must not configure the containers.
+#
+# The images are pulled from MSW_REGISTRY, this file never builds them: Portainer can't build.
+# To build them here instead: docker compose -f docker-compose.yaml -f docker-compose.build.yaml up --build
 name: mysportweb
 
 services:
   backend:
     image: ${MSW_REGISTRY:-ghcr.io/oupsman}/mysportwebgo:${MSW_TAG:-latest}
-    build: .
+    # latest moves with each push: a redeploy must not keep an old local copy
+    pull_policy: always
     restart: unless-stopped
     environment:
       DBHOST: ${MSW_DBHOST:-db}
@@ -33,8 +37,8 @@ services:
         required: false
 
   frontend:
-    image: ${MSW_REGISTRY:-ghcr.io/oupsman}/mysportweb-vuetify:${MSW_TAG:-latest}
-    build: ${MSW_FRONTEND_PATH:-../mysportweb-vuetify}
+    image: ${MSW_REGISTRY:-ghcr.io/oupsman}/mysportweb-frontend:${MSW_TAG:-latest}
+    pull_policy: always
     restart: unless-stopped
     environment:
       BACKEND_URL: http://backend:8080
