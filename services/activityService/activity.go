@@ -209,6 +209,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 					}
 					if record.Temperature != math.MaxInt8 {
 						activity.Temperatures = append(activity.Temperatures, int16(record.Temperature))
+						activity.TemperatureTimeStamps = append(activity.TemperatureTimeStamps, offset)
 					}
 					if !math.IsNaN(record.EnhancedSpeedScaled()) && record.EnhancedSpeedScaled() != 65.535 {
 						activity.Speeds = append(activity.Speeds, record.EnhancedSpeedScaled())
@@ -253,7 +254,8 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 							})
 						}
 					}
-					if session := sessions.at(record.Timestamp); isCycling(session) && hasPowerMeter(session) {
+					// measured power, of any sport: running, rowing... Without power meter, only the cycling one is estimated
+					if session := sessions.at(record.Timestamp); hasPowerMeter(session) {
 						if record.Power != math.MaxUint16 {
 							activity.Powers = append(activity.Powers, record.Power)
 							activity.PowerTS = append(activity.PowerTS, fmt.Sprintf("%f", offset))

@@ -6,8 +6,9 @@ import (
 	"os"
 )
 
-// the version of the analysis engine, 2: time stamps of the sparse series, 3: the recording device
-const Engine_version int = 3
+// the version of the analysis engine, 2: time stamps of the sparse series, 3: the recording device,
+// 4: the measured power of every sport and the time stamps of the temperatures
+const Engine_version int = 4
 
 var ListenPort string
 var Dsn string

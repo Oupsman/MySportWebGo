@@ -71,22 +71,23 @@ type Activity struct {
 	Temperatures        types.Int16Array    `json:"temperatures"`
 	TimeStamps          types.MultiString   `json:"time_stamps"`
 	// seconds since the start of each value of the sparse series, which skip the records without a value
-	GpsTimeStamps      types.FloatArray    `json:"gps_time_stamps"`
-	HeartTimeStamps    types.FloatArray    `json:"heart_time_stamps"`
-	CadenceTimeStamps  types.FloatArray    `json:"cadence_time_stamps"`
-	PhysicalConditions types.FloatArray    `json:"physical_conditions"`
-	TotalAscent        uint16              `json:"total_ascent"`
-	TotalDescent       uint16              `json:"total_descent"`
-	Altitudes          types.FloatArray    `json:"altitudes"`
-	GpsCenter          *types.GpsPoint     `json:"gps_center"`
-	GpsBounds          types.GpsPointArray `json:"gps_bounds"`
-	Means              types.FloatArray    `json:"means"`
-	PositiveElevation  float64             `json:"positive_elevation"`
-	NegativeElevation  float64             `json:"negative_elevation"`
-	StartPosition      *types.GpsPoint     `json:"start_position"`
-	EndPosition        *types.GpsPoint     `json:"end_position"`
-	Lengths            types.LengthArray   `json:"lengths"`
-	Legs               types.LegArray      `json:"legs"` // the sessions of a multi-session file, empty for one session
+	GpsTimeStamps         types.FloatArray    `json:"gps_time_stamps"`
+	HeartTimeStamps       types.FloatArray    `json:"heart_time_stamps"`
+	CadenceTimeStamps     types.FloatArray    `json:"cadence_time_stamps"`
+	TemperatureTimeStamps types.FloatArray    `json:"temperature_time_stamps"`
+	PhysicalConditions    types.FloatArray    `json:"physical_conditions"`
+	TotalAscent           uint16              `json:"total_ascent"`
+	TotalDescent          uint16              `json:"total_descent"`
+	Altitudes             types.FloatArray    `json:"altitudes"`
+	GpsCenter             *types.GpsPoint     `json:"gps_center"`
+	GpsBounds             types.GpsPointArray `json:"gps_bounds"`
+	Means                 types.FloatArray    `json:"means"`
+	PositiveElevation     float64             `json:"positive_elevation"`
+	NegativeElevation     float64             `json:"negative_elevation"`
+	StartPosition         *types.GpsPoint     `json:"start_position"`
+	EndPosition           *types.GpsPoint     `json:"end_position"`
+	Lengths               types.LengthArray   `json:"lengths"`
+	Legs                  types.LegArray      `json:"legs"` // the sessions of a multi-session file, empty for one session
 }
 
 func (db *DB) CreateActivity(activity *Activity) error {
@@ -234,7 +235,7 @@ func (db *DB) GetActivityFilePath(id uuid.UUID) (string, error) {
 }
 
 // UpdateActivityTimeStamps saves what an engine upgrade re-analyses (the time stamps of the sparse
-// series, the recording device) and the engine version
+// series, the recording device, the power and the temperature) and the engine version
 func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, version int) error {
 	updates := map[string]interface{}{"engine_version": version}
 	if analysed != nil {
@@ -244,6 +245,9 @@ func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, version
 		updates["heart_time_stamps"] = analysed.HeartTimeStamps
 		updates["cadence_time_stamps"] = analysed.CadenceTimeStamps
 		updates["power_ts"] = analysed.PowerTS
+		updates["powers"] = analysed.Powers
+		updates["temperatures"] = analysed.Temperatures
+		updates["temperature_time_stamps"] = analysed.TemperatureTimeStamps
 	}
 	return db.Model(&Activity{}).Where("id = ?", id).Updates(updates).Error
 }

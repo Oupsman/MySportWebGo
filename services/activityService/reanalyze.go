@@ -19,7 +19,7 @@ func analyzeFile(filePath string) (activity models.Activity, err error) {
 }
 
 // BackfillTimeStamps re-reads the FIT file of the activities analysed by an older engine, to fill the
-// time stamps of the sparse series and the recording device. Activities whose file can't be read are
+// time stamps of the sparse series, the recording device, the power and the temperatures. Activities whose file can't be read are
 // marked as done without them, the frontend then falls back on the records time stamps.
 func BackfillTimeStamps(db *models.DB, logger zerolog.Logger) error {
 	ids, err := db.GetActivitiesBelowEngine(vars.Engine_version)
