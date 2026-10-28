@@ -71,7 +71,7 @@ func AnalyzeLegs(sessions []*mesgdef.Session) []types.Leg {
 			continue
 		}
 		legs = append(legs, types.Leg{
-			Sport:          session.Sport.String(),
+			Sport:          SportName(session.Sport),
 			StartOffset:    session.StartTime.Sub(start).Seconds(),
 			Duration:       duration,
 			Distance:       valid(session.TotalDistanceScaled()),

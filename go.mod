@@ -1,8 +1,6 @@
 module MySportWeb
 
-go 1.24
-
-toolchain go1.24.5
+go 1.26.0
 
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
@@ -15,13 +13,13 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.3
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
-	github.com/muktihari/fit v0.25.0
+	github.com/muktihari/fit v0.28.5
 	github.com/pconstantinou/savitzkygolay v0.0.1
 	github.com/rs/zerolog v1.34.0
 	golang.org/x/crypto v0.40.0
 	golang.org/x/exp v0.0.0-20250711185948-6ae5c78190dc
 	golang.org/x/image v0.11.0
-	golang.org/x/sync v0.16.0
+	golang.org/x/sync v0.23.0
 	golang.org/x/term v0.33.0
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.30.0
@@ -63,7 +61,7 @@ require (
 	golang.org/x/arch v0.19.0 // indirect
 	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
-	golang.org/x/text v0.27.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	gonum.org/v1/plot v0.14.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

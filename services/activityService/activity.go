@@ -15,7 +15,6 @@ import (
 	"math"
 	"os"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -70,17 +69,9 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 		if len(legs) == 0 {
 			return models.Activity{}, errors.New("no session other than transitions in the FIT file")
 		}
-		for _, leg := range legs {
-			if strings.Contains(leg.Sport, "Invalid") {
-				return models.Activity{}, errors.New("Invalid sport")
-			}
-		}
 		activity.Legs = legs
 		summarizeLegs(&activity, fitActivity.Sessions, legs)
 		continuousDistances(fitActivity.Records, fitActivity.Sessions)
-	}
-	if strings.Contains(activity.Sport, "Invalid") {
-		return models.Activity{}, errors.New("Invalid sport")
 	}
 
 	// TODO : one day, I'll get the weight of the user and its equipment
@@ -107,7 +98,7 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 
 // summarizeSession sets the totals of a single-session activity
 func summarizeSession(activity *models.Activity, session *mesgdef.Session) {
-	activity.Sport = session.Sport.String()
+	activity.Sport = SportName(session.Sport)
 	activity.Date = session.StartTime
 	activity.Duration = session.TotalTimerTime / 1000
 	if !math.IsNaN(session.TotalDistanceScaled()) {

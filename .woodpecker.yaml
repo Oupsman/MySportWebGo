@@ -18,7 +18,7 @@ services:
 
 steps:
   - name: test
-    image: golang:1.24-bookworm
+    image: golang:1.26-bookworm
     environment:
       MYSPORTWEB_TEST_DSN: host=postgres user=postgres password=ci dbname=mysportweb_test sslmode=disable
     commands:

@@ -1,5 +1,5 @@
 # Backend of MySportWeb: the API, and the thumbnails of the activities drawn by a headless Chromium
-FROM golang:1.24-bookworm AS build
+FROM golang:1.26-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

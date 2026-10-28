@@ -65,7 +65,7 @@ The default branch pushes `latest` and the short commit sha; a version tag `v1.2
 1. Support more devices 
 2. support Healthdatas
 2.1 Integrate with Withings API - Oauth2
-3. Support more sports (skiing, snowboarding, etc)
+3. ~~Support more sports (skiing, snowboarding, etc)~~ (every sport of the FIT profile)
 4. Handle multiple languages
 5. Support GPX & TCX files format 
 6. ~~Support multisessions FIT files~~ (one activity with legs)

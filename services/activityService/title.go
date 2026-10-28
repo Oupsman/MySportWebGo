@@ -16,13 +16,23 @@ var dayPeriods = []struct {
 	name string
 }{{1, "morning"}, {12, "lunch"}, {14, "afternoon"}, {18, "evening"}, {22, "night"}}
 
-// sportNouns names an activity of a sport, the other sports are named after themselves
+// sportNouns names an activity of a sport, the other sports are named after themselves, "cross country
+// skiing": only the names reading badly in "Morning <sport>" are here
 var sportNouns = map[string]string{
-	"cycling":  "ride",
-	"running":  "run",
-	"walking":  "walk",
-	"hiking":   "hike",
-	"swimming": "swim",
+	"cycling":              "ride",
+	"running":              "run",
+	"walking":              "walk",
+	"hiking":               "hike",
+	"swimming":             "swim",
+	"generic":              "activity",
+	"e_biking":             "e-bike ride",
+	"fitness_equipment":    "workout",
+	"hiit":                 "HIIT",
+	"wheelchair_push_walk": "wheelchair walk",
+	"wheelchair_push_run":  "wheelchair run",
+	"motor_sports":         "motorsport",
+	"pool_apnea":           "apnea",
+	"mixed_martial_arts":   "MMA",
 }
 
 // userLocation returns the user's timezone, false when it's unknown
