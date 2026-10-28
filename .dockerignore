@@ -11,3 +11,5 @@ hashpw/
 mysportweb
 Dockerfile
 docker-compose.yaml
+# the desktop application, its own module
+desktop/

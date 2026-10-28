@@ -19,6 +19,11 @@ For now the app can :
 
 # For now, this app IS NOT PRODUCTION READY, AND VERY FAR FROM IT !
 
+## Desktop synchronization
+
+`desktop/` is a desktop application uploading the activities of the devices plugged through USB (mass storage or MTP)
+with a device token, see [desktop/README.md](desktop/README.md).
+
 ## Deploy with Docker Compose
 
 `docker-compose.yaml` runs the frontend (nginx, which forwards `/api` and `/MEDIA` to the backend) and the backend,

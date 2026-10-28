@@ -1,0 +1,132 @@
+// Package api uploads the activities to MySportWeb with a device token
+package api
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"mime/multipart"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// TokenPrefix starts the device tokens of MySportWeb
+const TokenPrefix = "msw_"
+
+// ErrAuth is a token refused by the server: missing, expired, revoked, or lacking activities:create.
+// Nothing can be uploaded until the settings change.
+var ErrAuth = errors.New("the server refused the device token")
+
+type Status int
+
+const (
+	Uploaded  Status = iota
+	Duplicate        // the server already has the activity
+	Rejected         // the server refused the file, sending it again changes nothing
+)
+
+type UploadResult struct {
+	Status     Status
+	ActivityID string
+	Message    string
+}
+
+type Client struct {
+	base  *url.URL
+	token string
+	http  *http.Client
+}
+
+func New(serverURL, token string) (*Client, error) {
+	serverURL = strings.TrimSpace(serverURL)
+	base, err := url.Parse(strings.TrimRight(serverURL, "/"))
+	if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" {
+		return nil, fmt.Errorf("the server URL must look like https://mysportweb.example.com")
+	}
+	token = strings.TrimSpace(token)
+	if !strings.HasPrefix(token, TokenPrefix) {
+		return nil, fmt.Errorf("the token must be a device token, starting with %s", TokenPrefix)
+	}
+	// the server draws a thumbnail of each activity with Chromium: an upload takes seconds
+	return &Client{base: base, token: token, http: &http.Client{Timeout: 3 * time.Minute}}, nil
+}
+
+func (c *Client) endpoint(p string) string {
+	return c.base.JoinPath(p).String()
+}
+
+// Ping checks the server answers, without the token: no route tells what a device token may do
+func (c *Client) Ping(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint("/api/v1/healthcheck"), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("the server answered %s, is it the URL of MySportWeb?", resp.Status)
+	}
+	return nil
+}
+
+// Upload sends a FIT file. item and count number the files of a synchronization: the server resets
+// the "last import" mark of the activities at the first one.
+func (c *Client) Upload(ctx context.Context, name string, content []byte, item, count int) (UploadResult, error) {
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	part, err := form.CreateFormFile("file", name)
+	if err != nil {
+		return UploadResult{}, err
+	}
+	part.Write(content)
+	form.WriteField("item", strconv.Itoa(item))
+	form.WriteField("count", strconv.Itoa(count))
+	if err := form.Close(); err != nil {
+		return UploadResult{}, err
+	}
+
+	// /activity is the route of the API clients, the frontend uses /activities/upload
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint("/api/v1/activity"), &body)
+	if err != nil {
+		return UploadResult{}, err
+	}
+	req.Header.Set("Content-Type", form.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return UploadResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var answer struct {
+		ID      string `json:"id"`
+		Error   string `json:"error"`
+		Message string `json:"message"` // the errors of the authentication
+	}
+	json.NewDecoder(resp.Body).Decode(&answer)
+	message := answer.Error
+	if message == "" {
+		message = answer.Message
+	}
+	switch {
+	case resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated:
+		return UploadResult{Status: Uploaded, ActivityID: answer.ID}, nil
+	case resp.StatusCode == http.StatusConflict:
+		return UploadResult{Status: Duplicate, ActivityID: answer.ID, Message: message}, nil
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return UploadResult{}, fmt.Errorf("%w: %s", ErrAuth, message)
+	case resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusRequestEntityTooLarge:
+		return UploadResult{Status: Rejected, Message: message}, nil
+	default:
+		// the server or a proxy fails: the file is tried again at the next synchronization
+		return UploadResult{}, fmt.Errorf("the server answered %s %s", resp.Status, message)
+	}
+}
