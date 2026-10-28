@@ -1,14 +1,15 @@
 package ui
 
-import "fyne.io/fyne/v2"
+import (
+	_ "embed"
 
-// icon is the icon of the window and the system tray: two arrows around a watch face
-var icon = fyne.NewStaticResource("mysportweb-sync.svg", []byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-<rect x="2" y="2" width="60" height="60" rx="14" fill="#1565c0"/>
-<circle cx="32" cy="32" r="13" fill="none" stroke="#fff" stroke-width="4"/>
-<path d="M32 25v7l5 4" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
-<path d="M12 28a21 21 0 0 1 36-12" fill="none" stroke="#90caf9" stroke-width="4" stroke-linecap="round"/>
-<path d="M50 9v9h-9" fill="none" stroke="#90caf9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M52 36a21 21 0 0 1-36 12" fill="none" stroke="#90caf9" stroke-width="4" stroke-linecap="round"/>
-<path d="M14 55v-9h9" fill="none" stroke="#90caf9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`))
+	"fyne.io/fyne/v2"
+)
+
+// iconSVG is the icon of the window and the system tray: two arrows around a watch face. install.sh
+// installs the same file for the menu entry.
+//
+//go:embed icon.svg
+var iconSVG []byte
+
+var icon = fyne.NewStaticResource("mysportweb-sync.svg", iconSVG)

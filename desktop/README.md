@@ -11,6 +11,21 @@ case) when one is plugged. It stays in the system tray when its window is closed
 
 It is a separate Go module: the backend is built without cgo, this application needs it (Fyne, libmtp).
 
+## Install
+
+On Linux, `install.sh` builds the application and installs it with its menu entry, in `~/.local` by default:
+
+```sh
+cd desktop
+./install.sh --install-deps   # once: the build dependencies, with the package manager (Arch, Debian/Ubuntu, Fedora, openSUSE)
+./install.sh --autostart      # build, install, and start in the system tray at login
+./install.sh --prefix /usr/local                    # for all the users, asks for sudo to copy the files
+./install.sh --uninstall [--purge]                  # --purge also removes the settings and the state
+```
+
+Run it again to update. Debian's Go may be too old: Go 1.21 or later is needed (it fetches the version of
+`go.mod` by itself).
+
 ## Build
 
 Linux, the development packages of libmtp, OpenGL and X11/Wayland:
@@ -39,15 +54,8 @@ driver, which replaces the MTP driver of Windows): mass storage devices only. On
 3. Plug the device. In MTP mode, unlock it if it asks which USB mode to use.
 
 `mysportweb-sync -scan` prints the devices found and their activity files, without uploading: start there when a
-device is not listed. `-hidden` starts in the system tray, for an autostart entry
-(`~/.config/autostart/mysportweb-sync.desktop`):
-
-```ini
-[Desktop Entry]
-Type=Application
-Name=MySportWeb Sync
-Exec=/path/to/mysportweb-sync -hidden
-```
+device is not listed. `-hidden` starts in the system tray, as the
+autostart entry of `install.sh --autostart` does.
 
 ## How it works
 
