@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -92,5 +93,44 @@ func TestNewRefuses(t *testing.T) {
 		if _, err := New(tt.url, tt.token); err == nil {
 			t.Errorf("%q %q accepted", tt.url, tt.token)
 		}
+	}
+}
+
+func TestCheckToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("Authorization") {
+		case "Bearer msw_uploader":
+			io.WriteString(w, `{"device_token":{"id":"1","name":"laptop","hint":"msw_abcd",`+
+				`"permissions":["activities:read","activities:create"],"expires_at":"2027-10-28T00:00:00Z"}}`)
+		case "Bearer msw_reader":
+			io.WriteString(w, `{"device_token":{"name":"reader","permissions":["activities:read"]}}`)
+		case "Bearer msw_old_server":
+			http.NotFound(w, r)
+		default:
+			w.WriteHeader(http.StatusUnauthorized)
+			io.WriteString(w, `{"message":"unauthorized: expired device token"}`)
+		}
+	}))
+	defer server.Close()
+	check := func(token string) (TokenInfo, error) {
+		client, err := New(server.URL, token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return client.CheckToken(context.Background())
+	}
+
+	info, err := check("msw_uploader")
+	if err != nil || info.Name != "laptop" || !info.CanUpload() || info.ExpiresAt.Year() != 2027 {
+		t.Errorf("uploader: %+v, %v", info, err)
+	}
+	if info, err := check("msw_reader"); err != nil || info.CanUpload() {
+		t.Errorf("reader: %+v, %v", info, err)
+	}
+	if _, err := check("msw_old_server"); !errors.Is(err, ErrNoTokenRoute) {
+		t.Errorf("old server: %v", err)
+	}
+	if _, err := check("msw_expired"); !errors.Is(err, ErrAuth) || !strings.Contains(err.Error(), "expired") {
+		t.Errorf("expired: %v", err)
 	}
 }

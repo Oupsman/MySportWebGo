@@ -73,6 +73,8 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.GET("/user/tokens", middlewares.IsAuthorized(), apicontrollers.GetDeviceTokens)
 	apiv1.POST("/user/tokens", middlewares.IsAuthorized(), apicontrollers.CreateDeviceToken)
 	apiv1.DELETE("/user/tokens/:id", middlewares.IsAuthorized(), apicontrollers.DeleteDeviceToken)
+	// the device token of the request, open to any device token: the applications check theirs
+	apiv1.GET("/token", middlewares.IsDeviceToken(), apicontrollers.GetCurrentDeviceToken)
 
 	// Activities
 	// the browsers' ad blockers refuse /api/v1/activity (EasyPrivacy: "/api/v1/activity|$~third-party,xmlhttprequest"):

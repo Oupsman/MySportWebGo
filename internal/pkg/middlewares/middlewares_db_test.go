@@ -85,6 +85,12 @@ func TestAuthorization(t *testing.T) {
 	router.GET("/delete", IsAuthorized(models.ActivitiesDelete), ok)
 	router.GET("/session", IsAuthorized(), ok)
 	router.GET("/public", OptionalUser(models.ActivitiesRead), func(c *gin.Context) { c.Status(http.StatusOK) })
+	router.GET("/token", IsDeviceToken(), func(c *gin.Context) {
+		if CurrentDeviceToken(c).Permissions != models.ActivitiesRead {
+			t.Error("wrong device token in the context")
+		}
+		ok(c)
+	})
 
 	for _, test := range []struct {
 		name, path, token string
@@ -101,6 +107,10 @@ func TestAuthorization(t *testing.T) {
 		{"anonymous on an optional route", "/public", "", 200},
 		{"device on an optional route", "/public", reader, 200},
 		{"invalid token on an optional route", "/public", "garbage", 401},
+		{"device on the device token route", "/token", reader, 200},
+		{"session on the device token route", "/token", session, 403},
+		{"expired device on the device token route", "/token", expired, 401},
+		{"no token on the device token route", "/token", "", 401},
 	} {
 		request := httptest.NewRequest(http.MethodGet, test.path, nil)
 		if test.token != "" {

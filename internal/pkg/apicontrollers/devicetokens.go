@@ -101,3 +101,9 @@ func DeleteDeviceToken(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"success": "device token revoked"})
 }
+
+// GetCurrentDeviceToken describes the device token of the request: an application checks it is valid
+// and holds the permissions it needs
+func GetCurrentDeviceToken(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"device_token": middlewares.CurrentDeviceToken(c)})
+}

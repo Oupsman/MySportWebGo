@@ -3,6 +3,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -250,15 +251,14 @@ func (u *UI) settings() fyne.CanvasObject {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
-			err := client.Ping(ctx)
+			title, text, err := checkServer(ctx, client)
 			fyne.Do(func() {
 				test.Enable()
 				if err != nil {
 					dialog.ShowError(err, u.window)
 					return
 				}
-				dialog.ShowInformation("Server", "The server answers. The token is checked at the first upload: "+
-					"it needs the activities:create permission.", u.window)
+				dialog.ShowInformation(title, text, u.window)
 			})
 		}()
 	}
@@ -287,4 +287,29 @@ func (u *UI) settings() fyne.CanvasObject {
 		&widget.FormItem{Text: "Ignore older than", Widget: maxAge, HintText: "days"},
 	)
 	return container.NewVScroll(container.NewVBox(form, container.NewHBox(test, save)))
+}
+
+// checkServer checks the server answers and accepts the token for the uploads
+func checkServer(ctx context.Context, client *api.Client) (title, text string, err error) {
+	if err := client.Ping(ctx); err != nil {
+		return "", "", err
+	}
+	info, err := client.CheckToken(ctx)
+	if errors.Is(err, api.ErrNoTokenRoute) {
+		return "Server", "The server answers, but it is too old to check the token: it is checked at the first " +
+			"upload, it needs the activities:create permission.", nil
+	}
+	if err != nil {
+		return "", "", err
+	}
+	if !info.CanUpload() {
+		return "", "", fmt.Errorf("the token %q lacks the activities:create permission, it has: %s",
+			info.Name, strings.Join(info.Permissions, ", "))
+	}
+	text = fmt.Sprintf("The server accepts the token %q (%s…).\nIt expires on %s.",
+		info.Name, info.Hint, info.ExpiresAt.Local().Format("January 2, 2006"))
+	if days := int(time.Until(info.ExpiresAt).Hours() / 24); days < 30 {
+		text += fmt.Sprintf("\n\nIt expires in %d days: create a new one in MySportWeb soon.", days)
+	}
+	return "Token", text, nil
 }

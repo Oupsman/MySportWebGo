@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -60,7 +61,52 @@ func (c *Client) endpoint(p string) string {
 	return c.base.JoinPath(p).String()
 }
 
-// Ping checks the server answers, without the token: no route tells what a device token may do
+// ErrNoTokenRoute is a server older than /api/v1/token: the token is only checked by the uploads
+var ErrNoTokenRoute = errors.New("the server can't check the token, it is checked at the first upload")
+
+// TokenInfo describes a device token, as the server knows it
+type TokenInfo struct {
+	Name        string    `json:"name"`
+	Hint        string    `json:"hint"`
+	Permissions []string  `json:"permissions"`
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
+// CanUpload tells whether the token holds the permission of the uploads
+func (t TokenInfo) CanUpload() bool {
+	return slices.Contains(t.Permissions, "activities:create")
+}
+
+// CheckToken returns the token as the server knows it, ErrAuth when it refuses it
+func (c *Client) CheckToken(ctx context.Context) (TokenInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint("/api/v1/token"), nil)
+	if err != nil {
+		return TokenInfo{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return TokenInfo{}, err
+	}
+	defer resp.Body.Close()
+	var answer struct {
+		DeviceToken TokenInfo `json:"device_token"`
+		Message     string    `json:"message"`
+	}
+	json.NewDecoder(resp.Body).Decode(&answer)
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return answer.DeviceToken, nil
+	case http.StatusNotFound:
+		return TokenInfo{}, ErrNoTokenRoute
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return TokenInfo{}, fmt.Errorf("%w: %s", ErrAuth, answer.Message)
+	default:
+		return TokenInfo{}, fmt.Errorf("the server answered %s", resp.Status)
+	}
+}
+
+// Ping checks the server answers, without the token
 func (c *Client) Ping(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint("/api/v1/healthcheck"), nil)
 	if err != nil {

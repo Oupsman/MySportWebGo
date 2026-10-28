@@ -34,6 +34,8 @@ driver, which replaces the MTP driver of Windows): mass storage devices only. On
 1. Create a device token in MySportWeb with the `activities:create` permission (`POST /api/v1/user/tokens` with a
    session, the token is shown once).
 2. Start `mysportweb-sync`, set the server URL (the one opened in the browser) and the token in Settings, save.
+   **Test the server** checks the server accepts the token and it holds `activities:create` (`GET /api/v1/token`,
+   open to any device token; an older server without this route is only told apart at the first upload).
 3. Plug the device. In MTP mode, unlock it if it asks which USB mode to use.
 
 `mysportweb-sync -scan` prints the devices found and their activity files, without uploading: start there when a
