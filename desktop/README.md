@@ -57,6 +57,22 @@ driver, which replaces the MTP driver of Windows): mass storage devices only. On
 device is not listed. `-hidden` starts in the system tray, as the
 autostart entry of `install.sh --autostart` does.
 
+## Health imports
+
+The **Health** tab imports health measures into MySportWeb: weight, body fat, muscle, bone, body water, resting heart
+rate, VO2max and blood pressure. The token needs `healthdatas:create`.
+
+* **Apple Health**: the `export.zip` of *Export All Health Data* in the Health application of the iPhone. The
+  application lists the data MySportWeb stores (weight, body fat, resting heart rate, VO2max, blood pressure) with
+  their number and dates, and the others, which aren't imported. Choose the kinds, the sources and a start date.
+  The values recorded at the same time (a scale's weight and fat) make one measure.
+* **CSV**: any export or spreadsheet. The delimiter, the header, the format of the dates and the columns are
+  guessed (English and French names), and can be changed; masses (Withings' "Fat mass (kg)") become percentages
+  of the weight; the masses can be in pounds. A preview shows the measures, and the rows left out with their line.
+
+The server completes a measure of the same date instead of duplicating it, and never changes a value already
+measured: a file can be imported again.
+
 ## How it works
 
 * The devices are scanned every 3 seconds: the mounted volumes (`/proc/self/mountinfo`, `/Volumes`, the drives),

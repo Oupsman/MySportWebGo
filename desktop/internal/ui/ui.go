@@ -96,10 +96,12 @@ func (u *UI) Attach(m *syncer.Manager) {
 		},
 	)
 
+	settingsTab := container.NewTabItemWithIcon("Settings", theme.SettingsIcon(), u.settings())
 	u.tabs = container.NewAppTabs(
 		container.NewTabItemWithIcon("Devices", theme.ComputerIcon(), devicesTab),
+		container.NewTabItemWithIcon("Health", theme.AccountIcon(), u.healthTab()),
 		container.NewTabItemWithIcon("History", theme.HistoryIcon(), u.history),
-		container.NewTabItemWithIcon("Settings", theme.SettingsIcon(), u.settings()),
+		settingsTab,
 	)
 	u.window.SetContent(u.tabs)
 	u.window.Resize(fyne.NewSize(640, 460))
@@ -114,7 +116,7 @@ func (u *UI) Attach(m *syncer.Manager) {
 		u.window.SetCloseIntercept(u.window.Hide)
 	}
 	if m.Config().Token == "" {
-		u.tabs.SelectIndex(2)
+		u.tabs.Select(settingsTab)
 	}
 	u.render()
 }
@@ -310,6 +312,9 @@ func checkServer(ctx context.Context, client *api.Client) (title, text string, e
 		info.Name, info.Hint, info.ExpiresAt.Local().Format("January 2, 2006"))
 	if days := int(time.Until(info.ExpiresAt).Hours() / 24); days < 30 {
 		text += fmt.Sprintf("\n\nIt expires in %d days: create a new one in MySportWeb soon.", days)
+	}
+	if !info.CanImportHealth() {
+		text += "\n\nThe health imports need the healthdatas:create permission, this token lacks it."
 	}
 	return "Token", text, nil
 }

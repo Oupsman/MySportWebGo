@@ -379,3 +379,8 @@ func (m *Manager) upload(ctx context.Context, cfg config.Config, d device.Device
 	}
 	return c, nil
 }
+
+// Log adds a line to the history, for the work done outside the synchronizations (health imports)
+func (m *Manager) Log(source, text string, failed bool) {
+	m.event(Event{Device: source, Text: text, Failed: failed})
+}

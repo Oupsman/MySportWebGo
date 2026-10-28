@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"MySportWebSync/internal/health"
 )
 
 // TokenPrefix starts the device tokens of MySportWeb
@@ -175,4 +177,87 @@ func (c *Client) Upload(ctx context.Context, name string, content []byte, item, 
 		// the server or a proxy fails: the file is tried again at the next synchronization
 		return UploadResult{}, fmt.Errorf("the server answered %s %s", resp.Status, message)
 	}
+}
+
+// healthBatch is the number of measures of an import request, the server takes up to 5000
+const healthBatch = 1000
+
+// HealthRejection is a measure the server refused, Index in the measures given to ImportHealth
+type HealthRejection struct {
+	Index int    `json:"index"`
+	Error string `json:"error"`
+}
+
+// HealthImport is what the server did with the measures
+type HealthImport struct {
+	Created   int               `json:"created"`
+	Merged    int               `json:"merged"`    // values added to a measure of the same date
+	Unchanged int               `json:"unchanged"` // already imported
+	Rejected  []HealthRejection `json:"rejected"`
+}
+
+// ImportHealth sends measures, by batches. The server completes the measures of the same date instead
+// of duplicating them: an import can be sent again. progress receives the measures sent.
+func (c *Client) ImportHealth(ctx context.Context, measures []health.Measure, progress func(done, total int)) (HealthImport, error) {
+	var total HealthImport
+	for start := 0; start < len(measures); start += healthBatch {
+		batch := measures[start:min(start+healthBatch, len(measures))]
+		result, err := c.importHealthBatch(ctx, batch)
+		if err != nil {
+			return total, err
+		}
+		total.Created += result.Created
+		total.Merged += result.Merged
+		total.Unchanged += result.Unchanged
+		for _, r := range result.Rejected {
+			total.Rejected = append(total.Rejected, HealthRejection{Index: start + r.Index, Error: r.Error})
+		}
+		if progress != nil {
+			progress(start+len(batch), len(measures))
+		}
+	}
+	return total, nil
+}
+
+func (c *Client) importHealthBatch(ctx context.Context, measures []health.Measure) (HealthImport, error) {
+	body, err := json.Marshal(map[string][]health.Measure{"measures": measures})
+	if err != nil {
+		return HealthImport{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint("/api/v1/healthdatas/import"), bytes.NewReader(body))
+	if err != nil {
+		return HealthImport{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return HealthImport{}, err
+	}
+	defer resp.Body.Close()
+	var answer struct {
+		HealthImport
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	json.NewDecoder(resp.Body).Decode(&answer)
+	switch {
+	case resp.StatusCode == http.StatusOK:
+		return answer.HealthImport, nil
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return HealthImport{}, fmt.Errorf("%w: %s", ErrAuth, answer.Message)
+	case resp.StatusCode == http.StatusNotImplemented || resp.StatusCode == http.StatusUnsupportedMediaType:
+		return HealthImport{}, errors.New("the server is too old to import health measures, update MySportWeb")
+	default:
+		message := answer.Error
+		if message == "" {
+			message = answer.Message
+		}
+		return HealthImport{}, fmt.Errorf("the server answered %s %s", resp.Status, message)
+	}
+}
+
+// CanImportHealth tells whether the token holds the permission of the health imports
+func (t TokenInfo) CanImportHealth() bool {
+	return slices.Contains(t.Permissions, "healthdatas:create")
 }

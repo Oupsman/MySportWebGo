@@ -13,10 +13,52 @@ import (
 	"time"
 )
 
+// maxHealthImport is the number of measures of an import request, a bigger import is split
+const maxHealthImport = 5000
+
+// ImportHealthDatas saves many measures at once, {"measures": [...]}, for the importers of the desktop
+// application (Apple Health, CSV). A measure at the date of an existing one completes it, an import
+// can be sent again. The invalid measures are refused one by one, with their index.
 func ImportHealthDatas(c *gin.Context) {
-	// TODO: CSV column mapping (Date/Weight/fatpc/musclepc/resthr/vo2max) is not
-	// defined yet, so row parsing and persistence are not implemented.
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "health data import is not implemented yet"})
+	if c.ContentType() != "application/json" {
+		c.AbortWithStatusJSON(http.StatusUnsupportedMediaType, gin.H{"error": "send the measures as JSON, " +
+			"{\"measures\": [...]}: the desktop application converts the CSV files and the Apple Health exports"})
+		return
+	}
+	var body struct {
+		Measures []models.HealthData `json:"measures" binding:"required"`
+	}
+	db := c.MustGet("App").(*app.App).DB
+	user := middlewares.CurrentUser(c)
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(body.Measures) > maxHealthImport {
+		c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge,
+			gin.H{"error": "at most " + strconv.Itoa(maxHealthImport) + " measures per request"})
+		return
+	}
+	type rejection struct {
+		Index int    `json:"index"`
+		Error string `json:"error"`
+	}
+	rejected := []rejection{}
+	valid := make([]models.HealthData, 0, len(body.Measures))
+	for i, measure := range body.Measures {
+		if err := measure.Validate(); err != nil {
+			rejected = append(rejected, rejection{i, err.Error()})
+			continue
+		}
+		valid = append(valid, measure)
+	}
+	result, err := db.ImportHealthDatas(user.ID, valid)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"created": result.Created, "merged": result.Merged, "unchanged": result.Unchanged,
+		"rejected": rejected})
 }
 
 func CreateHealthData(c *gin.Context) {

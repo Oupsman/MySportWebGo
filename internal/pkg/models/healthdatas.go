@@ -85,3 +85,79 @@ func (db *DB) GetHealthDatas(userID uint) ([]HealthData, error) {
 	}
 	return healthDatas, nil
 }
+
+// HealthImport counts what ImportHealthDatas did with each measure
+type HealthImport struct {
+	Created   int `json:"created"`
+	Merged    int `json:"merged"`    // values added to the measure of the same date
+	Unchanged int `json:"unchanged"` // the measure of the same date already had them
+}
+
+// fillMissing sets the values of h that are 0 to the ones of other, it returns whether h changed. The
+// values h already has are kept: an import never changes a measure, it completes it.
+func (h *HealthData) fillMissing(other HealthData) bool {
+	changed := false
+	floats := []struct{ to, from *float64 }{
+		{&h.Weight, &other.Weight}, {&h.Fat, &other.Fat}, {&h.Muscle, &other.Muscle}, {&h.Bone, &other.Bone},
+		{&h.BodyWater, &other.BodyWater},
+	}
+	for _, f := range floats {
+		if *f.to == 0 && *f.from != 0 {
+			*f.to, changed = *f.from, true
+		}
+	}
+	for _, f := range []struct{ to, from *uint16 }{{&h.RestHR, &other.RestHR}, {&h.Vo2Max, &other.Vo2Max}} {
+		if *f.to == 0 && *f.from != 0 {
+			*f.to, changed = *f.from, true
+		}
+	}
+	// the blood pressure is a pair: both values or none
+	if h.Systolic == 0 && h.Diastolic == 0 && other.Systolic != 0 {
+		h.Systolic, h.Diastolic, changed = other.Systolic, other.Diastolic, true
+	}
+	return changed
+}
+
+// ImportHealthDatas saves valid measures of a user, in a transaction: a measure at the date of another one
+// (imported before, or earlier in measures) completes it instead of duplicating it, importing the same
+// measures again changes nothing.
+func (db *DB) ImportHealthDatas(userID uint, measures []HealthData) (HealthImport, error) {
+	var result HealthImport
+	err := db.Transaction(func(tx *gorm.DB) error {
+		dates := make([]time.Time, len(measures))
+		for i := range measures {
+			// the precision of the database: the same date found again
+			measures[i].Date = measures[i].Date.Truncate(time.Microsecond)
+			dates[i] = measures[i].Date
+		}
+		var existing []HealthData
+		if err := tx.Where("user_id = ? AND date IN ?", userID, dates).Find(&existing).Error; err != nil {
+			return err
+		}
+		byDate := map[int64]*HealthData{}
+		for i := range existing {
+			byDate[existing[i].Date.UnixMicro()] = &existing[i]
+		}
+		for _, m := range measures {
+			m.ID, m.UserID = 0, userID
+			if found, ok := byDate[m.Date.UnixMicro()]; ok {
+				if !found.fillMissing(m) {
+					result.Unchanged++
+					continue
+				}
+				if err := tx.Omit("User").Save(found).Error; err != nil {
+					return err
+				}
+				result.Merged++
+				continue
+			}
+			if err := tx.Omit("User").Create(&m).Error; err != nil {
+				return err
+			}
+			byDate[m.Date.UnixMicro()] = &m
+			result.Created++
+		}
+		return nil
+	})
+	return result, err
+}

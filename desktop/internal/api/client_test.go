@@ -2,12 +2,17 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"MySportWebSync/internal/health"
 )
 
 const token = "msw_test"
@@ -132,5 +137,62 @@ func TestCheckToken(t *testing.T) {
 	}
 	if _, err := check("msw_expired"); !errors.Is(err, ErrAuth) || !strings.Contains(err.Error(), "expired") {
 		t.Errorf("expired: %v", err)
+	}
+}
+
+func TestImportHealth(t *testing.T) {
+	var requests []int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/healthdatas/import" || r.Header.Get("Content-Type") != "application/json" {
+			w.WriteHeader(http.StatusUnsupportedMediaType)
+			return
+		}
+		switch r.Header.Get("Authorization") {
+		case "Bearer msw_old":
+			w.WriteHeader(http.StatusNotImplemented)
+			io.WriteString(w, `{"error":"health data import is not implemented yet"}`)
+			return
+		case "Bearer msw_reader":
+			w.WriteHeader(http.StatusForbidden)
+			io.WriteString(w, `{"message":"forbidden: the device token lacks the permissions healthdatas:create"}`)
+			return
+		}
+		var body struct {
+			Measures []health.Measure `json:"measures"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		requests = append(requests, len(body.Measures))
+		// the second measure of each batch is refused, the others created
+		io.WriteString(w, fmt.Sprintf(`{"created":%d,"merged":0,"unchanged":0,"rejected":[{"index":1,"error":"no value measured"}]}`,
+			len(body.Measures)-1))
+	}))
+	defer server.Close()
+
+	measures := make([]health.Measure, 2500)
+	for i := range measures {
+		measures[i] = health.Measure{Date: time.Unix(int64(i)*86400, 0), Weight: 70}
+	}
+	client, _ := New(server.URL, "msw_writer")
+	var last int
+	result, err := client.ImportHealth(context.Background(), measures, func(done, total int) { last = done })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(requests) != "[1000 1000 500]" || last != 2500 {
+		t.Errorf("batches %v, progress %d", requests, last)
+	}
+	if result.Created != 2497 || len(result.Rejected) != 3 || result.Rejected[1].Index != 1001 || result.Rejected[2].Index != 2001 {
+		t.Errorf("%+v", result)
+	}
+
+	old, _ := New(server.URL, "msw_old")
+	if _, err := old.ImportHealth(context.Background(), measures[:1], nil); err == nil || !strings.Contains(err.Error(), "too old") {
+		t.Errorf("old server: %v", err)
+	}
+	reader, _ := New(server.URL, "msw_reader")
+	if _, err := reader.ImportHealth(context.Background(), measures[:1], nil); !errors.Is(err, ErrAuth) {
+		t.Errorf("token without healthdatas:create: %v", err)
 	}
 }
