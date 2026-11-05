@@ -21,6 +21,12 @@ import (
 // var decoderPool = sync.Pool{New: func() any { return decoder.New(nil) }}
 
 func SumAnalyze(filePath string, user models.Users, equipment models.Equipments) (models.Activity, error) {
+	return AnalyzeTrimmed(filePath, user, equipment, 0)
+}
+
+// AnalyzeTrimmed analyses a FIT file, ignoring what was recorded after trimEnd seconds since the start
+// (0 for the whole recording), see TrimActivity
+func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipments, trimEnd float64) (models.Activity, error) {
 	var activity models.Activity
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -37,7 +43,7 @@ func SumAnalyze(filePath string, user models.Users, equipment models.Equipments)
 		if err != nil {
 			return models.Activity{}, err
 		}
-		activity, err = DecodeFit(fit, user, equipment)
+		activity, err = decodeFit(fit, user, equipment, trimEnd)
 		if err != nil {
 			return models.Activity{}, err
 		}
@@ -47,6 +53,10 @@ func SumAnalyze(filePath string, user models.Users, equipment models.Equipments)
 }
 
 func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (models.Activity, error) {
+	return decodeFit(fit, user, equipment, 0)
+}
+
+func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, trimEnd float64) (models.Activity, error) {
 	var activity models.Activity
 	var err error
 	fitActivity := filedef.NewActivity(fit.Messages...)
@@ -57,6 +67,14 @@ func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (
 	sort.SliceStable(fitActivity.Sessions, func(i, j int) bool {
 		return fitActivity.Sessions[i].StartTime.Before(fitActivity.Sessions[j].StartTime)
 	})
+	activity.RecordedDuration = recordedDuration(fitActivity)
+	trimmed, err := trimFit(fitActivity, trimEnd)
+	if err != nil {
+		return models.Activity{}, err
+	}
+	if trimmed {
+		activity.TrimEnd = trimEnd
+	}
 	activity.EngineVersion = vars.Engine_version
 	activity.Device, activity.DeviceName = AnalyzeDevice(fitActivity)
 	activity.User = user

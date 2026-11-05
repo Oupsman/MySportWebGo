@@ -88,6 +88,7 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.GET("/activity/:id/similar", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.GetSimilarActivities)
 	apiv1.DELETE("/activity/:id", middlewares.IsAuthorized(models.ActivitiesDelete), apicontrollers.DeleteActivity)
 	apiv1.POST("/activity/:id", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.UpdateActivity)
+	apiv1.POST("/activity/:id/trim", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.TrimActivity)
 
 	// routes
 	apiv1.POST("/route/:id/commute", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.SetRouteCommute)

@@ -1,6 +1,7 @@
 package activityService
 
 import (
+	"MySportWeb/internal/pkg/models"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -15,7 +16,7 @@ func TestSparseSeriesTimeStamps(t *testing.T) {
 	files, _ := filepath.Glob(fitFilesPattern)
 	checked := 0
 	for _, file := range files {
-		a, err := analyzeFile(file)
+		a, err := analyzeFile(file, models.Users{}, 0)
 		if err != nil || len(a.TimeStamps) == 0 {
 			continue
 		}

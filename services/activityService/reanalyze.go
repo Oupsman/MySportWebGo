@@ -8,14 +8,14 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// analyzeFile runs SumAnalyze, turning its panics (a FIT file without session for instance) into errors
-func analyzeFile(filePath string) (activity models.Activity, err error) {
+// analyzeFile runs AnalyzeTrimmed, turning its panics (a FIT file without session for instance) into errors
+func analyzeFile(filePath string, user models.Users, trimEnd float64) (activity models.Activity, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic while analysing: %v", r)
 		}
 	}()
-	return SumAnalyze(filePath, models.Users{}, models.Equipments{})
+	return AnalyzeTrimmed(filePath, user, models.Equipments{}, trimEnd)
 }
 
 // BackfillTimeStamps re-reads the FIT file of the activities analysed by an older engine, to fill the
@@ -32,11 +32,12 @@ func BackfillTimeStamps(db *models.DB, logger zerolog.Logger) error {
 	logger.Info().Int("activities", len(ids)).Int("engine_version", vars.Engine_version).Msg("re-analysing activities")
 	failed := 0
 	for _, id := range ids {
-		filePath, err := db.GetActivityFilePath(id)
+		filePath, trimEnd, err := db.GetActivityFile(id)
 		if err != nil {
 			return err
 		}
-		analysed, err := analyzeFile(filePath)
+		// the series must stay as long as the trimmed activity
+		analysed, err := analyzeFile(filePath, models.Users{}, trimEnd)
 		if err != nil {
 			failed++
 			logger.Warn().Err(err).Str("activity", id.String()).Str("file", filePath).Msg("FIT file can't be re-analysed")

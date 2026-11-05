@@ -269,6 +269,47 @@ func DeleteActivity(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
 }
 
+// TrimActivity ignores what was recorded after "end" seconds since the start of the activity, when the
+// user forgot to stop the device; 0 restores the whole recording
+func TrimActivity(c *gin.Context) {
+	App := c.MustGet("App").(*app.App)
+	db := App.DB
+	user := middlewares.CurrentUser(c)
+
+	activityUUID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	var params struct {
+		End *float64 `json:"end" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&params); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if *params.End < 0 {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid end"})
+		return
+	}
+	activity, err := db.GetActivity(activityUUID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if activity.User.ID != user.ID {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "You are not the owner of this activity"})
+		return
+	}
+	trimmed, err := activityService.TrimActivity(&db, activity, *params.End, App.Logger)
+	if err != nil {
+		App.Logger.Warn().Err(err).Str("activity", activity.ID.String()).Float64("end", *params.End).Msg("activity not trimmed")
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"id": trimmed.ID.String(), "trim_end": trimmed.TrimEnd})
+}
+
 func GetSimilarActivities(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
 	user := middlewares.CurrentUser(c)

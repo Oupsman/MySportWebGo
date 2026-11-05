@@ -88,6 +88,11 @@ type Activity struct {
 	EndPosition           *types.GpsPoint     `json:"end_position"`
 	Lengths               types.LengthArray   `json:"lengths"`
 	Legs                  types.LegArray      `json:"legs"` // the sessions of a multi-session file, empty for one session
+	// seconds since the start after which the recording is ignored (the device wasn't stopped), 0 for none
+	TrimEnd float64 `json:"trim_end"`
+	// seconds between the start and the end of the whole recording, trimmed or not; 0 for the activities
+	// imported before it was stored
+	RecordedDuration float64 `json:"recorded_duration"`
 }
 
 func (db *DB) CreateActivity(activity *Activity) error {
@@ -131,13 +136,18 @@ func (db *DB) DeleteActivity(id uuid.UUID) error {
 		if activity.RouteID == nil {
 			return nil
 		}
-		err = tx.Model(&Route{}).Where("id = ?", *activity.RouteID).
-			Update("activity_count", gorm.Expr("activity_count - 1")).Error
-		if err != nil {
-			return err
-		}
-		return tx.Where("id = ? AND activity_count <= 0", *activity.RouteID).Delete(&Route{}).Error
+		return (&DB{DB: *tx}).LeaveRoute(*activity.RouteID)
 	})
+}
+
+// LeaveRoute counts one activity less on the route, removing the route when it becomes empty
+func (db *DB) LeaveRoute(routeID uuid.UUID) error {
+	err := db.Model(&Route{}).Where("id = ?", routeID).
+		Update("activity_count", gorm.Expr("activity_count - 1")).Error
+	if err != nil {
+		return err
+	}
+	return db.Where("id = ? AND activity_count <= 0", routeID).Delete(&Route{}).Error
 }
 
 func (db *DB) GetActivitiesByUser(userID uint, start, number int) ([]types.ActivitySummary, error) {
@@ -227,11 +237,11 @@ func (db *DB) SetActivityTitle(id uuid.UUID, oldTitle, title string) error {
 	return db.Model(&Activity{}).Where("id = ? AND title = ?", id, oldTitle).Update("title", title).Error
 }
 
-// GetActivityFilePath returns the path of the FIT file of an activity
-func (db *DB) GetActivityFilePath(id uuid.UUID) (string, error) {
+// GetActivityFile returns the path of the FIT file of an activity and where the activity is trimmed
+func (db *DB) GetActivityFile(id uuid.UUID) (string, float64, error) {
 	var activity Activity
-	err := db.Select("id", "file_path").First(&activity, "id = ?", id).Error
-	return activity.FilePath, err
+	err := db.Select("id", "file_path", "trim_end").First(&activity, "id = ?", id).Error
+	return activity.FilePath, activity.TrimEnd, err
 }
 
 // UpdateActivityTimeStamps saves what an engine upgrade re-analyses (the time stamps of the sparse
@@ -248,6 +258,7 @@ func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, version
 		updates["powers"] = analysed.Powers
 		updates["temperatures"] = analysed.Temperatures
 		updates["temperature_time_stamps"] = analysed.TemperatureTimeStamps
+		updates["recorded_duration"] = analysed.RecordedDuration
 	}
 	return db.Model(&Activity{}).Where("id = ?", id).Updates(updates).Error
 }
