@@ -103,6 +103,12 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.DELETE("/equipment/:id/picture", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.DeleteEquipmentPicture)
 	apiv1.POST("/equipment/:id/commutes", middlewares.IsAuthorized(models.EquipmentsWrite, models.ActivitiesWrite),
 		apicontrollers.AssignCommuteEquipment)
+	// services of an equipment
+	apiv1.GET("/equipment/:id/services", middlewares.IsAuthorized(models.EquipmentsRead), apicontrollers.GetServices)
+	apiv1.POST("/equipment/:id/services", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.CreateService)
+	apiv1.GET("/equipment/:id/services/:service", middlewares.IsAuthorized(models.EquipmentsRead), apicontrollers.GetService)
+	apiv1.POST("/equipment/:id/services/:service", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.UpdateService)
+	apiv1.DELETE("/equipment/:id/services/:service", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.DeleteService)
 
 	// healthdatas
 	apiv1.POST("/healthdatas", middlewares.IsAuthorized(models.HealthDatasCreate), apicontrollers.CreateHealthData)

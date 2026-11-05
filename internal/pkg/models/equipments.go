@@ -125,6 +125,11 @@ type EquipmentStats struct {
 	Distance   float64    `json:"distance"` // meters, of the activities only
 	Duration   int64      `json:"duration"` // seconds
 	LastUsed   *time.Time `json:"last_used"`
+	// LastService is the date of the latest service, nil without one
+	LastService *time.Time `json:"last_service"`
+	// KmSinceService is the distance of the activities after the latest service, or of all of them without one
+	KmSinceService       int     `json:"km_since_service"`
+	DistanceSinceService float64 `json:"-"` // meters
 }
 
 // GetEquipmentsStats returns the equipments of a user with their totals, the default one first.
@@ -147,20 +152,28 @@ func (db *DB) GetEquipmentStats(userID uint, id uuid.UUID) (EquipmentStats, erro
 func (db *DB) equipmentsStats(where string, args ...interface{}) ([]EquipmentStats, error) {
 	stats := []EquipmentStats{}
 	err := db.Raw("SELECT e.*, COUNT(a.id) AS activities, COALESCE(SUM(a.distance), 0) AS distance, "+
-		"COALESCE(SUM(a.duration), 0) AS duration, MAX(a.date) AS last_used "+
+		"COALESCE(SUM(a.duration), 0) AS duration, MAX(a.date) AS last_used, MAX(s.last_service) AS last_service, "+
+		"COALESCE(SUM(a.distance) FILTER (WHERE s.last_service IS NULL OR a.date > s.last_service), 0) "+
+		"AS distance_since_service "+
 		"FROM equipments e LEFT JOIN activities a ON a.equipment_id = e.id "+
+		"LEFT JOIN (SELECT equipment_id, MAX(date) AS last_service FROM services GROUP BY equipment_id) s "+
+		"ON s.equipment_id = e.id "+
 		"WHERE "+where+" GROUP BY e.id ORDER BY e.is_default DESC, e.name", args...).Scan(&stats).Error
 	for i := range stats {
 		stats[i].Mileage = stats[i].InitialMileage + int(math.Round(stats[i].Distance/1000))
+		stats[i].KmSinceService = int(math.Round(stats[i].DistanceSinceService / 1000))
 	}
 	return stats, err
 }
 
-// DeleteEquipment deletes an equipment, its activities are kept without equipment
+// DeleteEquipment deletes an equipment and its services, its activities are kept without equipment
 func (db *DB) DeleteEquipment(uuid uuid.UUID) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		err := tx.Model(&Activity{}).Where("equipment_id = ?", uuid).Update("equipment_id", nil).Error
 		if err != nil {
+			return err
+		}
+		if err := tx.Where("equipment_id = ?", uuid).Delete(&Services{}).Error; err != nil {
 			return err
 		}
 		return tx.Where("id = ?", uuid).Delete(&Equipments{}).Error
