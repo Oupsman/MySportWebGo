@@ -282,7 +282,7 @@ func TrimActivity(db *models.DB, activity *models.Activity, trimEnd float64, log
 	if activity.FilePath == "" {
 		return nil, ErrNoFitFile
 	}
-	analysed, err := analyzeFile(activity.FilePath, activity.User, trimEnd)
+	analysed, err := analyzeFile(activity.FilePath, activity.User, trimEnd, UserRestHR(db, activity.UserID))
 	if err != nil {
 		return nil, err
 	}

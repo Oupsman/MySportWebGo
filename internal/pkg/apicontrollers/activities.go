@@ -61,7 +61,7 @@ func UploadActivity(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	activity, err := activityService.SumAnalyze(tmpPath, user, equipment)
+	activity, err := activityService.AnalyzeTrimmed(tmpPath, user, equipment, 0, activityService.UserRestHR(&db, user.ID))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

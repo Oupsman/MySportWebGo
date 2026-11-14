@@ -20,13 +20,19 @@ import (
 
 // var decoderPool = sync.Pool{New: func() any { return decoder.New(nil) }}
 
+// RestHRFunc returns the resting heart rate (bpm) of the user at a date, 0 when it's unknown
+type RestHRFunc func(date time.Time) (uint16, error)
+
+// SumAnalyze analyses a whole FIT file, its training score computed with DefaultRestHR when the device
+// didn't record one: see AnalyzeTrimmed for the user's resting heart rate
 func SumAnalyze(filePath string, user models.Users, equipment models.Equipments) (models.Activity, error) {
-	return AnalyzeTrimmed(filePath, user, equipment, 0)
+	return AnalyzeTrimmed(filePath, user, equipment, 0, nil)
 }
 
 // AnalyzeTrimmed analyses a FIT file, ignoring what was recorded after trimEnd seconds since the start
-// (0 for the whole recording), see TrimActivity
-func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipments, trimEnd float64) (models.Activity, error) {
+// (0 for the whole recording), see TrimActivity. restHR gives the resting heart rate of the training score,
+// nil for DefaultRestHR.
+func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipments, trimEnd float64, restHR RestHRFunc) (models.Activity, error) {
 	var activity models.Activity
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -43,7 +49,7 @@ func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipme
 		if err != nil {
 			return models.Activity{}, err
 		}
-		activity, err = decodeFit(fit, user, equipment, trimEnd)
+		activity, err = decodeFit(fit, user, equipment, trimEnd, restHR)
 		if err != nil {
 			return models.Activity{}, err
 		}
@@ -53,10 +59,10 @@ func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipme
 }
 
 func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (models.Activity, error) {
-	return decodeFit(fit, user, equipment, 0)
+	return decodeFit(fit, user, equipment, 0, nil)
 }
 
-func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, trimEnd float64) (models.Activity, error) {
+func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, trimEnd float64, restHR RestHRFunc) (models.Activity, error) {
 	var activity models.Activity
 	var err error
 	fitActivity := filedef.NewActivity(fit.Messages...)
@@ -109,6 +115,9 @@ func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, t
 	}
 	if activity.Sport == "cycling" {
 		activity.Co2 = Commute(activity)
+	}
+	if err := setTrainingScore(&activity, fitActivity.Sessions, trimmed, restHR); err != nil {
+		return models.Activity{}, err
 	}
 
 	return activity, nil

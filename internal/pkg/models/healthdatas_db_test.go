@@ -90,3 +90,51 @@ func TestImportHealthDatas(t *testing.T) {
 		t.Errorf("first day: %+v", m)
 	}
 }
+
+func TestGetRestHR(t *testing.T) {
+	db := healthTestDB(t)
+	user := Users{Username: "resthr", Email: "resthr@test.local"}
+	other := Users{Username: "resthr2", Email: "resthr2@test.local"}
+	for _, u := range []*Users{&user, &other} {
+		if err := db.Create(u).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	day := func(d int) time.Time { return time.Date(2026, 9, d, 7, 0, 0, 0, time.UTC) }
+	measures := []HealthData{
+		{UserID: user.ID, Date: day(5), RestHR: 55},
+		{UserID: user.ID, Date: day(10), Weight: 70}, // no resting heart rate: skipped
+		{UserID: user.ID, Date: day(15), RestHR: 50},
+		{UserID: other.ID, Date: day(1), RestHR: 70},
+	}
+	for i := range measures {
+		if err := db.CreateHealthData(&measures[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, c := range []struct {
+		name string
+		date time.Time
+		want uint16
+	}{
+		{"before any measure: the first one", day(1), 55},
+		{"on the day of a measure", day(5), 55},
+		{"after a measure without it: the previous one", day(12), 55},
+		{"after the last measure", day(20), 50},
+	} {
+		got, err := db.GetRestHR(user.ID, c.date)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != c.want {
+			t.Errorf("%s: resting HR %d, want %d", c.name, got, c.want)
+		}
+	}
+	nobody := Users{Username: "resthr3", Email: "resthr3@test.local"}
+	if err := db.Create(&nobody).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got, err := db.GetRestHR(nobody.ID, day(1)); err != nil || got != 0 {
+		t.Errorf("never measured: resting HR %d (%v), want 0", got, err)
+	}
+}

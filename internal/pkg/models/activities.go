@@ -93,6 +93,9 @@ type Activity struct {
 	// seconds between the start and the end of the whole recording, trimmed or not; 0 for the activities
 	// imported before it was stored
 	RecordedDuration float64 `json:"recorded_duration"`
+	// training score: the one recorded by the device (Garmin's training load, else the TSS), else the
+	// Banister TRIMP of the heart rate stream; 0 without any, nil until computed
+	Trimp *float64 `json:"trimp"`
 }
 
 func (db *DB) CreateActivity(activity *Activity) error {
@@ -242,6 +245,27 @@ func (db *DB) GetActivityFile(id uuid.UUID) (string, float64, error) {
 	var activity Activity
 	err := db.Select("id", "file_path", "trim_end").First(&activity, "id = ?", id).Error
 	return activity.FilePath, activity.TrimEnd, err
+}
+
+// GetActivitiesWithoutTrimp returns the ids of the activities whose TRIMP was never computed, oldest first
+func (db *DB) GetActivitiesWithoutTrimp() ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := db.Model(&Activity{}).Where("trimp IS NULL").Order("date asc").Pluck("id", &ids).Error
+	return ids, err
+}
+
+// GetActivityHearts returns an activity with only what its training score needs: its user, date, FIT file,
+// trim and heart rate stream
+func (db *DB) GetActivityHearts(id uuid.UUID) (Activity, error) {
+	var activity Activity
+	err := db.Select("id", "user_id", "date", "file_path", "trim_end", "hearts", "heart_time_stamps").Preload("User").
+		First(&activity, "id = ?", id).Error
+	return activity, err
+}
+
+// SetActivityTrimp saves the TRIMP of an activity
+func (db *DB) SetActivityTrimp(id uuid.UUID, trimp float64) error {
+	return db.Model(&Activity{}).Where("id = ?", id).Update("trimp", trimp).Error
 }
 
 // UpdateActivityTimeStamps saves what an engine upgrade re-analyses (the time stamps of the sparse

@@ -77,6 +77,27 @@ func (db *DB) SetWeightObjective(userID uint, target float64) error {
 	return db.Model(&Users{}).Where("id = ?", userID).Update("weight_objective", target).Error
 }
 
+// GetRestHR returns the resting heart rate of a user at date: the last one measured on or before it, else the
+// first one measured after it (the user started measuring later), 0 when the user never measured it
+func (db *DB) GetRestHR(userID uint, date time.Time) (uint16, error) {
+	var restHRs []uint16
+	err := db.Model(&HealthData{}).Where("user_id = ? AND rest_hr > 0 AND date <= ?", userID, date).
+		Order("date desc").Limit(1).Pluck("rest_hr", &restHRs).Error
+	if err != nil || len(restHRs) > 0 {
+		return firstOrZero(restHRs), err
+	}
+	err = db.Model(&HealthData{}).Where("user_id = ? AND rest_hr > 0 AND date > ?", userID, date).
+		Order("date asc").Limit(1).Pluck("rest_hr", &restHRs).Error
+	return firstOrZero(restHRs), err
+}
+
+func firstOrZero(values []uint16) uint16 {
+	if len(values) == 0 {
+		return 0
+	}
+	return values[0]
+}
+
 func (db *DB) GetHealthDatas(userID uint) ([]HealthData, error) {
 	healthDatas := []HealthData{}
 	err := db.Where("user_id = ?", userID).Order("date desc").Find(&healthDatas).Error

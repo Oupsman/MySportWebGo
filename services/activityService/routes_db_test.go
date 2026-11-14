@@ -22,14 +22,19 @@ var (
 )
 
 func testDB(t *testing.T) *models.DB {
-	dsn := os.Getenv("MYSPORTWEB_TEST_DSN")
-	if dsn == "" {
-		t.Skip("MYSPORTWEB_TEST_DSN is not set")
-	}
 	for _, name := range append(append(sameRouteFiles, otherRouteFile), backfilledFiles...) {
 		if _, err := os.Stat("../../prototypes/" + name + ".fit"); err != nil {
 			t.Skip("FIT files missing in prototypes/")
 		}
+	}
+	return emptyDB(t)
+}
+
+// emptyDB returns the test database emptied, for the tests that don't read FIT files
+func emptyDB(t *testing.T) *models.DB {
+	dsn := os.Getenv("MYSPORTWEB_TEST_DSN")
+	if dsn == "" {
+		t.Skip("MYSPORTWEB_TEST_DSN is not set")
 	}
 	db, err := models.ConnectToDB("postgres", dsn)
 	if err != nil {

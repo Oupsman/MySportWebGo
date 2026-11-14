@@ -9,13 +9,13 @@ import (
 )
 
 // analyzeFile runs AnalyzeTrimmed, turning its panics (a FIT file without session for instance) into errors
-func analyzeFile(filePath string, user models.Users, trimEnd float64) (activity models.Activity, err error) {
+func analyzeFile(filePath string, user models.Users, trimEnd float64, restHR RestHRFunc) (activity models.Activity, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic while analysing: %v", r)
 		}
 	}()
-	return AnalyzeTrimmed(filePath, user, models.Equipments{}, trimEnd)
+	return AnalyzeTrimmed(filePath, user, models.Equipments{}, trimEnd, restHR)
 }
 
 // BackfillTimeStamps re-reads the FIT file of the activities analysed by an older engine, to fill the
@@ -37,7 +37,7 @@ func BackfillTimeStamps(db *models.DB, logger zerolog.Logger) error {
 			return err
 		}
 		// the series must stay as long as the trimmed activity
-		analysed, err := analyzeFile(filePath, models.Users{}, trimEnd)
+		analysed, err := analyzeFile(filePath, models.Users{}, trimEnd, nil)
 		if err != nil {
 			failed++
 			logger.Warn().Err(err).Str("activity", id.String()).Str("file", filePath).Msg("FIT file can't be re-analysed")
