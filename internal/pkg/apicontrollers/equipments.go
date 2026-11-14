@@ -19,7 +19,7 @@ func equipmentOwner(c *gin.Context) (models.Users, models.Equipments, bool) {
 	user := middlewares.CurrentUser(c)
 	equipmentUUID, err := utils.GetUUID(c.Param("id"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return models.Users{}, models.Equipments{}, false
 	}
 	equipment, err := db.GetEquipment(equipmentUUID)
@@ -38,7 +38,7 @@ func CreateEquipment(c *gin.Context) {
 	var equipment models.Equipments
 	err := c.ShouldBindJSON(&equipment)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	// set after binding, so the request body can't choose them; the picture has its own upload
@@ -48,23 +48,24 @@ func CreateEquipment(c *gin.Context) {
 
 	err = db.CreateEquipment(&equipment)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusCreated, equipment)
 }
 
-func GetDefaultEquipment(c *gin.Context) {
-
-	db := c.MustGet("App").(*app.App).DB
-	user := middlewares.CurrentUser(c)
-
-	equipment := db.GetDefaultEquipment(user.ID)
-
-	c.JSON(http.StatusOK, equipment)
-
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func GetDefaultEquipment(c *gin.Context) {
+//
+// 	db := c.MustGet("App").(*app.App).DB
+// 	user := middlewares.CurrentUser(c)
+//
+// 	equipment := db.GetDefaultEquipment(user.ID)
+//
+// 	c.JSON(http.StatusOK, equipment)
+//
+// }
 
 func UpdateEquipment(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
@@ -76,7 +77,7 @@ func UpdateEquipment(c *gin.Context) {
 	var update models.Equipments
 	err := c.ShouldBindJSON(&update)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	// only the user editable fields, ownership and id come from the database
@@ -92,7 +93,7 @@ func UpdateEquipment(c *gin.Context) {
 
 	err = db.UpdateEquipment(&equipment)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 
@@ -112,7 +113,7 @@ func AssignCommuteEquipment(c *gin.Context) {
 	}
 	updated, err := db.AssignCommuteEquipment(user.ID, equipment.ID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"updated": updated})
@@ -126,7 +127,7 @@ func GetEquipment(c *gin.Context) {
 	}
 	stats, err := db.GetEquipmentStats(user.ID, equipment.ID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		lookupError(c, err, "equipment")
 		return
 	}
 	c.JSON(http.StatusOK, stats)
@@ -138,7 +139,7 @@ func GetEquipments(c *gin.Context) {
 
 	equipments, err := db.GetEquipmentsStats(user.ID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 
@@ -155,7 +156,7 @@ func DeleteEquipment(c *gin.Context) {
 
 	err := db.DeleteEquipment(equipment.ID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	// the equipment is gone, its pictures only waste space
@@ -184,7 +185,7 @@ func UploadEquipmentPicture(c *gin.Context) {
 	}
 	file, err := header.Open()
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	defer file.Close()
@@ -195,12 +196,12 @@ func UploadEquipmentPicture(c *gin.Context) {
 	}
 	path, err := activityService.SaveEquipmentPicture(user.UUID, equipment.ID, picture)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	if err := db.SetEquipmentPicture(equipment.ID, path); err != nil {
 		_ = activityService.RemoveEquipmentPicture(user.UUID, path)
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	if err := activityService.RemoveEquipmentPicture(user.UUID, equipment.Picture); err != nil {
@@ -217,7 +218,7 @@ func DeleteEquipmentPicture(c *gin.Context) {
 		return
 	}
 	if err := db.SetEquipmentPicture(equipment.ID, ""); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	if err := activityService.RemoveEquipmentPicture(user.UUID, equipment.Picture); err != nil {

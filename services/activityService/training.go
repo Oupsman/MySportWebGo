@@ -2,7 +2,7 @@ package activityService
 
 import (
 	"MySportWeb/internal/pkg/models"
-	"MySportWeb/internal/pkg/utils"
+	// "MySportWeb/internal/pkg/utils" // used by the dead code below
 	"math"
 	"time"
 
@@ -10,21 +10,23 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func CalculateCalories(activity models.Activity) float64 {
-	return (float64(activity.Duration) * 60 * GetMet(activity.Sport) * 3.5 * float64(activity.TotalWeight)) / 200
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func CalculateCalories(activity models.Activity) float64 {
+// 	return (float64(activity.Duration) * 60 * GetMet(activity.Sport) * 3.5 * float64(activity.TotalWeight)) / 200
+// }
 
-func GetMet(sport string) float64 {
-	switch sport {
-	case "cycling":
-		return 9.5
-	case "running":
-		return 10
-	case "hiking":
-		return 6
-	}
-	return 6
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func GetMet(sport string) float64 {
+// 	switch sport {
+// 	case "cycling":
+// 		return 9.5
+// 	case "running":
+// 		return 10
+// 	case "hiking":
+// 		return 6
+// 	}
+// 	return 6
+// }
 
 // DefaultRestHR is the resting heart rate (bpm) of the users who never measured theirs
 const DefaultRestHR = 60
@@ -150,7 +152,8 @@ func BackfillTrimp(db *models.DB, logger zerolog.Logger) error {
 	return nil
 }
 
-func CalculateTrainingEffect(activity models.Activity) float64 {
-	powerNorm := utils.NormalizedAvg(activity.Powers)
-	return powerNorm / activity.User.EstimateFTP(activity.Date)
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func CalculateTrainingEffect(activity models.Activity) float64 {
+// 	powerNorm := utils.NormalizedAvg(activity.Powers)
+// 	return powerNorm / activity.User.EstimateFTP(activity.Date)
+// }

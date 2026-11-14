@@ -33,33 +33,35 @@ type GpsPoint struct {
 
 type GpsPointArray []GpsPoint
 
-type ChannelBody struct {
-	ChannelID       uint64 `json:"channel_id"`
-	ChannelProvider string `json:"channel_provider"`
-	Config          string `json:"config"`
-	Name            string `json:"name"`
-	UserID          uint64 `json:"user_id"`
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// type ChannelBody struct {
+// 	ChannelID       uint64 `json:"channel_id"`
+// 	ChannelProvider string `json:"channel_provider"`
+// 	Config          string `json:"config"`
+// 	Name            string `json:"name"`
+// 	UserID          uint64 `json:"user_id"`
+// }
 
-type UserBody struct {
-	ID                   uint64    `json:"user_id"`
-	UUID                 uuid.UUID `json:"uuid"`
-	Username             string    `json:"username"`
-	Password             string    `json:"newPassword"`
-	PasswordConfirmation string    `json:"newPasswordConfirmation"`
-	OldPassword          string    `json:"oldpassword"`
-	DateOfBirth          time.Time `json:"date_of_birth"`
-	Email                string    `json:"email"`
-	Weight               uint16    `json:"weight"`
-	Unit                 int       `json:"unit"`
-	Timezone             string    `json:"timezone"`
-	Gender               int       `json:"gender"`
-	Height               uint16    `json:"height"`
-	MaxHR                uint16    `json:"max_hr"`
-	WeightObjective      float64   `json:"weight_objective"`
-	SecurityDistance     uint16    `json:"security_distance"`
-	HomeTown             string    `json:"home_town"`
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// type UserBody struct {
+// 	ID                   uint64    `json:"user_id"`
+// 	UUID                 uuid.UUID `json:"uuid"`
+// 	Username             string    `json:"username"`
+// 	Password             string    `json:"newPassword"`
+// 	PasswordConfirmation string    `json:"newPasswordConfirmation"`
+// 	OldPassword          string    `json:"oldpassword"`
+// 	DateOfBirth          time.Time `json:"date_of_birth"`
+// 	Email                string    `json:"email"`
+// 	Weight               uint16    `json:"weight"`
+// 	Unit                 int       `json:"unit"`
+// 	Timezone             string    `json:"timezone"`
+// 	Gender               int       `json:"gender"`
+// 	Height               uint16    `json:"height"`
+// 	MaxHR                uint16    `json:"max_hr"`
+// 	WeightObjective      float64   `json:"weight_objective"`
+// 	SecurityDistance     uint16    `json:"security_distance"`
+// 	HomeTown             string    `json:"home_town"`
+// }
 
 type LoginBody struct {
 	Username string `json:"username"`
@@ -271,12 +273,13 @@ type ActivityUpload struct {
 	Count uint16                `form:"count"`
 }
 
-type HealthDatasUpload struct {
-	File      *multipart.FileHeader `form:"file"`
-	Path      string                `form:"path"`
-	Separator string                `form:"separator"`
-	Raw       bool                  `form:"raw"`
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// type HealthDatasUpload struct {
+// 	File      *multipart.FileHeader `form:"file"`
+// 	Path      string                `form:"path"`
+// 	Separator string                `form:"separator"`
+// 	Raw       bool                  `form:"raw"`
+// }
 
 type LengthArray []Length
 

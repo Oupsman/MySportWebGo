@@ -109,7 +109,6 @@ func Login(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "could not generate token"})
 		return
 	}
-	c.SetCookie("mysportweb_session", tokenString, 3600, "/", "localhost", false, true)
 	c.JSON(200, gin.H{"token": tokenString})
 }
 
@@ -351,7 +350,7 @@ func Dashboard(c *gin.Context) {
 	user, location := currentUserLocation(c)
 	dashboard, err := db.GetDashboard(user.ID, time.Now().In(location))
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(200, dashboard)
@@ -368,7 +367,7 @@ func Calendar(c *gin.Context) {
 	}
 	calendar, err := db.GetCalendar(user.ID, month)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(200, gin.H{"month": month.Format("2006-01"), "activities": calendar})

@@ -63,15 +63,16 @@ func (db *DB) MarkAsSent(notificationID uint) error {
 	return nil
 }
 
-func (db *DB) AddNotification(channelID uint, message string) error {
-	notification := Notifications{
-		ChannelID: uint64(channelID),
-		Message:   message,
-		Sent:      false,
-	}
-	result := db.Create(&notification)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func (db *DB) AddNotification(channelID uint, message string) error {
+// 	notification := Notifications{
+// 		ChannelID: uint64(channelID),
+// 		Message:   message,
+// 		Sent:      false,
+// 	}
+// 	result := db.Create(&notification)
+// 	if result.Error != nil {
+// 		return result.Error
+// 	}
+// 	return nil
+// }

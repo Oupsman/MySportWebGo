@@ -1,7 +1,7 @@
 package models
 
 import (
-	"MySportWeb/internal/pkg/types"
+	// "MySportWeb/internal/pkg/types" // used by the dead code below
 	"errors"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -149,27 +149,29 @@ func (db *DB) UpdateUserFields(id uint, fields map[string]interface{}) error {
 	})
 }
 
-func (db *DB) CreateUser(user types.UserBody) error {
-	var newUser = Users{
-		Username: user.Username,
-		Password: user.Password,
-		Email:    user.Email,
-	}
-	result := db.Create(&newUser)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func (db *DB) CreateUser(user types.UserBody) error {
+// 	var newUser = Users{
+// 		Username: user.Username,
+// 		Password: user.Password,
+// 		Email:    user.Email,
+// 	}
+// 	result := db.Create(&newUser)
+// 	if result.Error != nil {
+// 		return result.Error
+// 	}
+// 	return nil
+// }
 
-func (db *DB) GetAllUsers() ([]Users, error) {
-	var users []Users
-	result := db.Find(&users)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return users, nil
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func (db *DB) GetAllUsers() ([]Users, error) {
+// 	var users []Users
+// 	result := db.Find(&users)
+// 	if result.Error != nil {
+// 		return nil, result.Error
+// 	}
+// 	return users, nil
+// }
 
 func (user *Users) GetAge(date time.Time) int {
 	age := date.Year() - user.DateOfBirth.Year()
@@ -179,13 +181,14 @@ func (user *Users) GetAge(date time.Time) int {
 	return age
 }
 
-func (user *Users) GetWeight() uint16 {
-	if user.Weight == 0 {
-		return 70
-	} else {
-		return user.Weight
-	}
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func (user *Users) GetWeight() uint16 {
+// 	if user.Weight == 0 {
+// 		return 70
+// 	} else {
+// 		return user.Weight
+// 	}
+// }
 
 func (user *Users) GetMaxHR(date time.Time) uint16 {
 	// A rought estimate can be made with 220-age for men and 226-age for women
@@ -196,14 +199,16 @@ func (user *Users) GetMaxHR(date time.Time) uint16 {
 	return user.MaxHR
 }
 
-func (user *Users) GetGender() int {
-	return user.Gender
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func (user *Users) GetGender() int {
+// 	return user.Gender
+// }
 
-func (user *Users) EstimateFTP(date time.Time) float64 {
-	age := user.GetAge(date)
-	if age > 35 {
-		return float64(user.GetWeight())*4.40924 - float64(age-35)*0.005
-	}
-	return float64(user.GetWeight()) * 2.20462
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func (user *Users) EstimateFTP(date time.Time) float64 {
+// 	age := user.GetAge(date)
+// 	if age > 35 {
+// 		return float64(user.GetWeight())*4.40924 - float64(age-35)*0.005
+// 	}
+// 	return float64(user.GetWeight()) * 2.20462
+// }

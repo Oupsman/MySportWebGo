@@ -8,7 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"fmt"
+	// "fmt" // used by the dead code below
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -119,14 +119,15 @@ func GetUserUUID(tokenString string) (uuid.UUID, error) {
 	return uuid.Parse(userUUID)
 }
 
-func StringInSlice(a string, list []string) bool {
-	for _, b := range list {
-		if b == a {
-			return true
-		}
-	}
-	return false
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func StringInSlice(a string, list []string) bool {
+// 	for _, b := range list {
+// 		if b == a {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }
 
 func GetUserRole(tokenString string) (string, error) {
 	claims, err := ParseBearerToken(tokenString)
@@ -144,45 +145,48 @@ func SemiCircleToDegres(semi int32) float64 {
 	return float64(semi) * (180.0 / math.Pow(2.0, 31.0))
 }
 
-func MmsToKmh(mms float64) float64 {
-	return mms * 3600 / 1000000
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func MmsToKmh(mms float64) float64 {
+// 	return mms * 3600 / 1000000
+// }
 
-func CmToKm(cm uint32) float64 {
-	return float64(cm) / 100000
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func CmToKm(cm uint32) float64 {
+// 	return float64(cm) / 100000
+// }
 
-func ConvertTime(time uint32) string {
-	result := ""
-	day := time / 86400
-	hour := (time % 86400) / 3600
-	minute := (time % 3600) / 60
-	second := time % 60
-
-	if day > 0 {
-		result += fmt.Sprintf("%d days ", day)
-	}
-
-	if hour < 10 {
-		result += fmt.Sprintf("0%d", hour)
-
-	} else {
-		result += fmt.Sprintf("%d", hour)
-	}
-	result += ":"
-	if minute < 10 {
-		result += fmt.Sprintf("0%d", minute)
-	} else {
-		result += fmt.Sprintf("%d", minute)
-	}
-	result += ":"
-	if second < 10 {
-		result += fmt.Sprintf("0%d", second)
-	} else {
-		result += fmt.Sprintf("%d", second)
-	}
-	return result
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func ConvertTime(time uint32) string {
+// 	result := ""
+// 	day := time / 86400
+// 	hour := (time % 86400) / 3600
+// 	minute := (time % 3600) / 60
+// 	second := time % 60
+//
+// 	if day > 0 {
+// 		result += fmt.Sprintf("%d days ", day)
+// 	}
+//
+// 	if hour < 10 {
+// 		result += fmt.Sprintf("0%d", hour)
+//
+// 	} else {
+// 		result += fmt.Sprintf("%d", hour)
+// 	}
+// 	result += ":"
+// 	if minute < 10 {
+// 		result += fmt.Sprintf("0%d", minute)
+// 	} else {
+// 		result += fmt.Sprintf("%d", minute)
+// 	}
+// 	result += ":"
+// 	if second < 10 {
+// 		result += fmt.Sprintf("0%d", second)
+// 	} else {
+// 		result += fmt.Sprintf("%d", second)
+// 	}
+// 	return result
+// }
 
 func Avg[T Number](arr []T) float64 {
 
@@ -233,137 +237,144 @@ func AerodynamicDrag(altitude float64) float64 {
 	return 0.5 * 0.324 * (1.225 * math.Exp(-0.0011856*altitude))
 }
 
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
 // SavitzkyGolay applies the Savitzky-Golay filter to smooth the data.
 // coeffs are the filter coefficients, data is the input signal, and it returns the smoothed data.
-func SavitzkyGolay(data []float64, windowSize int, polyOrder int) []float64 {
-	if len(data) < windowSize {
-		return data
-	}
+// func SavitzkyGolay(data []float64, windowSize int, polyOrder int) []float64 {
+// 	if len(data) < windowSize {
+// 		return data
+// 	}
+//
+// 	halfWindow := (windowSize - 1) / 2
+// 	coeffs := computeCoefficients(windowSize, polyOrder)
+// 	smoothed := make([]float64, len(data))
+//
+// 	for i := range data {
+// 		sum := 0.0
+// 		for j := -halfWindow; j <= halfWindow; j++ {
+// 			idx := i + j
+// 			if idx < 0 {
+// 				idx = 0
+// 			} else if idx >= len(data) {
+// 				idx = len(data) - 1
+// 			}
+// 			sum += coeffs[halfWindow+j] * data[idx]
+// 		}
+// 		smoothed[i] = sum
+// 	}
+//
+// 	return smoothed
+// }
 
-	halfWindow := (windowSize - 1) / 2
-	coeffs := computeCoefficients(windowSize, polyOrder)
-	smoothed := make([]float64, len(data))
-
-	for i := range data {
-		sum := 0.0
-		for j := -halfWindow; j <= halfWindow; j++ {
-			idx := i + j
-			if idx < 0 {
-				idx = 0
-			} else if idx >= len(data) {
-				idx = len(data) - 1
-			}
-			sum += coeffs[halfWindow+j] * data[idx]
-		}
-		smoothed[i] = sum
-	}
-
-	return smoothed
-}
-
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
 // computeCoefficients calculates the filter coefficients for a given window size and polynomial order.
-func computeCoefficients(windowSize int, polyOrder int) []float64 {
-	halfWindow := (windowSize - 1) / 2
-	a := make([][]float64, windowSize)
-	for i := range a {
-		a[i] = make([]float64, polyOrder+1)
-		x := float64(i - halfWindow)
-		for j := 0; j <= polyOrder; j++ {
-			a[i][j] = math.Pow(x, float64(j))
-		}
-	}
+// func computeCoefficients(windowSize int, polyOrder int) []float64 {
+// 	halfWindow := (windowSize - 1) / 2
+// 	a := make([][]float64, windowSize)
+// 	for i := range a {
+// 		a[i] = make([]float64, polyOrder+1)
+// 		x := float64(i - halfWindow)
+// 		for j := 0; j <= polyOrder; j++ {
+// 			a[i][j] = math.Pow(x, float64(j))
+// 		}
+// 	}
+//
+// 	// Transpose of matrix a
+// 	at := transpose(a)
+// 	ata := multiplyMatrices(at, a)
+// 	ataInv := invertMatrix(ata)
+// 	ataInvAt := multiplyMatrices(ataInv, at)
+//
+// 	coeffs := ataInvAt[halfWindow]
+// 	return coeffs
+// }
 
-	// Transpose of matrix a
-	at := transpose(a)
-	ata := multiplyMatrices(at, a)
-	ataInv := invertMatrix(ata)
-	ataInvAt := multiplyMatrices(ataInv, at)
-
-	coeffs := ataInvAt[halfWindow]
-	return coeffs
-}
-
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
 // transpose returns the transpose of a matrix.
-func transpose(a [][]float64) [][]float64 {
-	rows := len(a)
-	cols := len(a[0])
-	at := make([][]float64, cols)
-	for i := range at {
-		at[i] = make([]float64, rows)
-		for j := range at[i] {
-			at[i][j] = a[j][i]
-		}
-	}
-	return at
-}
+// func transpose(a [][]float64) [][]float64 {
+// 	rows := len(a)
+// 	cols := len(a[0])
+// 	at := make([][]float64, cols)
+// 	for i := range at {
+// 		at[i] = make([]float64, rows)
+// 		for j := range at[i] {
+// 			at[i][j] = a[j][i]
+// 		}
+// 	}
+// 	return at
+// }
 
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
 // multiplyMatrices multiplies two matrices.
-func multiplyMatrices(a, b [][]float64) [][]float64 {
-	rows := len(a)
-	cols := len(b[0])
-	bRows := len(b)
-	result := make([][]float64, rows)
-	for i := range result {
-		result[i] = make([]float64, cols)
-		for j := range result[i] {
-			sum := 0.0
-			for k := 0; k < bRows; k++ {
-				sum += a[i][k] * b[k][j]
-			}
-			result[i][j] = sum
-		}
-	}
-	return result
-}
+// func multiplyMatrices(a, b [][]float64) [][]float64 {
+// 	rows := len(a)
+// 	cols := len(b[0])
+// 	bRows := len(b)
+// 	result := make([][]float64, rows)
+// 	for i := range result {
+// 		result[i] = make([]float64, cols)
+// 		for j := range result[i] {
+// 			sum := 0.0
+// 			for k := 0; k < bRows; k++ {
+// 				sum += a[i][k] * b[k][j]
+// 			}
+// 			result[i][j] = sum
+// 		}
+// 	}
+// 	return result
+// }
 
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
 // invertMatrix inverts a square matrix using Gaussian elimination.
-func invertMatrix(a [][]float64) [][]float64 {
-	n := len(a)
-	aug := make([][]float64, n)
-	for i := range aug {
-		aug[i] = make([]float64, 2*n)
-		copy(aug[i], a[i])
-		aug[i][i+n] = 1.0
-	}
+// func invertMatrix(a [][]float64) [][]float64 {
+// 	n := len(a)
+// 	aug := make([][]float64, n)
+// 	for i := range aug {
+// 		aug[i] = make([]float64, 2*n)
+// 		copy(aug[i], a[i])
+// 		aug[i][i+n] = 1.0
+// 	}
+//
+// 	for i := range aug {
+// 		scale := aug[i][i]
+// 		for j := range aug[i] {
+// 			aug[i][j] /= scale
+// 		}
+// 		for k := range aug {
+// 			if i != k {
+// 				scale = aug[k][i]
+// 				for j := range aug[k] {
+// 					aug[k][j] -= scale * aug[i][j]
+// 				}
+// 			}
+// 		}
+// 	}
+//
+// 	inv := make([][]float64, n)
+// 	for i := range inv {
+// 		inv[i] = make([]float64, n)
+// 		copy(inv[i], aug[i][n:])
+// 	}
+//
+// 	return inv
+// }
 
-	for i := range aug {
-		scale := aug[i][i]
-		for j := range aug[i] {
-			aug[i][j] /= scale
-		}
-		for k := range aug {
-			if i != k {
-				scale = aug[k][i]
-				for j := range aug[k] {
-					aug[k][j] -= scale * aug[i][j]
-				}
-			}
-		}
-	}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func NormalizedAvg[T Number](arr []T) float64 {
+// 	var sum float64
+//
+// 	if len(arr) == 0 {
+// 		return 0
+// 	}
+//
+// 	for _, val := range arr {
+// 		sum += math.Pow(float64(val), 4)
+// 	}
+// 	res := math.Sqrt(math.Sqrt(sum / float64(len(arr))))
+// 	fmt.Println(res)
+// 	return res
+// }
 
-	inv := make([][]float64, n)
-	for i := range inv {
-		inv[i] = make([]float64, n)
-		copy(inv[i], aug[i][n:])
-	}
-
-	return inv
-}
-
-func NormalizedAvg[T Number](arr []T) float64 {
-	var sum float64
-
-	if len(arr) == 0 {
-		return 0
-	}
-
-	for _, val := range arr {
-		sum += math.Pow(float64(val), 4)
-	}
-	res := math.Sqrt(math.Sqrt(sum / float64(len(arr))))
-	fmt.Println(res)
-	return res
-}
 func NormalizedAvgPositive[T Number](arr []T) float64 {
 	var sum float64
 	var nbval float64

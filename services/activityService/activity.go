@@ -29,6 +29,20 @@ func SumAnalyze(filePath string, user models.Users, equipment models.Equipments)
 	return AnalyzeTrimmed(filePath, user, equipment, 0, nil)
 }
 
+// InvalidFitError is a file that isn't a FIT activity the analysis can read: its message tells the user
+// why. The other errors of the analysis are the server's (the file can't be opened, the database fails).
+type InvalidFitError struct {
+	err error
+}
+
+func (e *InvalidFitError) Error() string {
+	return e.err.Error()
+}
+
+func (e *InvalidFitError) Unwrap() error {
+	return e.err
+}
+
 // AnalyzeTrimmed analyses a FIT file, ignoring what was recorded after trimEnd seconds since the start
 // (0 for the whole recording), see TrimActivity. restHR gives the resting heart rate of the training score,
 // nil for DefaultRestHR.
@@ -50,30 +64,37 @@ func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipme
 	// Maybe add an option to correct the FIT file.
 	dec := decoder.New(f, decoder.WithIgnoreChecksum())
 
+	decoded := false
 	for dec.Next() {
 		fit, err := dec.Decode()
 		if err != nil {
-			return models.Activity{}, err
+			return models.Activity{}, &InvalidFitError{err}
 		}
 		activity, err = decodeFit(fit, user, equipment, trimEnd, restHR)
 		if err != nil {
 			return models.Activity{}, err
 		}
+		decoded = true
+	}
+	// an empty file, or one that doesn't start as a FIT file
+	if !decoded {
+		return models.Activity{}, &InvalidFitError{errors.New("not a FIT file")}
 	}
 
 	return activity, nil
 }
 
-func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (models.Activity, error) {
-	return decodeFit(fit, user, equipment, 0, nil)
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func DecodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments) (models.Activity, error) {
+// 	return decodeFit(fit, user, equipment, 0, nil)
+// }
 
 func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, trimEnd float64, restHR RestHRFunc) (models.Activity, error) {
 	var activity models.Activity
 	var err error
 	fitActivity := filedef.NewActivity(fit.Messages...)
 	if len(fitActivity.Sessions) == 0 {
-		return models.Activity{}, errors.New("no session in the FIT file")
+		return models.Activity{}, &InvalidFitError{errors.New("no session in the FIT file")}
 	}
 	// the analysis starts at the first session
 	sort.SliceStable(fitActivity.Sessions, func(i, j int) bool {
@@ -97,7 +118,7 @@ func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, t
 	} else {
 		legs := AnalyzeLegs(fitActivity.Sessions)
 		if len(legs) == 0 {
-			return models.Activity{}, errors.New("no session other than transitions in the FIT file")
+			return models.Activity{}, &InvalidFitError{errors.New("no session other than transitions in the FIT file")}
 		}
 		activity.Legs = legs
 		summarizeLegs(&activity, fitActivity.Sessions, legs)
