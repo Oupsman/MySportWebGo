@@ -7,8 +7,9 @@ import (
 )
 
 // the version of the analysis engine, 2: time stamps of the sparse series, 3: the recording device,
-// 4: the measured power of every sport and the time stamps of the temperatures
-const Engine_version int = 4
+// 4: the measured power of every sport and the time stamps of the temperatures, 5: the privacy zones
+// around the first and the last GPS fixes (they were around the first and the last records)
+const Engine_version int = 5
 
 var ListenPort string
 var Dsn string

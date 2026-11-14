@@ -176,7 +176,6 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	var counter = 0
 	var recordsCount = len(fitActivity.Records)
 	var altitudes, filtered []float64
-	var securityDistance = float64(activity.User.SecurityDistance) / 1000
 	var startPosition, endPosition types.GpsPoint
 
 	distance := activity.Distance
@@ -192,28 +191,13 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	// the power is read or estimated per session: only the bike leg of a triathlon has some
 	sessions := sessionCursor{sessions: fitActivity.Sessions}
 
-	// Find first valid GPS points in records
-	if distance > 0 {
-		for counter < recordsCount && (fitActivity.Records[counter].PositionLat == math.MaxInt32 ||
-			fitActivity.Records[counter].PositionLong == math.MaxInt32) {
-			counter++
-		}
-		if counter < recordsCount {
-			startPosition = types.GpsPoint{
-				Lat: utils.SemiCircleToDegres(fitActivity.Records[counter].PositionLat),
-				Lon: utils.SemiCircleToDegres(fitActivity.Records[counter].PositionLong),
-			}
-			endPosition = types.GpsPoint{
-				Lat: utils.SemiCircleToDegres(fitActivity.Records[recordsCount-1].PositionLat),
-				Lon: utils.SemiCircleToDegres(fitActivity.Records[recordsCount-1].PositionLong),
-			}
-			if utils.Haversine(startPosition, endPosition) < securityDistance {
-				// Activity is a loop so we double the security distance
-				securityDistance = 2 * securityDistance
-			}
-		}
+	// the privacy zones are around the first and the last positions with a GPS fix: the first and the last
+	// records often have none (no fix yet, or the device saving after the GPS stopped), and a zone around
+	// an invalid position would hide nothing
+	if first, last, found := gpsRange(fitActivity.Records); found {
+		startPosition = recordPosition(fitActivity.Records[first])
+		endPosition = recordPosition(fitActivity.Records[last])
 	}
-	counter = 0
 	for km < distance && counter < recordsCount-1 {
 		stopkm := km + 1.0
 		for km < stopkm && counter < recordsCount-1 {
@@ -269,17 +253,6 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 						}
 						activity.GpsPoints = append(activity.GpsPoints, currentPoint)
 						activity.GpsTimeStamps = append(activity.GpsTimeStamps, offset)
-
-						// if the user has a security distance, we add the points to the public gps points
-						distanceFromStart := utils.Haversine(startPosition, currentPoint)
-						distanceFromEnd := utils.Haversine(endPosition, currentPoint)
-						if distanceFromStart > securityDistance &&
-							distanceFromEnd > securityDistance {
-							activity.PublicGpsPoints = append(activity.PublicGpsPoints, types.GpsPoint{
-								Lat: utils.SemiCircleToDegres(record.PositionLat),
-								Lon: utils.SemiCircleToDegres(record.PositionLong),
-							})
-						}
 					}
 					// measured power, of any sport: running, rowing... Without power meter, only the cycling one is estimated
 					if session := sessions.at(record.Timestamp); hasPowerMeter(session) {
@@ -368,19 +341,14 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	} else {
 		filtered = altitudes
 	}
+	activity.PublicGpsPoints = PublicTrace(activity.GpsPoints, startPosition, endPosition, activity.User.SecurityDistance)
 	activity.Altitudes = filtered
 	if len(altitudes) > 2 {
 		ComputeElevation(&activity, filtered)
 	}
 	if len(activity.GpsPoints) > 2 {
-		activity.StartPosition = &types.GpsPoint{
-			Lat: utils.SemiCircleToDegres(fitActivity.Records[0].PositionLat),
-			Lon: utils.SemiCircleToDegres(fitActivity.Records[0].PositionLong),
-		}
-		activity.EndPosition = &types.GpsPoint{
-			Lat: utils.SemiCircleToDegres(fitActivity.Records[len(fitActivity.Records)-1].PositionLat),
-			Lon: utils.SemiCircleToDegres(fitActivity.Records[len(fitActivity.Records)-1].PositionLong),
-		}
+		activity.StartPosition = &startPosition
+		activity.EndPosition = &endPosition
 		activity.GpsCenter = &types.GpsPoint{
 			Lat: utils.Avg(activity.Lats),
 			Lon: utils.Avg(activity.Lons),
@@ -392,6 +360,59 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 		activity.SimplifiedGpsPoints = SimplifyTrace(activity.GpsPoints)
 	}
 	return activity, nil
+}
+
+// PublicTrace returns the points of a trace the others may see: the ones out of the privacy zones, circles
+// of securityDistance meters around the start and the end (where the user lives or works). The radius is
+// doubled for a loop, whose start and end are close. start and end are the first and the last positions
+// with a GPS fix.
+func PublicTrace(points []types.GpsPoint, start, end types.GpsPoint, securityDistance uint16) types.GpsPointArray {
+	var public types.GpsPointArray
+	if len(points) == 0 {
+		return public
+	}
+	radius := float64(securityDistance) / 1000 // Haversine is in km
+	if utils.Haversine(start, end) < radius {
+		radius *= 2
+	}
+	for _, point := range points {
+		if utils.Haversine(start, point) > radius && utils.Haversine(end, point) > radius {
+			public = append(public, point)
+		}
+	}
+	return public
+}
+
+// ValidPosition tells whether a position is on Earth: the positions read from records without GPS fix
+// (stored by the engines before 5) are around (180, 180)
+func ValidPosition(p *types.GpsPoint) bool {
+	return p != nil && math.Abs(p.Lat) <= 90 && math.Abs(p.Lon) < 180
+}
+
+// hasPosition tells whether a record has a GPS fix
+func hasPosition(record *mesgdef.Record) bool {
+	return record.PositionLat != math.MaxInt32 && record.PositionLong != math.MaxInt32
+}
+
+func recordPosition(record *mesgdef.Record) types.GpsPoint {
+	return types.GpsPoint{
+		Lat: utils.SemiCircleToDegres(record.PositionLat),
+		Lon: utils.SemiCircleToDegres(record.PositionLong),
+	}
+}
+
+// gpsRange returns the indexes of the first and the last records with a GPS fix, false when none has one
+func gpsRange(records []*mesgdef.Record) (first, last int, found bool) {
+	first = -1
+	for i, record := range records {
+		if hasPosition(record) {
+			if first < 0 {
+				first = i
+			}
+			last = i
+		}
+	}
+	return first, last, first >= 0
 }
 
 func ComputeElevation(activity *models.Activity, filtered []float64) {

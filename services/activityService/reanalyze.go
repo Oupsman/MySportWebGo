@@ -2,11 +2,18 @@ package activityService
 
 import (
 	"MySportWeb/internal/pkg/models"
+	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/vars"
 	"fmt"
+	"slices"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
+
+// DefaultSecurityDistance is the radius (in meters) of the privacy zones of a user, the default of the users
+// table: the one of the activities whose user can't be read
+const DefaultSecurityDistance = 500
 
 // analyzeFile runs AnalyzeTrimmed, turning its panics (a FIT file without session for instance) into errors
 func analyzeFile(filePath string, user models.Users, trimEnd float64, restHR RestHRFunc) (activity models.Activity, err error) {
@@ -19,8 +26,11 @@ func analyzeFile(filePath string, user models.Users, trimEnd float64, restHR Res
 }
 
 // BackfillTimeStamps re-reads the FIT file of the activities analysed by an older engine, to fill the
-// time stamps of the sparse series, the recording device, the power and the temperatures. Activities whose file can't be read are
-// marked as done without them, the frontend then falls back on the records time stamps.
+// time stamps of the sparse series, the recording device, the power, the temperatures, and the privacy
+// zones of the public trace, with the security distance of the user. The thumbnails, drawn from the public
+// trace, are drawn again when it changed.
+// Activities whose file can't be read are marked as done without them, the frontend then falls back on the
+// records time stamps; their public trace is computed again from the trace saved in the database.
 func BackfillTimeStamps(db *models.DB, logger zerolog.Logger) error {
 	ids, err := db.GetActivitiesBelowEngine(vars.Engine_version)
 	if err != nil {
@@ -32,23 +42,65 @@ func BackfillTimeStamps(db *models.DB, logger zerolog.Logger) error {
 	logger.Info().Int("activities", len(ids)).Int("engine_version", vars.Engine_version).Msg("re-analysing activities")
 	failed := 0
 	for _, id := range ids {
-		filePath, trimEnd, err := db.GetActivityFile(id)
+		stored, err := db.GetActivityToReanalyze(id)
 		if err != nil {
 			return err
+		}
+		user := stored.User
+		if user.ID == 0 {
+			// a zone of 0 would make the whole trace public
+			user.SecurityDistance = DefaultSecurityDistance
 		}
 		// the series must stay as long as the trimmed activity
-		analysed, err := analyzeFile(filePath, models.Users{}, trimEnd, nil)
+		analysed, err := analyzeFile(stored.FilePath, user, stored.TrimEnd, nil)
+		var public types.GpsPointArray
 		if err != nil {
 			failed++
-			logger.Warn().Err(err).Str("activity", id.String()).Str("file", filePath).Msg("FIT file can't be re-analysed")
-			err = db.UpdateActivityTimeStamps(id, nil, vars.Engine_version)
+			logger.Warn().Err(err).Str("activity", id.String()).Str("file", stored.FilePath).Msg("FIT file can't be re-analysed")
+			public = publicTraceOf(stored.GpsPoints, user.SecurityDistance)
+			err = db.UpdateActivityTimeStamps(id, nil, &public, vars.Engine_version)
 		} else {
-			err = db.UpdateActivityTimeStamps(id, &analysed, vars.Engine_version)
+			public = analysed.PublicGpsPoints
+			err = db.UpdateActivityTimeStamps(id, &analysed, nil, vars.Engine_version)
+			if err == nil {
+				err = fixRouteEndpoints(db, stored.RouteID, analysed.StartPosition, analysed.EndPosition)
+			}
 		}
 		if err != nil {
 			return err
+		}
+		if user.UUID != uuid.Nil && !slices.Equal(public, stored.PublicGpsPoints) {
+			redrawn := models.Activity{ID: id, User: user, PublicGpsPoints: public}
+			if err := GenerateThumbnail(redrawn); err != nil {
+				logger.Warn().Err(err).Str("activity", id.String()).Msg("thumbnail not drawn again with the new public trace")
+			}
 		}
 	}
 	logger.Info().Int("activities", len(ids)).Int("failed", failed).Msg("activities re-analysed")
 	return nil
+}
+
+// publicTraceOf computes the public trace from a saved trace, whose first and last points are the first and
+// the last GPS fixes
+func publicTraceOf(points types.GpsPointArray, securityDistance uint16) types.GpsPointArray {
+	if len(points) == 0 {
+		return nil
+	}
+	return PublicTrace(points, points[0], points[len(points)-1], securityDistance)
+}
+
+// fixRouteEndpoints gives a route the endpoints of one of its activities when its own are invalid: routes
+// created by the engines before 5 from an activity whose first or last record had no GPS fix
+func fixRouteEndpoints(db *models.DB, routeID *uuid.UUID, start, end *types.GpsPoint) error {
+	if routeID == nil || !ValidPosition(start) || !ValidPosition(end) {
+		return nil
+	}
+	route, err := db.GetRoute(*routeID)
+	if err != nil {
+		return err
+	}
+	if ValidPosition(route.StartPosition) && ValidPosition(route.EndPosition) {
+		return nil
+	}
+	return db.SetRouteEndpoints(route.ID, start, end)
 }

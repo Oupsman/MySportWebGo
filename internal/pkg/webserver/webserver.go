@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
 )
 
@@ -28,7 +27,9 @@ func AppHandler(App *app.App) gin.HandlerFunc {
 func RunHttp(listenAddr string, App *app.App) error {
 
 	httpRouter := gin.Default()
-	httpRouter.Use(static.Serve("/MEDIA", static.LocalFile("./MEDIA", true)))
+	// only the thumbnails and the equipment pictures, never the FIT files nor a directory listing
+	httpRouter.GET("/MEDIA/*path", apicontrollers.ServeMedia)
+	httpRouter.HEAD("/MEDIA/*path", apicontrollers.ServeMedia)
 	httpRouter.Use(AppHandler(App))
 
 	// the cors middleware refuses other origins silently (403, or a missing header in the browser)

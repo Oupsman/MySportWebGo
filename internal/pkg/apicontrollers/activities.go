@@ -228,15 +228,7 @@ func GetActivity(c *gin.Context) {
 		return
 	}
 	if activity.User.ID != user.ID {
-		// Deleting non-public datas if user is not the owner
-		activity.GpsPoints = nil
-		activity.GpsTimeStamps = nil
-		activity.StartPosition = nil
-		activity.EndPosition = nil
-		activity.User = models.Users{}
-		activity.Equipment = models.Equipments{}
-		// TODO : is there more fields that needs to be nilled ?
-
+		activity.HidePrivate()
 	}
 	c.JSON(http.StatusOK, gin.H{"activity": activity})
 }

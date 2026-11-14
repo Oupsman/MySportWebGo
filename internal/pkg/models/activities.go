@@ -5,6 +5,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"math"
 	"time"
 )
 
@@ -96,6 +97,50 @@ type Activity struct {
 	// training score: the one recorded by the device (Garmin's training load, else the TSS), else the
 	// Banister TRIMP of the heart rate stream; 0 without any, nil until computed
 	Trimp *float64 `json:"trimp"`
+}
+
+// HidePrivate removes what only the owner of the activity may see: the trace inside the privacy zones
+// (every position but the public ones), where its files are, who recorded it and with what. The map of
+// the others is centered on the public trace.
+func (a *Activity) HidePrivate() {
+	a.GpsPoints = nil
+	a.GpsTimeStamps = nil
+	a.SimplifiedGpsPoints = nil
+	a.Lats = nil
+	a.Lons = nil
+	a.StartPosition = nil
+	a.EndPosition = nil
+	a.MaxSpeedPosition = types.GpsPoint{}
+	a.GpsCenter, a.GpsBounds = traceBounds(a.PublicGpsPoints)
+
+	a.Filename = ""
+	a.FilePath = ""
+	a.Thumbnail = ""
+	a.User = Users{}
+	a.UserID = 0
+	a.Equipment = Equipments{}
+	a.EquipmentID = nil
+	a.RouteID = nil
+	a.Serialnumber = ""
+	a.Device.Serial = ""
+	a.Lastimport = false
+}
+
+// traceBounds returns the center and the bounds (south-west, north-east) of a trace, nil without point
+func traceBounds(points types.GpsPointArray) (*types.GpsPoint, types.GpsPointArray) {
+	if len(points) == 0 {
+		return nil, nil
+	}
+	min, max := points[0], points[0]
+	var sum types.GpsPoint
+	for _, p := range points {
+		min.Lat, min.Lon = math.Min(min.Lat, p.Lat), math.Min(min.Lon, p.Lon)
+		max.Lat, max.Lon = math.Max(max.Lat, p.Lat), math.Max(max.Lon, p.Lon)
+		sum.Lat += p.Lat
+		sum.Lon += p.Lon
+	}
+	n := float64(len(points))
+	return &types.GpsPoint{Lat: sum.Lat / n, Lon: sum.Lon / n}, types.GpsPointArray{min, max}
 }
 
 func (db *DB) CreateActivity(activity *Activity) error {
@@ -240,11 +285,13 @@ func (db *DB) SetActivityTitle(id uuid.UUID, oldTitle, title string) error {
 	return db.Model(&Activity{}).Where("id = ? AND title = ?", id, oldTitle).Update("title", title).Error
 }
 
-// GetActivityFile returns the path of the FIT file of an activity and where the activity is trimmed
-func (db *DB) GetActivityFile(id uuid.UUID) (string, float64, error) {
+// GetActivityToReanalyze returns what re-analysing an activity needs: its FIT file, where it is trimmed, its
+// user (empty when deleted), its route, and its traces to compute the public one again without the file
+func (db *DB) GetActivityToReanalyze(id uuid.UUID) (Activity, error) {
 	var activity Activity
-	err := db.Select("id", "file_path", "trim_end").First(&activity, "id = ?", id).Error
-	return activity.FilePath, activity.TrimEnd, err
+	err := db.Select("id", "user_id", "file_path", "trim_end", "route_id", "gps_points", "public_gps_points").
+		Preload("User").First(&activity, "id = ?", id).Error
+	return activity, err
 }
 
 // GetActivitiesWithoutTrimp returns the ids of the activities whose TRIMP was never computed, oldest first
@@ -269,10 +316,18 @@ func (db *DB) SetActivityTrimp(id uuid.UUID, trimp float64) error {
 }
 
 // UpdateActivityTimeStamps saves what an engine upgrade re-analyses (the time stamps of the sparse
-// series, the recording device, the power and the temperature) and the engine version
-func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, version int) error {
+// series, the recording device, the power, the temperature, the start and end positions and the public
+// trace) and the engine version. privacy alone, when not nil, holds the public trace computed again
+// without the FIT file.
+func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, privacy *types.GpsPointArray, version int) error {
 	updates := map[string]interface{}{"engine_version": version}
+	if privacy != nil {
+		updates["public_gps_points"] = *privacy
+	}
 	if analysed != nil {
+		updates["public_gps_points"] = analysed.PublicGpsPoints
+		updates["start_position"] = analysed.StartPosition
+		updates["end_position"] = analysed.EndPosition
 		updates["device"] = analysed.Device
 		updates["device_name"] = analysed.DeviceName
 		updates["gps_time_stamps"] = analysed.GpsTimeStamps

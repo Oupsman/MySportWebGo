@@ -84,6 +84,12 @@ func (db *DB) SetRouteCommute(routeID uuid.UUID, isCommute bool) (int64, error) 
 	return count, err
 }
 
+// SetRouteEndpoints replaces the reference start and end of a route
+func (db *DB) SetRouteEndpoints(routeID uuid.UUID, start, end *types.GpsPoint) error {
+	return db.Model(&Route{}).Where("id = ?", routeID).
+		Updates(map[string]interface{}{"start_position": start, "end_position": end}).Error
+}
+
 func (db *DB) CreateRoute(route *Route) error {
 	return db.Create(route).Error
 }
