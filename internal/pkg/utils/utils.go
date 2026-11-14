@@ -95,30 +95,6 @@ func HashDeviceToken(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func GetUserID(tokenString string) (uint64, error) {
-	claims, err := ParseBearerToken(tokenString)
-	if err != nil {
-		return 0, err
-	}
-	sub, ok := claims["sub"].(float64)
-	if !ok {
-		return 0, errors.New("invalid token subject")
-	}
-	return uint64(sub), nil
-}
-
-func GetUserUUID(tokenString string) (uuid.UUID, error) {
-	claims, err := ParseBearerToken(tokenString)
-	if err != nil {
-		return uuid.UUID{}, err
-	}
-	userUUID, ok := claims["uuid"].(string)
-	if !ok {
-		return uuid.UUID{}, errors.New("invalid token uuid")
-	}
-	return uuid.Parse(userUUID)
-}
-
 // DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
 // func StringInSlice(a string, list []string) bool {
 // 	for _, b := range list {
@@ -128,18 +104,6 @@ func GetUserUUID(tokenString string) (uuid.UUID, error) {
 // 	}
 // 	return false
 // }
-
-func GetUserRole(tokenString string) (string, error) {
-	claims, err := ParseBearerToken(tokenString)
-	if err != nil {
-		return "", err
-	}
-	role, ok := claims["role"].(string)
-	if !ok {
-		return "", errors.New("invalid token role")
-	}
-	return role, nil
-}
 
 func SemiCircleToDegres(semi int32) float64 {
 	return float64(semi) * (180.0 / math.Pow(2.0, 31.0))

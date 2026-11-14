@@ -3,11 +3,11 @@ package types
 import (
 	"database/sql/driver"
 	"encoding/json"
-	"fmt"
+	// "fmt" // used by the dead code below
 	"github.com/google/uuid"
 	"mime/multipart"
-	"strconv"
-	"strings"
+	// "strconv" // used by the dead code below
+	// "strings" // used by the dead code below
 	"time"
 )
 
@@ -283,9 +283,11 @@ type ActivityUpload struct {
 
 type LengthArray []Length
 
-type Int8Array []int8
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// type Int8Array []int8
 
-type Uint8Array []uint8
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// type Uint8Array []uint8
 
 type Uint16Array []uint16
 
@@ -364,36 +366,38 @@ func (s GpsPointArray) Value() (driver.Value, error) {
 	return json.Marshal(s)
 }
 
-func (s *Uint8Array) Scan(src interface{}) error {
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func (s *Uint8Array) Scan(src interface{}) error {
+//
+// 	src = strings.Trim(src.(string), "[]")
+// 	strNumbers := strings.Split(src.(string), ",")
+// 	var numbers Uint8Array
+//
+// 	for _, strNum := range strNumbers {
+// 		num, err := strconv.ParseUint(strNum, 10, 64)
+// 		if err == nil {
+// 			numbers = append(numbers, uint8(num))
+// 		} else {
+// 			return err
+// 		}
+// 	}
+//
+// 	*s = numbers
+// 	return nil
+// }
 
-	src = strings.Trim(src.(string), "[]")
-	strNumbers := strings.Split(src.(string), ",")
-	var numbers Uint8Array
-
-	for _, strNum := range strNumbers {
-		num, err := strconv.ParseUint(strNum, 10, 64)
-		if err == nil {
-			numbers = append(numbers, uint8(num))
-		} else {
-			return err
-		}
-	}
-
-	*s = numbers
-	return nil
-}
-
-func (s Uint8Array) Value() (driver.Value, error) {
-
-	var result string
-
-	if s == nil {
-		result = "null"
-	} else {
-		result = strings.Join(strings.Fields(fmt.Sprintf("%d", s)), ",")
-	}
-	return result, nil
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func (s Uint8Array) Value() (driver.Value, error) {
+//
+// 	var result string
+//
+// 	if s == nil {
+// 		result = "null"
+// 	} else {
+// 		result = strings.Join(strings.Fields(fmt.Sprintf("%d", s)), ",")
+// 	}
+// 	return result, nil
+// }
 
 func (s *Uint16Array) Scan(src interface{}) error {
 	return json.Unmarshal(src.([]byte), s)
@@ -403,13 +407,15 @@ func (s Uint16Array) Value() (driver.Value, error) {
 	return json.Marshal(s)
 }
 
-func (s *Int8Array) Scan(src interface{}) error {
-	return json.Unmarshal(src.([]byte), s)
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func (s *Int8Array) Scan(src interface{}) error {
+// 	return json.Unmarshal(src.([]byte), s)
+// }
 
-func (s Int8Array) Value() (driver.Value, error) {
-	return json.Marshal(s)
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// func (s Int8Array) Value() (driver.Value, error) {
+// 	return json.Marshal(s)
+// }
 
 func (s *Int16Array) Scan(src interface{}) error {
 	return json.Unmarshal(src.([]byte), s)

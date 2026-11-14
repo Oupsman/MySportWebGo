@@ -23,12 +23,6 @@ import (
 // RestHRFunc returns the resting heart rate (bpm) of the user at a date, 0 when it's unknown
 type RestHRFunc func(date time.Time) (uint16, error)
 
-// SumAnalyze analyses a whole FIT file, its training score computed with DefaultRestHR when the device
-// didn't record one: see AnalyzeTrimmed for the user's resting heart rate
-func SumAnalyze(filePath string, user models.Users, equipment models.Equipments) (models.Activity, error) {
-	return AnalyzeTrimmed(filePath, user, equipment, 0, nil)
-}
-
 // InvalidFitError is a file that isn't a FIT activity the analysis can read: its message tells the user
 // why. The other errors of the analysis are the server's (the file can't be opened, the database fails).
 type InvalidFitError struct {
