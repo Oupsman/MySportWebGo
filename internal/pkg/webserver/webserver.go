@@ -90,8 +90,8 @@ func RunHttp(listenAddr string, App *app.App) error {
 	}))
 
 	httpRouter.GET("/", apicontrollers.HealthCheck)
-	httpRouter.GET("/login", controllers.Login)
-	httpRouter.GET("/signup", controllers.SignUp)
+	// httpRouter.GET("/login", controllers.Login)
+	// httpRouter.GET("/signup", controllers.SignUp)
 
 	apiv1 := httpRouter.Group("/api/v1")
 	{
