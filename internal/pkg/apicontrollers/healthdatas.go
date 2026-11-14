@@ -31,7 +31,9 @@ func ImportHealthDatas(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
 	user := middlewares.CurrentUser(c)
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if !middlewares.RequestTooLarge(c, err) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
 		return
 	}
 	if len(body.Measures) > maxHealthImport {

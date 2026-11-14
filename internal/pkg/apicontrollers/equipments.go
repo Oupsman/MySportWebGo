@@ -177,7 +177,9 @@ func UploadEquipmentPicture(c *gin.Context) {
 	}
 	header, err := c.FormFile("file")
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "missing file"})
+		if !middlewares.RequestTooLarge(c, err) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "missing file"})
+		}
 		return
 	}
 	file, err := header.Open()

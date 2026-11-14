@@ -3,6 +3,8 @@ package pictures
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -130,5 +132,34 @@ func TestProcessRefuses(t *testing.T) {
 		if _, err := Process(bytes.NewReader(data)); err == nil {
 			t.Errorf("%s accepted", name)
 		}
+	}
+}
+
+// pngClaiming returns a small PNG file whose header claims w x h pixels
+func pngClaiming(t *testing.T, w, h uint32) []byte {
+	var b bytes.Buffer
+	if err := png.Encode(&b, picture(8, 8)); err != nil {
+		t.Fatal(err)
+	}
+	data := b.Bytes()
+	// signature (8), IHDR length (4) and type (4), then width and height
+	binary.BigEndian.PutUint32(data[16:], w)
+	binary.BigEndian.PutUint32(data[20:], h)
+	binary.BigEndian.PutUint32(data[29:], crc32.ChecksumIEEE(data[12:29]))
+	return data
+}
+
+// a decompression bomb is refused from its header, before allocating its pixels
+func TestProcessRefusesTooManyPixels(t *testing.T) {
+	bomb := pngClaiming(t, 100_000, 100_000)
+	if len(bomb) > 1000 {
+		t.Fatalf("the bomb is %d bytes", len(bomb))
+	}
+	if _, err := Process(bytes.NewReader(bomb)); !errors.Is(err, ErrTooManyPixels) {
+		t.Errorf("100000 x 100000 pixels: %v, want ErrTooManyPixels", err)
+	}
+	// the header patching keeps a valid file
+	if _, _, err := image.DecodeConfig(bytes.NewReader(pngClaiming(t, 8, 8))); err != nil {
+		t.Fatal(err)
 	}
 }

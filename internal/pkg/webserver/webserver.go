@@ -6,11 +6,25 @@ import (
 	"MySportWeb/internal/pkg/controllers"
 	"MySportWeb/internal/pkg/middlewares"
 	"MySportWeb/internal/pkg/models"
+	"MySportWeb/internal/pkg/pictures"
 	"MySportWeb/internal/pkg/vars"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+)
+
+// The largest request bodies accepted
+const (
+	// DefaultBodyLimit is the one of the JSON requests
+	DefaultBodyLimit = 1 << 20
+	// FitBodyLimit is the one of the FIT file uploads: a day long recording is about 10 MB. The whole file
+	// is decoded in memory.
+	FitBodyLimit = 25 << 20
+	// PictureBodyLimit is the one of the equipment pictures, pictures.MaxUploadSize and the multipart form
+	PictureBodyLimit = pictures.MaxUploadSize + 1<<20
+	// HealthImportBodyLimit is the one of the health imports, 5000 measures
+	HealthImportBodyLimit = 4 << 20
 )
 
 type WebServer struct {
@@ -31,6 +45,14 @@ func RunHttp(listenAddr string, App *app.App) error {
 	httpRouter.GET("/MEDIA/*path", apicontrollers.ServeMedia)
 	httpRouter.HEAD("/MEDIA/*path", apicontrollers.ServeMedia)
 	httpRouter.Use(AppHandler(App))
+	// the multipart files above this are written to temporary files instead of memory
+	httpRouter.MaxMultipartMemory = 8 << 20
+	httpRouter.Use(middlewares.LimitBody(DefaultBodyLimit, map[string]int64{
+		"/api/v1/activities/upload":     FitBodyLimit,
+		"/api/v1/activity":              FitBodyLimit,
+		"/api/v1/equipment/:id/picture": PictureBodyLimit,
+		"/api/v1/healthdatas/import":    HealthImportBodyLimit,
+	}))
 
 	// the cors middleware refuses other origins silently (403, or a missing header in the browser)
 	httpRouter.Use(func(c *gin.Context) {

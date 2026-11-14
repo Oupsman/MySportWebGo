@@ -27,7 +27,15 @@ func chromeContext() (context.Context, context.CancelFunc) {
 	}
 }
 
+// GenerateThumbnail draws the public trace of an activity on a map, with a headless Chromium. At most
+// MaxConcurrentThumbnails are drawn at a time, ErrBusy after waiting QueueTimeout; a drawing taking more
+// than ThumbnailTimeout is stopped.
 func GenerateThumbnail(activity models.Activity) error {
+	release, err := thumbnailSlots.acquire(QueueTimeout)
+	if err != nil {
+		return err
+	}
+	defer release()
 	gpsPoints := "["
 
 	for _, record := range activity.PublicGpsPoints {
@@ -58,7 +66,9 @@ func GenerateThumbnail(activity models.Activity) error {
 	// only read by Chromium below
 	defer os.Remove(fileName)
 
-	ctx, cancel := chromeContext()
+	browser, cancelBrowser := chromeContext()
+	defer cancelBrowser()
+	ctx, cancel := context.WithTimeout(browser, ThumbnailTimeout)
 	defer cancel()
 	var screenshotBuffer []byte
 

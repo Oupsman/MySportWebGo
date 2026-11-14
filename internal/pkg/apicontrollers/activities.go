@@ -34,7 +34,13 @@ func UploadActivity(c *gin.Context) {
 
 	err := c.ShouldBind(&uploadParams)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if !middlewares.RequestTooLarge(c, err) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	if uploadParams.File == nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "missing file"})
 		return
 	}
 
@@ -63,7 +69,9 @@ func UploadActivity(c *gin.Context) {
 	}
 	activity, err := activityService.AnalyzeTrimmed(tmpPath, user, equipment, 0, activityService.UserRestHR(&db, user.ID))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if !serverBusy(c, err) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
 		return
 	}
 	activity.ID = uuid.New()
@@ -92,7 +100,9 @@ func UploadActivity(c *gin.Context) {
 
 	err = activityService.GenerateThumbnail(activity)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if !serverBusy(c, err) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
@@ -117,6 +127,17 @@ func UploadActivity(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
+}
+
+// serverBusy answers 503 and returns true when err is activityService.ErrBusy: the server has too much
+// heavy work queued, the client can send the request again later
+func serverBusy(c *gin.Context, err error) bool {
+	if !errors.Is(err, activityService.ErrBusy) {
+		return false
+	}
+	c.Header("Retry-After", "30")
+	c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+	return true
 }
 
 func ListActivities(c *gin.Context) {
@@ -296,7 +317,9 @@ func TrimActivity(c *gin.Context) {
 	trimmed, err := activityService.TrimActivity(&db, activity, *params.End, App.Logger)
 	if err != nil {
 		App.Logger.Warn().Err(err).Str("activity", activity.ID.String()).Float64("end", *params.End).Msg("activity not trimmed")
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if !serverBusy(c, err) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"id": trimmed.ID.String(), "trim_end": trimmed.TrimEnd})

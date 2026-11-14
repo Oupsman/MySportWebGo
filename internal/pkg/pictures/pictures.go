@@ -20,11 +20,17 @@ const (
 	MaxUploadSize = 15 << 20
 	// MaxSide is the longest side of the saved pictures, in pixels
 	MaxSide = 1600
-	quality = 85
+	// MaxPixels is the largest picture decoded, 50 megapixels: a recent phone photo. Decoding takes up to
+	// 4 bytes per pixel, 200 MB.
+	MaxPixels = 50_000_000
+	quality   = 85
 )
 
 // ErrNotAPicture is returned for files that are not JPEG, PNG or WebP pictures
 var ErrNotAPicture = errors.New("the file must be a JPEG, PNG or WebP picture")
+
+// ErrTooManyPixels is returned for pictures larger than MaxPixels
+var ErrTooManyPixels = errors.New("the picture has more than 50 megapixels")
 
 // Process reads an uploaded picture and returns it as a JPEG of at most MaxSide pixels, turned upright.
 // Re-encoding drops all the metadata of the file: the EXIF of a phone photo holds where it was taken.
@@ -40,6 +46,15 @@ func Process(r io.Reader) ([]byte, error) {
 	case "image/jpeg", "image/png", "image/webp":
 	default:
 		return nil, ErrNotAPicture
+	}
+	// the size is read from the header before decoding: a small file can claim billions of pixels, and
+	// decoding allocates them all
+	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, ErrNotAPicture
+	}
+	if config.Width <= 0 || config.Height <= 0 || config.Width*config.Height > MaxPixels {
+		return nil, ErrTooManyPixels
 	}
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {

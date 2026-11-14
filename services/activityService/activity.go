@@ -32,7 +32,13 @@ func SumAnalyze(filePath string, user models.Users, equipment models.Equipments)
 // AnalyzeTrimmed analyses a FIT file, ignoring what was recorded after trimEnd seconds since the start
 // (0 for the whole recording), see TrimActivity. restHR gives the resting heart rate of the training score,
 // nil for DefaultRestHR.
+// At most MaxConcurrentAnalyses files are analysed at a time, ErrBusy after waiting QueueTimeout.
 func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipments, trimEnd float64, restHR RestHRFunc) (models.Activity, error) {
+	release, err := analysisSlots.acquire(QueueTimeout)
+	if err != nil {
+		return models.Activity{}, err
+	}
+	defer release()
 	var activity models.Activity
 	f, err := os.Open(filePath)
 	if err != nil {
