@@ -27,7 +27,7 @@ func CreateDeviceToken(c *gin.Context) {
 	user := middlewares.CurrentUser(c)
 
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	if body.Permissions == 0 {
@@ -45,7 +45,7 @@ func CreateDeviceToken(c *gin.Context) {
 	}
 	count, err := db.CountDeviceTokens(user.ID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	if count >= maxDeviceTokens {
@@ -63,7 +63,7 @@ func CreateDeviceToken(c *gin.Context) {
 		ExpiresAt:   body.ExpiresAt,
 	}
 	if err := db.CreateDeviceToken(&deviceToken); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"token": token, "device_token": deviceToken})
@@ -75,7 +75,7 @@ func GetDeviceTokens(c *gin.Context) {
 
 	tokens, err := db.GetDeviceTokens(user.ID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"device_tokens": tokens})
@@ -87,12 +87,12 @@ func DeleteDeviceToken(c *gin.Context) {
 
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	deleted, err := db.DeleteDeviceToken(user.ID, id)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	if !deleted {

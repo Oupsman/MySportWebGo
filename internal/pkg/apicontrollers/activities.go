@@ -34,9 +34,7 @@ func UploadActivity(c *gin.Context) {
 
 	err := c.ShouldBind(&uploadParams)
 	if err != nil {
-		if !middlewares.RequestTooLarge(c, err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		}
+		badRequest(c, err)
 		return
 	}
 	if uploadParams.File == nil {
@@ -49,7 +47,7 @@ func UploadActivity(c *gin.Context) {
 	// count := uploadParams.Count
 	baseDir := filepath.Join(activityService.MediaDir, user.UUID.String(), "Activities")
 	if err := os.MkdirAll(baseDir, 0770); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 
@@ -57,21 +55,20 @@ func UploadActivity(c *gin.Context) {
 	// with the same file name, nor stay on disk
 	tmp, err := os.CreateTemp(baseDir, "upload-*.fit")
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	tmpPath := tmp.Name()
 	tmp.Close()
 	defer os.Remove(tmpPath) // fails harmlessly once the file is moved in place
 	if err = c.SaveUploadedFile(file, tmpPath); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		// the upload was read when binding: writing it is the server's failure
+		internalError(c, err)
 		return
 	}
 	activity, err := activityService.AnalyzeTrimmed(tmpPath, user, equipment, 0, activityService.UserRestHR(&db, user.ID))
 	if err != nil {
-		if !serverBusy(c, err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		}
+		analysisError(c, err)
 		return
 	}
 	activity.ID = uuid.New()
@@ -80,7 +77,7 @@ func UploadActivity(c *gin.Context) {
 	// checked again when saving; checked here to answer before generating the thumbnail, which is slow
 	existing, err := db.FindDuplicateActivity(user.ID, activity.Sport, activity.Date)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	if existing != nil {
@@ -92,7 +89,7 @@ func UploadActivity(c *gin.Context) {
 	if item == 0 {
 		err = db.ResetImportStatus(user.ID)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 
@@ -101,7 +98,7 @@ func UploadActivity(c *gin.Context) {
 	err = activityService.GenerateThumbnail(activity)
 	if err != nil {
 		if !serverBusy(c, err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			internalError(c, err)
 		}
 		return
 	}
@@ -122,22 +119,11 @@ func UploadActivity(c *gin.Context) {
 			c.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": err.Error(), "id": duplicate.ExistingID.String()})
 			return
 		}
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
-}
-
-// serverBusy answers 503 and returns true when err is activityService.ErrBusy: the server has too much
-// heavy work queued, the client can send the request again later
-func serverBusy(c *gin.Context, err error) bool {
-	if !errors.Is(err, activityService.ErrBusy) {
-		return false
-	}
-	c.Header("Retry-After", "30")
-	c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
-	return true
 }
 
 func ListActivities(c *gin.Context) {
@@ -145,18 +131,18 @@ func ListActivities(c *gin.Context) {
 	user := middlewares.CurrentUser(c)
 	start, err := strconv.Atoi((c.Param("start")))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	count, err := strconv.Atoi(c.Param("count"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 
 	activities, err := db.GetActivitiesByUser(user.ID, start, count)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 
@@ -171,13 +157,13 @@ func UpdateActivity(c *gin.Context) {
 
 	activityUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 
 	activity, err := db.GetActivity(activityUUID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		lookupError(c, err, "activity")
 		return
 	}
 	if activity.User.ID != user.ID {
@@ -186,7 +172,7 @@ func UpdateActivity(c *gin.Context) {
 	}
 	err = c.ShouldBindJSON(&newActivity)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	if newActivity.EquipmentID != nil {
@@ -202,7 +188,7 @@ func UpdateActivity(c *gin.Context) {
 	}
 	newActivity.EquipmentID, err = activityService.EquipmentOnUpdate(&db, *activity, newActivity.IsCommute, newActivity.EquipmentID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	activity.Title = newActivity.Title
@@ -217,7 +203,7 @@ func UpdateActivity(c *gin.Context) {
 	activity.Visibility = newActivity.Visibility
 	err = db.UpdateActivity(activity)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
@@ -228,12 +214,12 @@ func GetActivity(c *gin.Context) {
 
 	activityUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	activity, err := db.GetActivity(activityUUID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		lookupError(c, err, "activity")
 		return
 	}
 
@@ -261,13 +247,13 @@ func DeleteActivity(c *gin.Context) {
 
 	activityUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 
 	activity, err := db.GetActivity(activityUUID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		lookupError(c, err, "activity")
 		return
 	}
 	if activity.User.ID != user.ID {
@@ -276,7 +262,7 @@ func DeleteActivity(c *gin.Context) {
 	}
 	err = activityService.DeleteActivity(&db, activity, App.Logger)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
@@ -291,14 +277,14 @@ func TrimActivity(c *gin.Context) {
 
 	activityUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	var params struct {
 		End *float64 `json:"end" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&params); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	if *params.End < 0 {
@@ -307,7 +293,7 @@ func TrimActivity(c *gin.Context) {
 	}
 	activity, err := db.GetActivity(activityUUID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		lookupError(c, err, "activity")
 		return
 	}
 	if activity.User.ID != user.ID {
@@ -317,9 +303,7 @@ func TrimActivity(c *gin.Context) {
 	trimmed, err := activityService.TrimActivity(&db, activity, *params.End, App.Logger)
 	if err != nil {
 		App.Logger.Warn().Err(err).Str("activity", activity.ID.String()).Float64("end", *params.End).Msg("activity not trimmed")
-		if !serverBusy(c, err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		}
+		analysisError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"id": trimmed.ID.String(), "trim_end": trimmed.TrimEnd})
@@ -331,12 +315,12 @@ func GetSimilarActivities(c *gin.Context) {
 
 	activityUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	activity, err := db.GetActivity(activityUUID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		lookupError(c, err, "activity")
 		return
 	}
 	if activity.User.ID != user.ID {
@@ -349,12 +333,12 @@ func GetSimilarActivities(c *gin.Context) {
 	if activity.RouteID != nil {
 		similar, err = db.GetActivitiesByRoute(*activity.RouteID, activity.ID)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		route, err = db.GetRoute(*activity.RouteID)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 	}
@@ -441,7 +425,7 @@ func SearchActivities(c *gin.Context) {
 
 	search, err := db.SearchActivities(user.ID, filter, sort, order == "desc", page, perPage, location)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, search)
@@ -457,16 +441,16 @@ func SetRouteCommute(c *gin.Context) {
 
 	routeUUID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	route, err := db.GetRoute(routeUUID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "unknown route"})
+		lookupError(c, err, "route")
 		return
 	}
 	if route.UserID != user.ID {
@@ -476,7 +460,7 @@ func SetRouteCommute(c *gin.Context) {
 
 	updated, err := db.SetRouteCommute(route.ID, *body.IsCommute)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"updated": updated})
@@ -488,7 +472,7 @@ func FindDuplicates(c *gin.Context) {
 	user := middlewares.CurrentUser(c)
 	groups, err := db.FindDuplicates(user.ID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"groups": groups})

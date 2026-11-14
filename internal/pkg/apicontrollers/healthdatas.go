@@ -31,9 +31,7 @@ func ImportHealthDatas(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
 	user := middlewares.CurrentUser(c)
 	if err := c.ShouldBindJSON(&body); err != nil {
-		if !middlewares.RequestTooLarge(c, err) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		}
+		badRequest(c, err)
 		return
 	}
 	if len(body.Measures) > maxHealthImport {
@@ -56,7 +54,7 @@ func ImportHealthDatas(c *gin.Context) {
 	}
 	result, err := db.ImportHealthDatas(user.ID, valid)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"created": result.Created, "merged": result.Merged, "unchanged": result.Unchanged,
@@ -69,7 +67,7 @@ func CreateHealthData(c *gin.Context) {
 	var healthData models.HealthData
 	err := c.ShouldBindJSON(&healthData)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	// set after binding, so the request body can't choose them
@@ -81,7 +79,7 @@ func CreateHealthData(c *gin.Context) {
 	}
 	err = db.CreateHealthData(&healthData)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, healthData)
@@ -104,7 +102,7 @@ func healthDataOwned(c *gin.Context) (models.HealthData, bool) {
 		return models.HealthData{}, false
 	}
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return models.HealthData{}, false
 	}
 	return healthData, true
@@ -118,7 +116,7 @@ func UpdateHealthData(c *gin.Context) {
 	}
 	var update models.HealthData
 	if err := c.ShouldBindJSON(&update); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	// only the measured values, ownership and id come from the database
@@ -130,7 +128,7 @@ func UpdateHealthData(c *gin.Context) {
 		return
 	}
 	if err := db.UpdateHealthData(&update); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, update)
@@ -143,7 +141,7 @@ func DeleteHealthData(c *gin.Context) {
 		return
 	}
 	if err := db.DeleteHealthData(healthData.UserID, healthData.ID); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": "health data deleted"})
@@ -154,7 +152,7 @@ func GetHealthDatas(c *gin.Context) {
 	user := middlewares.CurrentUser(c)
 	healthDatas, err := db.GetHealthDatas(user.ID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, healthDatas)
@@ -178,7 +176,7 @@ func GetWeightTarget(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
 	estimate, err := weightEstimate(&db, middlewares.CurrentUser(c))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, estimate)
@@ -192,7 +190,7 @@ func SetWeightTarget(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
 	user := middlewares.CurrentUser(c)
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	if *body.Target != 0 && (*body.Target < 20 || *body.Target > 500) {
@@ -200,13 +198,13 @@ func SetWeightTarget(c *gin.Context) {
 		return
 	}
 	if err := db.SetWeightObjective(user.ID, *body.Target); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	user.WeightObjective = *body.Target
 	estimate, err := weightEstimate(&db, user)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, estimate)

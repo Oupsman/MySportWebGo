@@ -129,6 +129,11 @@ func abort(c *gin.Context, authErr *authError) {
 		message = "unauthorized: " + message
 	case http.StatusForbidden:
 		message = "forbidden: " + message
+	default:
+		// the database failed: its error tells the server's internals, it is only logged
+		c.MustGet("App").(*app.App).Logger.Error().Err(authErr.err).Str("route", c.FullPath()).
+			Msg("authentication failed")
+		message = "internal error, see the server logs"
 	}
 	c.AbortWithStatusJSON(authErr.status, gin.H{
 		"message": message,
@@ -151,28 +156,29 @@ func IsAuthorized(permissions ...models.Permission) gin.HandlerFunc {
 	}
 }
 
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
 // IsAdmin requires a session token of an admin, device tokens are refused
-func IsAdmin() gin.HandlerFunc {
-
-	return func(c *gin.Context) {
-		user, authErr := authenticate(c, 0)
-		if authErr != nil {
-			abort(c, authErr)
-			return
-		}
-
-		// the role of the database, not the one of the token: a demoted admin loses access immediately
-		if user.Role != "Admin" {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"message": "forbidden",
-			})
-			return
-		}
-
-		c.Set(userKey, user)
-		c.Next()
-	}
-}
+// func IsAdmin() gin.HandlerFunc {
+//
+// 	return func(c *gin.Context) {
+// 		user, authErr := authenticate(c, 0)
+// 		if authErr != nil {
+// 			abort(c, authErr)
+// 			return
+// 		}
+//
+// 		// the role of the database, not the one of the token: a demoted admin loses access immediately
+// 		if user.Role != "Admin" {
+// 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+// 				"message": "forbidden",
+// 			})
+// 			return
+// 		}
+//
+// 		c.Set(userKey, user)
+// 		c.Next()
+// 	}
+// }
 
 // OptionalUser sets the user of the request when there is an Authorization header, for routes also open
 // to anonymous users. An invalid token is refused rather than treated as anonymous, and a device token

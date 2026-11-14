@@ -8,6 +8,7 @@ import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/pictures"
 	"MySportWeb/internal/pkg/vars"
+	"os"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -33,9 +34,10 @@ const (
 	RegistrationsPerHour = 5
 )
 
-type WebServer struct {
-	Router *gin.Engine
-}
+// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
+// type WebServer struct {
+// 	Router *gin.Engine
+// }
 
 func AppHandler(App *app.App) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -46,6 +48,11 @@ func AppHandler(App *app.App) gin.HandlerFunc {
 
 func RunHttp(listenAddr string, App *app.App) error {
 
+	// release mode unless GIN_MODE says otherwise (debug for development): debug mode logs the routes and
+	// its warnings at each start
+	if os.Getenv(gin.EnvGinMode) == "" {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	httpRouter := gin.Default()
 	// the IP of the client (rate limits, logs) comes from X-Forwarded-For only behind these proxies: by
 	// default gin trusts it from anyone, a client could choose its IP
@@ -75,12 +82,11 @@ func RunHttp(listenAddr string, App *app.App) error {
 		c.Next()
 	})
 	httpRouter.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{vars.Domain},
-		AllowMethods:     []string{"GET", "OPTIONS", "POST", "DELETE"},
-		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
-		ExposeHeaders:    []string{"Content-Length", "Retry-After"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
+		AllowOrigins:  []string{vars.Domain},
+		AllowMethods:  []string{"GET", "OPTIONS", "POST", "DELETE"},
+		AllowHeaders:  []string{"Origin", "Authorization", "Content-Type"},
+		ExposeHeaders: []string{"Content-Length", "Retry-After"},
+		MaxAge:        12 * time.Hour,
 	}))
 
 	httpRouter.GET("/", apicontrollers.HealthCheck)

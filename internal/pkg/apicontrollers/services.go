@@ -54,7 +54,7 @@ func equipmentService(c *gin.Context) (models.Services, bool) {
 	}
 	serviceID, err := utils.GetUUID(c.Param("service"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return models.Services{}, false
 	}
 	service, err := db.GetService(equipment.ID, serviceID)
@@ -63,7 +63,7 @@ func equipmentService(c *gin.Context) (models.Services, bool) {
 		return models.Services{}, false
 	}
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return models.Services{}, false
 	}
 	return service, true
@@ -78,7 +78,7 @@ func CreateService(c *gin.Context) {
 
 	var input serviceInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	service := models.Services{ID: uuid.Nil, EquipmentID: equipment.ID}
@@ -88,7 +88,7 @@ func CreateService(c *gin.Context) {
 	}
 
 	if err := db.CreateService(&service); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, service)
@@ -102,7 +102,7 @@ func GetServices(c *gin.Context) {
 	}
 	services, err := db.GetServices(equipment.ID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, services)
@@ -125,7 +125,7 @@ func UpdateService(c *gin.Context) {
 
 	var input serviceInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	if err := input.apply(&service); err != nil {
@@ -134,7 +134,7 @@ func UpdateService(c *gin.Context) {
 	}
 
 	if err := db.UpdateService(&service); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, service)
@@ -147,7 +147,7 @@ func DeleteService(c *gin.Context) {
 		return
 	}
 	if err := db.DeleteService(service.EquipmentID, service.ID); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": "service deleted"})
