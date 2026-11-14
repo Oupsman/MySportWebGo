@@ -18,6 +18,7 @@ import (
 const (
 	userKey        = "User"
 	deviceTokenKey = "DeviceToken"
+	sessionKey     = "Session" // the session token of the request, set by identify
 )
 
 // authError is a refused authentication, with the HTTP status to answer
@@ -31,8 +32,8 @@ func refuse(status int, message string) *authError {
 }
 
 // identify returns the user of the Authorization header, loaded from the database: a token of a
-// deleted user is refused. It accepts the session tokens (JWT) of the web application, and the valid
-// device tokens (msw_...), returned for the latter.
+// deleted user is refused. It accepts the session tokens (JWT) of the web application not logged out
+// nor ended by a password change, and the valid device tokens (msw_...), returned for the latter.
 func identify(c *gin.Context) (models.Users, *models.DeviceTokens, *authError) {
 	header := c.GetHeader("Authorization")
 	token, err := utils.BearerToken(header)
@@ -42,17 +43,30 @@ func identify(c *gin.Context) (models.Users, *models.DeviceTokens, *authError) {
 	db := c.MustGet("App").(*app.App).DB
 
 	if !strings.HasPrefix(token, utils.DeviceTokenPrefix) {
-		userUUID, err := utils.GetUserUUID(header)
+		session, err := utils.ParseSession(header)
 		if err != nil {
 			return models.Users{}, nil, &authError{http.StatusUnauthorized, err}
 		}
-		user, err := db.GetUserByUUID(userUUID)
+		user, err := db.GetUserByUUID(session.UserUUID)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Users{}, nil, refuse(http.StatusUnauthorized, "unknown user")
 		}
 		if err != nil {
 			return models.Users{}, nil, &authError{http.StatusInternalServerError, err}
 		}
+		// the token dates are in seconds: a token issued in the second of the change stays valid, the one
+		// returned with the new password
+		if session.IssuedAt.Unix() < user.SessionsValidAfter.Unix() {
+			return models.Users{}, nil, refuse(http.StatusUnauthorized, "session ended, log in again")
+		}
+		revoked, err := db.IsSessionRevoked(session.ID)
+		if err != nil {
+			return models.Users{}, nil, &authError{http.StatusInternalServerError, err}
+		}
+		if revoked {
+			return models.Users{}, nil, refuse(http.StatusUnauthorized, "logged out")
+		}
+		c.Set(sessionKey, session)
 		return user, nil, nil
 	}
 
@@ -203,6 +217,16 @@ func IsDeviceToken() gin.HandlerFunc {
 // CurrentDeviceToken returns the device token set by IsDeviceToken. It panics on a route without it.
 func CurrentDeviceToken(c *gin.Context) models.DeviceTokens {
 	return c.MustGet(deviceTokenKey).(models.DeviceTokens)
+}
+
+// CurrentSession returns the session token of the request, false for a device token or an anonymous request
+func CurrentSession(c *gin.Context) (utils.Session, bool) {
+	value, ok := c.Get(sessionKey)
+	if !ok {
+		return utils.Session{}, false
+	}
+	session, ok := value.(utils.Session)
+	return session, ok
 }
 
 // CurrentUser returns the user set by IsAuthorized or IsAdmin. It panics on a route without them.

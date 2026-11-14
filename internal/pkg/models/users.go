@@ -2,8 +2,10 @@ package models
 
 import (
 	"MySportWeb/internal/pkg/types"
+	"errors"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"time"
 )
 
@@ -24,6 +26,33 @@ type Users struct {
 	WeightObjective  float64   `json:"weight_objective" gorm:"default:0"` // the target weight, kg, 0 without
 	SecurityDistance uint16    `json:"security_distance" gorm:"default:500"`
 	HomeTown         string    `json:"home_town" gorm:"default:'Earth'"`
+	// the session tokens issued before are refused: set when the password changes
+	SessionsValidAfter time.Time `json:"-"`
+}
+
+// RevokedSessions are the session tokens logged out before they expire, by their id (jti). They are
+// forgotten once expired: the token is refused anyway.
+type RevokedSessions struct {
+	ID        string    `gorm:"primaryKey"`
+	ExpiresAt time.Time `gorm:"index;not null"`
+}
+
+// RevokeSession refuses a session token from now on, and forgets the revoked tokens expired since
+func (db *DB) RevokeSession(id string, expiresAt time.Time) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("expires_at < ?", time.Now()).Delete(&RevokedSessions{}).Error; err != nil {
+			return err
+		}
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).
+			Create(&RevokedSessions{ID: id, ExpiresAt: expiresAt}).Error
+	})
+}
+
+// IsSessionRevoked tells whether a session token was logged out
+func (db *DB) IsSessionRevoked(id string) (bool, error) {
+	var count int64
+	err := db.Model(&RevokedSessions{}).Where("id = ?", id).Count(&count).Error
+	return count > 0, err
 }
 
 type Validations struct {
@@ -54,6 +83,72 @@ func (db *DB) GetUserByUUID(uuid uuid.UUID) (Users, error) {
 	return user, nil
 }
 
+// ErrUsernameTaken and ErrEmailTaken are returned by RegisterUser when another user has them
+var (
+	ErrUsernameTaken = errors.New("this username is already used")
+	ErrEmailTaken    = errors.New("this email is already used")
+)
+
+const advisoryLockRegistration = 2
+
+// RegisterUser saves a new user, whose password is already hashed. The first user of the instance is its
+// admin, the next ones are users: the registrations are serialized, two can't both be the first. A deleted
+// user keeps its username and email (they stay in the table), and the instance never gets a new first user.
+func (db *DB) RegisterUser(user *Users) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(?::int, 0)", advisoryLockRegistration).Error; err != nil {
+			return err
+		}
+		var taken int64
+		if err := tx.Unscoped().Model(&Users{}).Where("username = ?", user.Username).Count(&taken).Error; err != nil {
+			return err
+		}
+		if taken > 0 {
+			return ErrUsernameTaken
+		}
+		if err := tx.Unscoped().Model(&Users{}).Where("lower(email) = lower(?)", user.Email).Count(&taken).Error; err != nil {
+			return err
+		}
+		if taken > 0 {
+			return ErrEmailTaken
+		}
+		var users int64
+		if err := tx.Unscoped().Model(&Users{}).Count(&users).Error; err != nil {
+			return err
+		}
+		user.Role = "User"
+		if users == 0 {
+			user.Role = "Admin"
+		}
+		return tx.Create(user).Error
+	})
+}
+
+// UpdateUserFields changes some columns of a user, the others are kept: a field the client didn't send isn't
+// erased, and what another request changed meanwhile isn't overwritten. A new email must not be another
+// user's one, ErrEmailTaken otherwise: checked as RegisterUser does, with the registrations serialized.
+func (db *DB) UpdateUserFields(id uint, fields map[string]interface{}) error {
+	if len(fields) == 0 {
+		return nil
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		if email, ok := fields["email"]; ok {
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(?::int, 0)", advisoryLockRegistration).Error; err != nil {
+				return err
+			}
+			var taken int64
+			err := tx.Unscoped().Model(&Users{}).Where("lower(email) = lower(?) AND id <> ?", email, id).Count(&taken).Error
+			if err != nil {
+				return err
+			}
+			if taken > 0 {
+				return ErrEmailTaken
+			}
+		}
+		return tx.Model(&Users{}).Where("id = ?", id).Updates(fields).Error
+	})
+}
+
 func (db *DB) CreateUser(user types.UserBody) error {
 	var newUser = Users{
 		Username: user.Username,
@@ -61,15 +156,6 @@ func (db *DB) CreateUser(user types.UserBody) error {
 		Email:    user.Email,
 	}
 	result := db.Create(&newUser)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
-}
-
-func (db *DB) UpdateUser(user Users) error {
-
-	result := db.Save(user)
 	if result.Error != nil {
 		return result.Error
 	}

@@ -44,6 +44,7 @@ func ParseToken(tokenString string) (claims jwt.MapClaims, err error) {
 		// tokens are only signed with HS256 by Login, refuse any other algorithm
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
 		jwt.WithExpirationRequired(),
+		jwt.WithIssuedAt(), // refuses the tokens issued in the future
 		jwt.WithIssuer("mysportweb"),
 	)
 	if err != nil {

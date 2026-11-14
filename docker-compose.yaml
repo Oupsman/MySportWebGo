@@ -23,7 +23,9 @@ services:
       DBPASSWORD: ${MSW_DBPASSWORD:?set MSW_DBPASSWORD}
       DBNAME: ${MSW_DBNAME:-mysportweb}
       DBSSLMODE: ${MSW_DBSSLMODE:-disable}
-      SECRET_KEY: ${MSW_SECRET_KEY:?set MSW_SECRET_KEY, a long random string signing the sessions}
+      SECRET_KEY: ${MSW_SECRET_KEY:?set MSW_SECRET_KEY, at least 32 random bytes signing the sessions}
+      # empty: the loopback and the private networks
+      TRUSTED_PROXIES: ${MSW_TRUSTED_PROXIES:-}
       # the public URL of the app: the API refuses the requests of any other origin
       DOMAIN: ${MSW_DOMAIN:?set MSW_DOMAIN, the URL users open, e.g. https://sport.example.com}
       LISTEN_PORT: "8080"

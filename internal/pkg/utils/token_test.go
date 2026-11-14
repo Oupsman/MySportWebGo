@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 const testUUID = "3c664c0d-a791-489c-a33a-fbce04e43184"
@@ -118,5 +119,42 @@ func TestNewDeviceToken(t *testing.T) {
 	// a device token is not a JWT
 	if _, err := ParseBearerToken("Bearer " + token); err == nil {
 		t.Fatal("a device token parsed as a session token")
+	}
+}
+
+func TestSessionTokens(t *testing.T) {
+	vars.SecretKey = "testsecret"
+	userUUID := uuid.MustParse(testUUID)
+	now := time.Now()
+	token, issued, err := NewSessionToken(42, userUUID, "User", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := ParseSession("Bearer " + token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session != issued || session.ID == "" || session.UserUUID != userUUID ||
+		session.IssuedAt.Unix() != now.Unix() || !session.ExpiresAt.After(now.Add(SessionLifetime-time.Second)) {
+		t.Errorf("parsed %+v, issued %+v", session, issued)
+	}
+	if _, other, _ := NewSessionToken(42, userUUID, "User", now); other.ID == session.ID {
+		t.Error("two sessions with the same id")
+	}
+
+	// the tokens signed before the sessions could be revoked: without id nor issue date
+	if _, err := ParseSession("Bearer " + signToken(t, jwt.SigningMethodHS256, []byte(vars.SecretKey), validClaims())); err == nil {
+		t.Error("token without jti nor iat accepted")
+	}
+	withID := validClaims()
+	withID["jti"] = "x"
+	if _, err := ParseSession("Bearer " + signToken(t, jwt.SigningMethodHS256, []byte(vars.SecretKey), withID)); err == nil {
+		t.Error("token without iat accepted")
+	}
+	// issued in the future
+	future := validClaims()
+	future["jti"], future["iat"] = "x", time.Now().Add(time.Hour).Unix()
+	if _, err := ParseSession("Bearer " + signToken(t, jwt.SigningMethodHS256, []byte(vars.SecretKey), future)); err == nil {
+		t.Error("token issued in the future accepted")
 	}
 }

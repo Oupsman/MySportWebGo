@@ -36,7 +36,7 @@ func testDB(t *testing.T) *models.DB {
 	if err := models.CreateOrMigrate(db); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("TRUNCATE device_tokens, users RESTART IDENTITY CASCADE").Error; err != nil {
+	if err := db.Exec("TRUNCATE device_tokens, revoked_sessions, users RESTART IDENTITY CASCADE").Error; err != nil {
 		t.Fatal(err)
 	}
 	return db
@@ -53,10 +53,30 @@ func TestAuthorization(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	session, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	session, _, err := utils.NewSessionToken(user.ID, user.UUID, user.Role, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// signed before the sessions could be revoked: no id, no issue date
+	legacy, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"exp": time.Now().Add(time.Hour).Unix(), "iss": "mysportweb", "sub": user.ID, "uuid": user.UUID.String(),
 	}).SignedString([]byte(vars.SecretKey))
 	if err != nil {
+		t.Fatal(err)
+	}
+	loggedOut, loggedOutSession, err := utils.NewSessionToken(user.ID, user.UUID, user.Role, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RevokeSession(loggedOutSession.ID, loggedOutSession.ExpiresAt); err != nil {
+		t.Fatal(err)
+	}
+	// issued before the password changed
+	beforeChange, _, err := utils.NewSessionToken(user.ID, user.UUID, user.Role, time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&user).Update("sessions_valid_after", time.Now().Add(-time.Minute)).Error; err != nil {
 		t.Fatal(err)
 	}
 	device := func(permissions models.Permission, expiresAt time.Time) string {
@@ -98,6 +118,10 @@ func TestAuthorization(t *testing.T) {
 	}{
 		{"session on a permission route", "/read", session, 200},
 		{"session on a session route", "/session", session, 200},
+		{"session without id nor issue date", "/session", legacy, 401},
+		{"logged out session", "/session", loggedOut, 401},
+		{"session opened before the password changed", "/session", beforeChange, 401},
+		{"logged out session on an optional route", "/public", loggedOut, 401},
 		{"device with the permission", "/read", reader, 200},
 		{"device without the permission", "/delete", reader, 403},
 		{"device on a session route", "/session", reader, 403},

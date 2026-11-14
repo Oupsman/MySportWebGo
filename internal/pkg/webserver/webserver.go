@@ -27,6 +27,12 @@ const (
 	HealthImportBodyLimit = 4 << 20
 )
 
+// The attempts accepted per IP: every login and registration hashes a password, about a second of CPU
+const (
+	LoginsPerMinute      = 10
+	RegistrationsPerHour = 5
+)
+
 type WebServer struct {
 	Router *gin.Engine
 }
@@ -41,6 +47,11 @@ func AppHandler(App *app.App) gin.HandlerFunc {
 func RunHttp(listenAddr string, App *app.App) error {
 
 	httpRouter := gin.Default()
+	// the IP of the client (rate limits, logs) comes from X-Forwarded-For only behind these proxies: by
+	// default gin trusts it from anyone, a client could choose its IP
+	if err := httpRouter.SetTrustedProxies(vars.TrustedProxies); err != nil {
+		return err
+	}
 	// only the thumbnails and the equipment pictures, never the FIT files nor a directory listing
 	httpRouter.GET("/MEDIA/*path", apicontrollers.ServeMedia)
 	httpRouter.HEAD("/MEDIA/*path", apicontrollers.ServeMedia)
@@ -67,7 +78,7 @@ func RunHttp(listenAddr string, App *app.App) error {
 		AllowOrigins:     []string{vars.Domain},
 		AllowMethods:     []string{"GET", "OPTIONS", "POST", "DELETE"},
 		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
-		ExposeHeaders:    []string{"Content-Length"},
+		ExposeHeaders:    []string{"Content-Length", "Retry-After"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
@@ -83,8 +94,11 @@ func RunHttp(listenAddr string, App *app.App) error {
 
 	apiv1.GET("/healthcheck", apicontrollers.HealthCheck)
 	// Users
-	apiv1.POST("/user/login", apicontrollers.Login)
-	apiv1.POST("/user/register", apicontrollers.Register)
+	// per IP; the logins are also limited per username, see apicontrollers.Login
+	apiv1.POST("/user/login", middlewares.RateLimit(middlewares.NewRateLimiter(LoginsPerMinute, time.Minute)),
+		apicontrollers.Login)
+	apiv1.POST("/user/register", middlewares.RateLimit(middlewares.NewRateLimiter(RegistrationsPerHour, time.Hour)),
+		apicontrollers.Register)
 	// Routes given permissions are also open to device tokens holding them, the others to sessions only
 	apiv1.GET("/user/logout", middlewares.IsAuthorized(), apicontrollers.Logout)
 	apiv1.GET("/user/dashboard", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.Dashboard)
