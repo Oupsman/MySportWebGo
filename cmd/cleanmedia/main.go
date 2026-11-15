@@ -1,7 +1,9 @@
 // cleanmedia finds the files of MEDIA/ that no activity uses any more: thumbnails of deleted activities,
 // FIT files of deleted activities or of failed uploads. It only reports them, unless -delete is given.
 //
-// Usage, from the backend directory (it reads the database configuration in .env):
+// It connects to the database as the server does: the DB* variables of the environment, completed by the
+// .env of the current directory. Usage, from the backend directory, or in the container
+// (docker compose exec backend cleanmedia):
 //
 //	go run ./cmd/cleanmedia            report the orphan files
 //	go run ./cmd/cleanmedia -delete    remove them
@@ -13,6 +15,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"MySportWeb/internal/pkg/vars"
 
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
@@ -37,12 +41,13 @@ func main() {
 }
 
 func run(remove bool) error {
-	env, err := godotenv.Read(".env")
+	// as the server: the environment, completed by the .env of the current directory when there is one
+	_ = godotenv.Load()
+	dsn, err := vars.DatabaseDSN(os.Getenv)
 	if err != nil {
-		return fmt.Errorf("reading .env (run from the backend directory): %w", err)
+		return err
 	}
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
-		env["DBHOST"], env["DBUSER"], env["DBPASSWORD"], env["DBNAME"], env["DBPORT"])
+	dbName := os.Getenv("DBNAME")
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		return err
@@ -64,7 +69,7 @@ func run(remove bool) error {
 	}
 	// a wrong .env would make every file look orphan
 	if len(activities) == 0 && remove {
-		return fmt.Errorf("database %s has no activity: refusing to delete, check .env", env["DBNAME"])
+		return fmt.Errorf("database %s has no activity: refusing to delete, check .env", dbName)
 	}
 	knownUsers := map[string]bool{}
 	for _, u := range users {
@@ -90,7 +95,7 @@ func run(remove bool) error {
 		}
 		userUUID := dir.Name()
 		if !knownUsers[userUUID] {
-			fmt.Printf("skipped %s: no such user in database %s\n", filepath.Join(mediaDir, userUUID), env["DBNAME"])
+			fmt.Printf("skipped %s: no such user in database %s\n", filepath.Join(mediaDir, userUUID), dbName)
 			continue
 		}
 		orphanThumbnails = append(orphanThumbnails, find(filepath.Join(mediaDir, userUUID, "thumbnails"), func(name, _ string) bool {
@@ -101,7 +106,7 @@ func run(remove bool) error {
 		})...)
 	}
 
-	fmt.Printf("database %s: %d activities, %d FIT files used\n", env["DBNAME"], len(activities), len(fitFiles))
+	fmt.Printf("database %s: %d activities, %d FIT files used\n", dbName, len(activities), len(fitFiles))
 	report("thumbnails without activity", orphanThumbnails)
 	report("FIT files without activity", orphanFits)
 	if !remove {

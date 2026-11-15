@@ -22,7 +22,8 @@ services:
       DBUSER: ${MSW_DBUSER:-mysportweb}
       DBPASSWORD: ${MSW_DBPASSWORD:?set MSW_DBPASSWORD}
       DBNAME: ${MSW_DBNAME:-mysportweb}
-      DBSSLMODE: ${MSW_DBSSLMODE:-disable}
+      # prefer: TLS when the database offers it, the bundled one doesn't
+      DBSSLMODE: ${MSW_DBSSLMODE:-prefer}
       SECRET_KEY: ${MSW_SECRET_KEY:?set MSW_SECRET_KEY, at least 32 random bytes signing the sessions}
       # empty: the loopback and the private networks
       TRUSTED_PROXIES: ${MSW_TRUSTED_PROXIES:-}

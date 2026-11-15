@@ -1,10 +1,11 @@
 // hashpw resets a user's password, or prints the bcrypt hash of a password.
 //
-// Usage, from the backend directory:
+// It connects to the database as the server does: the DB* variables of the environment, completed by the
+// .env of the current directory. Usage, from the backend directory:
 //
 //	go run ./hashpw -user <username>
 //	    prompts for the new password (not echoed, asked twice) and writes it in the database
-//	    configured in .env, then checks that it can be verified
+//	    of the server, then checks that it can be verified
 //	go run ./hashpw 'my-new-password'
 //	echo 'my-new-password' | go run ./hashpw
 //	    only prints the hash, for UPDATE users SET password = '<hash>' WHERE username = '<username>';
@@ -19,6 +20,8 @@ import (
 	"os"
 	"strings"
 
+	"MySportWeb/internal/pkg/vars"
+
 	"github.com/joho/godotenv"
 	"golang.org/x/term"
 	"gorm.io/driver/postgres"
@@ -27,7 +30,7 @@ import (
 )
 
 func main() {
-	username := flag.String("user", "", "username whose password is reset in the database of .env")
+	username := flag.String("user", "", "username whose password is reset in the database of the server (DB* variables or .env)")
 	flag.Parse()
 
 	if *username != "" {
@@ -79,12 +82,13 @@ func promptPassword(prompt string) (string, error) {
 }
 
 func resetPassword(username string) error {
-	env, err := godotenv.Read(".env")
+	// as the server: the environment, completed by the .env of the current directory when there is one
+	_ = godotenv.Load()
+	dsn, err := vars.DatabaseDSN(os.Getenv)
 	if err != nil {
-		return fmt.Errorf("reading .env (run from the backend directory): %w", err)
+		return err
 	}
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
-		env["DBHOST"], env["DBUSER"], env["DBPASSWORD"], env["DBNAME"], env["DBPORT"])
+	dbName := os.Getenv("DBNAME")
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		return err
@@ -95,7 +99,7 @@ func resetPassword(username string) error {
 		return err
 	}
 	if count != 1 {
-		return fmt.Errorf("no user %q in database %s", username, env["DBNAME"])
+		return fmt.Errorf("no user %q in database %s", username, dbName)
 	}
 
 	password, err := promptPassword("New password: ")
@@ -128,6 +132,6 @@ func resetPassword(username string) error {
 	if !utils.CompareHashPassword(password, stored) {
 		return errors.New("the stored hash does not verify, something else changed it")
 	}
-	fmt.Fprintf(os.Stderr, "password of %q updated in database %s\n", username, env["DBNAME"])
+	fmt.Fprintf(os.Stderr, "password of %q updated in database %s\n", username, dbName)
 	return nil
 }

@@ -36,7 +36,9 @@ docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_POR
 
 * **Bundled database**: `COMPOSE_PROFILES=db` in `.env` starts a Postgres, its data in the `db` volume.
 * **External database**: remove `COMPOSE_PROFILES` and set `MSW_DBHOST`, `MSW_DBPORT`, `MSW_DBUSER`, `MSW_DBPASSWORD`,
-  `MSW_DBNAME`, and `MSW_DBSSLMODE` (`require`...) when it needs TLS. The tables are created at the first start.
+  `MSW_DBNAME`, and `MSW_DBSSLMODE`. The default, `prefer`, uses TLS when the database offers it without checking
+  its certificate: set `verify-full` (or `require`) for a database reached over a network you don't control.
+  The tables are created at the first start.
 * `MSW_DOMAIN` is the URL users open: the API refuses requests from any other origin.
 * The uploaded files are in the `media` volume.
 * The images are pulled from `MSW_REGISTRY` with the tag `MSW_TAG` (`latest`, a short commit sha, or a version
