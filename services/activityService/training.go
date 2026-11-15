@@ -41,7 +41,7 @@ const trimpMaxGap = 30
 // maximum heart rate of the user isn't above restHR.
 func BanisterTRIMP(activity models.Activity, restHR uint16) float64 {
 	maxHR := activity.User.GetMaxHR(activity.Date)
-	// a user without date of birth has a meaningless estimated maximum
+	// 0 without date of birth: the maximum can't be estimated
 	if maxHR <= restHR || maxHR > 250 {
 		return 0
 	}

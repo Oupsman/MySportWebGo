@@ -173,9 +173,27 @@ func (db *DB) UpdateUserFields(id uint, fields map[string]interface{}) error {
 // 	return users, nil
 // }
 
+// location returns the user's timezone, UTC when it is unknown
+func (user *Users) location() *time.Location {
+	if user.Timezone != "" {
+		if location, err := time.LoadLocation(user.Timezone); err == nil {
+			return location
+		}
+	}
+	return time.UTC
+}
+
+// GetAge returns the age of the user on date, in years, -1 when their date of birth is unknown. It grows on
+// their birthday in their timezone: the frontend saves the date of birth as a midnight there (16 May 22:00
+// UTC for 17 May in Paris). Born on 29 February, the age grows on 1 March of the other years.
 func (user *Users) GetAge(date time.Time) int {
-	age := date.Year() - user.DateOfBirth.Year()
-	if date.Month() < user.DateOfBirth.Month() && date.Day() < user.DateOfBirth.Day() {
+	if user.DateOfBirth.IsZero() {
+		return -1
+	}
+	location := user.location()
+	birth, on := user.DateOfBirth.In(location), date.In(location)
+	age := on.Year() - birth.Year()
+	if on.Month() < birth.Month() || (on.Month() == birth.Month() && on.Day() < birth.Day()) {
 		age--
 	}
 	return age
@@ -190,13 +208,20 @@ func (user *Users) GetAge(date time.Time) int {
 // 	}
 // }
 
-func (user *Users) GetMaxHR(date time.Time) uint16 {
-	// A rought estimate can be made with 220-age for men and 226-age for women
-	if user.MaxHR == 0 {
-		return uint16(220 + user.Gender*6 - user.GetAge(date))
-	}
+// maxEstimatedAge is the oldest age the maximum heart rate is estimated from: above, the date of birth is wrong
+const maxEstimatedAge = 120
 
-	return user.MaxHR
+// GetMaxHR returns the maximum heart rate of the user on date: theirs, else estimated from their age
+// (220 - age for men, 226 - age for women); 0 when it can't be, without date of birth
+func (user *Users) GetMaxHR(date time.Time) uint16 {
+	if user.MaxHR != 0 {
+		return user.MaxHR
+	}
+	age := user.GetAge(date)
+	if age < 0 || age > maxEstimatedAge {
+		return 0
+	}
+	return uint16(220 + user.Gender*6 - age)
 }
 
 // DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
