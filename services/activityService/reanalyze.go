@@ -61,6 +61,12 @@ func BackfillTimeStamps(db *models.DB, logger zerolog.Logger) error {
 			err = db.UpdateActivityTimeStamps(id, nil, &public, vars.Engine_version)
 		} else {
 			public = analysed.PublicGpsPoints
+			// the new engine may name the device differently: the activity goes to the device of that name
+			analysed.DeviceID, err = db.FindOrCreateDevice(stored.UserID, analysed.Device, analysed.DeviceName,
+				models.AltitudeCorrectionNone)
+			if err != nil {
+				return err
+			}
 			err = db.UpdateActivityTimeStamps(id, &analysed, nil, vars.Engine_version)
 			if err == nil {
 				err = fixRouteEndpoints(db, stored.RouteID, analysed.StartPosition, analysed.EndPosition)

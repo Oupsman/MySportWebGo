@@ -133,6 +133,12 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.POST("/activity/:id", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.UpdateActivity)
 	apiv1.POST("/activity/:id/trim", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.TrimActivity)
 
+	// recording devices, created at the import of their first activity; their settings change how their
+	// activities are analysed
+	apiv1.GET("/device/all", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.GetDevices)
+	apiv1.GET("/device/:id", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.GetDevice)
+	apiv1.POST("/device/:id", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.UpdateDevice)
+
 	// routes
 	apiv1.POST("/route/:id/commute", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.SetRouteCommute)
 

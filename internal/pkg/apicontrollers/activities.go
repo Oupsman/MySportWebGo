@@ -348,7 +348,7 @@ func GetSimilarActivities(c *gin.Context) {
 
 // SearchActivities returns a page of the user's activities:
 // ?sport=a&sport=b&from=YYYY-MM-DD&to=YYYY-MM-DD (included, in the user's timezone)&q=title
-// &equipment=<id>|none&device=<name>|none&commute=true|false&sort=date|title|distance|duration|speed|elevation&order=asc|desc
+// &equipment=<id>|none&device=<name>|none&device_id=<id>&commute=true|false&sort=date|title|distance|duration|speed|elevation&order=asc|desc
 // &page=1&per_page=25 (100 at most)
 func SearchActivities(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
@@ -392,6 +392,14 @@ func SearchActivities(c *gin.Context) {
 		filter.NoDevice = true
 	default:
 		filter.Device = device
+	}
+	if device := c.Query("device_id"); device != "" {
+		id, err := uuid.Parse(device)
+		if err != nil {
+			bad("device_id must be an id")
+			return
+		}
+		filter.DeviceID = &id
 	}
 	if commute := c.Query("commute"); commute != "" {
 		isCommute, err := strconv.ParseBool(commute)

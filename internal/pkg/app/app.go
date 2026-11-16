@@ -34,7 +34,13 @@ func NewApp(logger zerolog.Logger, driver string, dsn string) (*App, error) {
 
 func (app *App) Start() error {
 	go func() {
-		err := activityService.BackfillRoutes(&app.DB, app.Logger)
+		linked, err := app.DB.BackfillDevices()
+		if err != nil {
+			app.Logger.Error().Err(err).Msg("failed to create the devices of activities")
+		} else if linked > 0 {
+			app.Logger.Info().Int64("activities", linked).Msg("activities linked to their device")
+		}
+		err = activityService.BackfillRoutes(&app.DB, app.Logger)
 		if err != nil {
 			app.Logger.Error().Err(err).Msg("failed to assign routes to activities")
 		}

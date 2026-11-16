@@ -16,9 +16,10 @@ type ActivityFilter struct {
 	Query       string    // in the title, case insensitive
 	EquipmentID *uuid.UUID
 	NoEquipment bool
-	Device      string // the name of the recording device
-	NoDevice    bool   // the activities whose file doesn't tell it
-	Commute     *bool  // only the commutes, or only the other activities
+	Device      string     // the name of the recording device
+	DeviceID    *uuid.UUID // the recording device: a unit, when the name is the one of a model
+	NoDevice    bool       // the activities whose file doesn't tell it
+	Commute     *bool      // only the commutes, or only the other activities
 }
 
 // SortColumns are the columns the activities can be sorted by
@@ -55,6 +56,8 @@ func (f ActivityFilter) apply(query *gorm.DB, userID uint) *gorm.DB {
 	if f.NoDevice {
 		// NULL: imported before the devices were read, until the re-analysis
 		query = query.Where("activities.device_name IS NULL OR activities.device_name = ''")
+	} else if f.DeviceID != nil {
+		query = query.Where("activities.device_id = ?", *f.DeviceID)
 	} else if f.Device != "" {
 		query = query.Where("activities.device_name = ?", f.Device)
 	}
@@ -104,9 +107,10 @@ func (db *DB) SearchActivities(userID uint, filter ActivityFilter, sort string, 
 		return search, err
 	}
 	// the most used first
-	err = db.Table("activities").Select("device_name AS name, COUNT(*) AS activities").
-		Where("user_id = ? AND device_name <> ''", userID).Group("device_name").
-		Order("COUNT(*) DESC").Order("device_name").Scan(&search.Devices).Error
+	err = db.Table("devices").Select("devices.id, devices.name, devices.serial, COUNT(*) AS activities").
+		Joins("JOIN activities ON activities.device_id = devices.id").Where("devices.user_id = ?", userID).
+		Group("devices.id").Order("COUNT(*) DESC").Order("devices.name").Order("devices.serial").
+		Scan(&search.Devices).Error
 	if err != nil {
 		return search, err
 	}

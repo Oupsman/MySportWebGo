@@ -224,8 +224,10 @@ type ActivityRow struct {
 
 // DeviceCount is a device of the user and how many activities it recorded
 type DeviceCount struct {
-	Name       string `json:"name"`
-	Activities int64  `json:"activities"`
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	Serial     string    `json:"serial_number"` // tells apart the units of the same model, empty when unknown
+	Activities int64     `json:"activities"`
 }
 
 // DuplicateActivity is an activity of a group of duplicates, ImportedAt telling which copy came first

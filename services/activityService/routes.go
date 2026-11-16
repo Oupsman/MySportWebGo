@@ -131,6 +131,13 @@ func CreateActivity(db *models.DB, activity *models.Activity, store func(activit
 		if err := assignRoute(txDB, activity); err != nil {
 			return err
 		}
+		// a new device starts without correction: the user enables it on the device page
+		deviceID, err := txDB.FindOrCreateDevice(activity.UserID, activity.Device, activity.DeviceName,
+			models.AltitudeCorrectionNone)
+		if err != nil {
+			return err
+		}
+		activity.DeviceID = deviceID
 		if store != nil {
 			if err := store(activity); err != nil {
 				return err

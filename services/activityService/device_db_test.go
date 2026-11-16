@@ -28,10 +28,15 @@ func TestDeviceSearch(t *testing.T) {
 		return activity
 	}
 	karoo := create(sameRouteFiles[0])
-	create(sameRouteFiles[1])
+	karoo2 := create(sameRouteFiles[1])
 	fenix := create("2022-08-30-18-12-37")
 	if karoo.DeviceName != "Hammerhead Karoo 2" || fenix.DeviceName != "Garmin Fenix 6X" {
 		t.Fatalf("devices %q and %q", karoo.DeviceName, fenix.DeviceName)
+	}
+	// the import creates the device at its first activity, and links the next ones to it
+	if karoo.DeviceID == nil || fenix.DeviceID == nil || karoo2.DeviceID == nil ||
+		*karoo2.DeviceID != *karoo.DeviceID || *fenix.DeviceID == *karoo.DeviceID {
+		t.Errorf("device ids %v, %v and %v", karoo.DeviceID, karoo2.DeviceID, fenix.DeviceID)
 	}
 	// entered by hand: no device
 	manual := models.Activity{UserID: user.ID, Sport: "running", Title: "manual", Date: time.Now()}
