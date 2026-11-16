@@ -39,7 +39,7 @@ func TestPrivacyZonesWithoutFixAtEnds(t *testing.T) {
 	fit := runWithoutFixAtEnds(start, 50)
 	const securityDistance = 500 // meters
 	activity := models.Activity{User: models.Users{SecurityDistance: securityDistance}, Distance: 5200}
-	activity, err := AnalyzeRecords(fit, activity)
+	activity, err := AnalyzeRecords(fit, activity, models.AltitudeCorrectionNone)
 	if err != nil {
 		t.Fatal(err)
 	}

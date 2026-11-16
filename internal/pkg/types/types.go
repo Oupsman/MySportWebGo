@@ -222,6 +222,16 @@ type ActivityRow struct {
 	DeviceName    string     `json:"device_name"`
 }
 
+// RecomputeStatus is the progress of the analysis of the activities of a device again
+type RecomputeStatus struct {
+	Running    bool       `json:"running"`
+	Total      int        `json:"total"`  // activities to analyse
+	Done       int        `json:"done"`   // analysed and saved
+	Failed     int        `json:"failed"` // their FIT file is missing or can't be read
+	StartedAt  time.Time  `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at"`
+}
+
 // DeviceCount is a device of the user and how many activities it recorded
 type DeviceCount struct {
 	ID         uuid.UUID `json:"id"`

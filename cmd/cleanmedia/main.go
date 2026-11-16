@@ -26,6 +26,9 @@ import (
 
 const mediaDir = "MEDIA"
 
+// demDir is the directory of MEDIA holding the elevation tiles of the altitude correction (DEM_DIR by default)
+const demDir = "dem"
+
 type orphan struct {
 	path string
 	size int64
@@ -94,6 +97,9 @@ func run(remove bool) error {
 			continue
 		}
 		userUUID := dir.Name()
+		if userUUID == demDir {
+			continue
+		}
 		if !knownUsers[userUUID] {
 			fmt.Printf("skipped %s: no such user in database %s\n", filepath.Join(mediaDir, userUUID), dbName)
 			continue

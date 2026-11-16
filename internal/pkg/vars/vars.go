@@ -9,10 +9,19 @@ import (
 
 // the version of the analysis engine, 2: time stamps of the sparse series, 3: the recording device,
 // 4: the measured power of every sport and the time stamps of the temperatures, 5: the privacy zones
-// around the first and the last GPS fixes (they were around the first and the last records)
-const Engine_version int = 5
+// around the first and the last GPS fixes (they were around the first and the last records),
+// 6: the altitude correction of the device, the missing altitudes interpolated (they were 0) and the
+// slope of the estimated power from them
+const Engine_version int = 6
 
 var ListenPort string
+
+// DemDir is the directory of the elevation tiles of the altitude correction: DEM_DIR, MEDIA/dem by default
+var DemDir string
+
+// DemURL is where the missing elevation tiles are downloaded from: DEM_URL, elevation.DefaultURL by
+// default, "none" for no download (the tiles are then only the ones put in DemDir)
+var DemURL string
 var Dsn string
 var SecretKey string
 var Domain string
@@ -61,6 +70,11 @@ func Init() {
 		panic(err.Error())
 	}
 	Domain = CheckVariable("DOMAIN", true)
+	DemDir = CheckVariable("DEM_DIR", false)
+	if DemDir == "" {
+		DemDir = "MEDIA/dem"
+	}
+	DemURL = CheckVariable("DEM_URL", false)
 	TrustedProxies = DefaultTrustedProxies
 	if proxies := CheckVariable("TRUSTED_PROXIES", false); proxies != "" {
 		TrustedProxies = nil

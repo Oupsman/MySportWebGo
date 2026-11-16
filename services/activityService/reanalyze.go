@@ -16,13 +16,13 @@ import (
 const DefaultSecurityDistance = 500
 
 // analyzeFile runs AnalyzeTrimmed, turning its panics (a FIT file without session for instance) into errors
-func analyzeFile(filePath string, user models.Users, trimEnd float64, restHR RestHRFunc) (activity models.Activity, err error) {
+func analyzeFile(filePath string, user models.Users, trimEnd float64, restHR RestHRFunc, correction CorrectionFunc) (activity models.Activity, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic while analysing: %v", r)
 		}
 	}()
-	return AnalyzeTrimmed(filePath, user, models.Equipments{}, trimEnd, restHR)
+	return AnalyzeTrimmed(filePath, user, models.Equipments{}, trimEnd, restHR, correction)
 }
 
 // BackfillTimeStamps re-reads the FIT file of the activities analysed by an older engine, to fill the
@@ -52,7 +52,7 @@ func BackfillTimeStamps(db *models.DB, logger zerolog.Logger) error {
 			user.SecurityDistance = DefaultSecurityDistance
 		}
 		// the series must stay as long as the trimmed activity
-		analysed, err := analyzeFile(stored.FilePath, user, stored.TrimEnd, nil)
+		analysed, err := analyzeFile(stored.FilePath, user, stored.TrimEnd, nil, DeviceCorrection(db, stored.UserID))
 		var public types.GpsPointArray
 		if err != nil {
 			failed++

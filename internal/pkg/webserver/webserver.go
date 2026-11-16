@@ -138,6 +138,10 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.GET("/device/all", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.GetDevices)
 	apiv1.GET("/device/:id", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.GetDevice)
 	apiv1.POST("/device/:id", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.UpdateDevice)
+	// the same unit, that its files named differently: its activities, past and future, go to the other one
+	apiv1.POST("/device/:id/merge", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.MergeDevice)
+	// its activities analysed again with its altitude correction, in the background
+	apiv1.POST("/device/:id/recompute", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.RecomputeDevice)
 
 	// routes
 	apiv1.POST("/route/:id/commute", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.SetRouteCommute)

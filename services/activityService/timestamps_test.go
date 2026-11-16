@@ -16,7 +16,7 @@ func TestSparseSeriesTimeStamps(t *testing.T) {
 	files, _ := filepath.Glob(fitFilesPattern)
 	checked := 0
 	for _, file := range files {
-		a, err := analyzeFile(file, models.Users{}, 0, nil)
+		a, err := analyzeFile(file, models.Users{}, 0, nil, nil)
 		if err != nil || len(a.TimeStamps) == 0 {
 			continue
 		}

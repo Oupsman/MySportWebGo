@@ -30,8 +30,11 @@ services:
       # the public URL of the app: the API refuses the requests of any other origin
       DOMAIN: ${MSW_DOMAIN:?set MSW_DOMAIN, the URL users open, e.g. https://sport.example.com}
       LISTEN_PORT: "8080"
+      # the elevation tiles of the altitude correction, kept in MEDIA/dem: empty downloads the missing ones
+      # from AWS Terrain Tiles, none only uses the ones put there
+      DEM_URL: ${MSW_DEM_URL:-}
     volumes:
-      # the uploaded FIT files, thumbnails and pictures
+      # the uploaded FIT files, thumbnails, pictures and elevation tiles
       - media:/app/MEDIA
     depends_on:
       db:

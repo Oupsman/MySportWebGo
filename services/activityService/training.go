@@ -135,7 +135,8 @@ func BackfillTrimp(db *models.DB, logger zerolog.Logger) error {
 			return err
 		}
 		restHR := UserRestHR(db, activity.UserID)
-		analysed, err := analyzeFile(activity.FilePath, activity.User, activity.TrimEnd, restHR)
+		// only the heart rates are used: the altitudes needn't be corrected
+		analysed, err := analyzeFile(activity.FilePath, activity.User, activity.TrimEnd, restHR, nil)
 		if err == nil && analysed.Trimp != nil {
 			activity.Trimp = analysed.Trimp
 		} else {

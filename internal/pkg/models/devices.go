@@ -2,6 +2,7 @@ package models
 
 import (
 	"MySportWeb/internal/pkg/types"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -46,10 +47,20 @@ type Devices struct {
 	// "Garmin Edge 530", the device_name of its activities
 	Name               string `json:"name"`
 	AltitudeCorrection string `gorm:"not null;default:'none'" json:"altitude_correction"`
+	// the device this one was merged into: the same unit, that its files named differently (a firmware
+	// update giving a serial number...). It stays as an alias: the activities of its name go to the other.
+	MergedIntoID *uuid.UUID `gorm:"type:uuid;index" json:"-"`
 }
 
+// unitOf selects the devices of a unit of a user
+const unitOf = "user_id = ? AND brand = ? AND model = ? AND serial = ?"
+
+// ErrMergeDevice is a merge of a device into itself
+var ErrMergeDevice = errors.New("a device can't be merged into itself")
+
 // FindOrCreateDevice returns the id of the device of the user that recorded an activity, creating it with
-// correction at its first activity; nil when the file doesn't name the device
+// correction at its first activity, the device it was merged into when it was; nil when the file doesn't
+// name the device
 func (db *DB) FindOrCreateDevice(userID uint, device types.Device, name, correction string) (*uuid.UUID, error) {
 	if name == "" {
 		return nil, nil
@@ -64,13 +75,31 @@ func (db *DB) FindOrCreateDevice(userID uint, device types.Device, name, correct
 		return nil, err
 	}
 	var found Devices
-	err := db.Select("id").
-		Where("user_id = ? AND brand = ? AND model = ? AND serial = ?", userID, device.Brand, device.Model, device.Serial).
-		First(&found).Error
+	// shared lock: a merge of the device being saved waits for this import, or this import for the merge,
+	// and then reads the device it was merged into
+	err := db.Select("id", "merged_into_id").Clauses(clause.Locking{Strength: "SHARE"}).
+		Where(unitOf, userID, device.Brand, device.Model, device.Serial).First(&found).Error
 	if err != nil {
 		return nil, err
 	}
+	if found.MergedIntoID != nil {
+		return found.MergedIntoID, nil
+	}
 	return &found.ID, nil
+}
+
+// DeviceAltitudeCorrection returns the altitude correction of the device of a user that recorded an
+// activity (of the device it was merged into), AltitudeCorrectionNone for a device without activity yet:
+// a new device starts without
+func (db *DB) DeviceAltitudeCorrection(userID uint, device types.Device) (string, error) {
+	var corrections []string
+	err := db.Table("devices d").Joins("JOIN devices t ON t.id = COALESCE(d.merged_into_id, d.id)").
+		Where("d.user_id = ? AND d.brand = ? AND d.model = ? AND d.serial = ?", userID, device.Brand, device.Model, device.Serial).
+		Limit(1).Pluck("t.altitude_correction", &corrections).Error
+	if err != nil || len(corrections) == 0 {
+		return AltitudeCorrectionNone, err
+	}
+	return corrections[0], nil
 }
 
 // BackfillDevices creates the devices of the activities imported before devices existed, from the device
@@ -93,13 +122,21 @@ func (db *DB) BackfillDevices() (int64, error) {
 		if err != nil {
 			return err
 		}
-		result := tx.Exec(`UPDATE activities SET device_id = devices.id
+		result := tx.Exec(`UPDATE activities SET device_id = COALESCE(devices.merged_into_id, devices.id)
 			FROM ` + unit + ` u JOIN devices USING (user_id, brand, model, serial)
 			WHERE activities.id = u.id`)
 		linked = result.RowsAffected
 		return result.Error
 	})
 	return linked, err
+}
+
+// DeviceAlias is how the files of a device also named it, before it was merged
+type DeviceAlias struct {
+	Name   string `json:"name"`
+	Brand  string `json:"brand"`
+	Model  string `json:"model"`
+	Serial string `json:"serial_number"`
 }
 
 // DeviceStats is a device with the activities it recorded
@@ -109,14 +146,19 @@ type DeviceStats struct {
 	LastUsed   *time.Time `json:"last_used"`
 	// the firmware version of its latest activity, empty when the file doesn't tell
 	Software string `json:"software"`
+	// the devices merged into it
+	Aliases []DeviceAlias `json:"aliases" gorm:"-"`
+	// the latest recompute of its activities since the server started, nil without
+	Recompute *types.RecomputeStatus `json:"recompute" gorm:"-"`
 }
 
-// GetDevicesStats returns the devices of a user, the latest used first
+// GetDevicesStats returns the devices of a user, the latest used first; not the ones merged into another
 func (db *DB) GetDevicesStats(userID uint) ([]DeviceStats, error) {
 	return db.devicesStats("d.user_id = ?", userID)
 }
 
-// GetDeviceStats returns a device of a user, gorm.ErrRecordNotFound when the user has no such device
+// GetDeviceStats returns a device of a user, gorm.ErrRecordNotFound when the user has no such device or
+// when it was merged into another
 func (db *DB) GetDeviceStats(userID uint, id uuid.UUID) (DeviceStats, error) {
 	stats, err := db.devicesStats("d.user_id = ? AND d.id = ?", userID, id)
 	if err != nil {
@@ -135,15 +177,33 @@ func (db *DB) devicesStats(where string, args ...interface{}) ([]DeviceStats, er
 			COALESCE((SELECT convert_from(l.device, 'UTF8')::jsonb->>'software' FROM activities l
 				WHERE l.device_id = d.id ORDER BY l.date DESC LIMIT 1), '') AS software
 		FROM devices d LEFT JOIN activities a ON a.device_id = d.id
-		WHERE `+where+` GROUP BY d.id ORDER BY last_used DESC NULLS LAST, d.name, d.serial`, args...).
+		WHERE d.merged_into_id IS NULL AND `+where+`
+		GROUP BY d.id ORDER BY last_used DESC NULLS LAST, d.name, d.serial`, args...).
 		Scan(&stats).Error
+	if err != nil || len(stats) == 0 {
+		return stats, err
+	}
+	ids := make([]uuid.UUID, len(stats))
+	index := map[uuid.UUID]int{}
+	for i := range stats {
+		ids[i] = stats[i].ID
+		index[stats[i].ID] = i
+		stats[i].Aliases = []DeviceAlias{}
+	}
+	var aliases []Devices
+	err = db.Where("merged_into_id IN ?", ids).Order("name").Order("serial").Find(&aliases).Error
+	for _, alias := range aliases {
+		i := index[*alias.MergedIntoID]
+		stats[i].Aliases = append(stats[i].Aliases,
+			DeviceAlias{Name: alias.Name, Brand: alias.Brand, Model: alias.Model, Serial: alias.Serial})
+	}
 	return stats, err
 }
 
 // SetAltitudeCorrection changes the altitude correction of a device of a user, gorm.ErrRecordNotFound
 // when the user has no such device
 func (db *DB) SetAltitudeCorrection(userID uint, id uuid.UUID, correction string) error {
-	result := db.Model(&Devices{}).Where("user_id = ? AND id = ?", userID, id).
+	result := db.Model(&Devices{}).Where("user_id = ? AND id = ? AND merged_into_id IS NULL", userID, id).
 		Update("altitude_correction", correction)
 	if result.Error != nil {
 		return result.Error
@@ -152,4 +212,35 @@ func (db *DB) SetAltitudeCorrection(userID uint, id uuid.UUID, correction string
 		return gorm.ErrRecordNotFound
 	}
 	return nil
+}
+
+// MergeDevices merges a device of a user into another: the same unit, that its files named differently.
+// Its activities go to the other one, and so do the activities imported later under its name; the devices
+// merged into it are merged into the other one too. The settings are the ones of the other device: the
+// activities moved keep the altitudes their analysis gave, until they are recomputed.
+// gorm.ErrRecordNotFound when one of them isn't a device of the user (or was merged already),
+// ErrMergeDevice when they are the same.
+func (db *DB) MergeDevices(userID uint, id, intoID uuid.UUID) error {
+	if id == intoID {
+		return ErrMergeDevice
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		// locked: an import of the merged device waits for the merge, then reads the device it was merged into
+		var found []Devices
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("user_id = ? AND id IN ? AND merged_into_id IS NULL", userID, []uuid.UUID{id, intoID}).
+			Order("id"). // in the same order by every merge: two merges of the same devices can't deadlock
+			Find(&found).Error
+		if err != nil {
+			return err
+		}
+		if len(found) != 2 {
+			return gorm.ErrRecordNotFound
+		}
+		if err := tx.Model(&Activity{}).Where("device_id = ?", id).Update("device_id", intoID).Error; err != nil {
+			return err
+		}
+		return tx.Model(&Devices{}).Where("id = ? OR merged_into_id = ?", id, id).
+			Update("merged_into_id", intoID).Error
+	})
 }

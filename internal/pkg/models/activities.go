@@ -86,10 +86,13 @@ type Activity struct {
 	Means                 types.FloatArray    `json:"means"`
 	PositiveElevation     float64             `json:"positive_elevation"`
 	NegativeElevation     float64             `json:"negative_elevation"`
-	StartPosition         *types.GpsPoint     `json:"start_position"`
-	EndPosition           *types.GpsPoint     `json:"end_position"`
-	Lengths               types.LengthArray   `json:"lengths"`
-	Legs                  types.LegArray      `json:"legs"` // the sessions of a multi-session file, empty for one session
+	// the altitude correction applied to Altitudes (AltitudeCorrectionNone...): the one of the device, or none
+	// when the ground elevation of the trace is unknown
+	ElevationCorrection string            `json:"elevation_correction" gorm:"not null;default:'none'"`
+	StartPosition       *types.GpsPoint   `json:"start_position"`
+	EndPosition         *types.GpsPoint   `json:"end_position"`
+	Lengths             types.LengthArray `json:"lengths"`
+	Legs                types.LegArray    `json:"legs"` // the sessions of a multi-session file, empty for one session
 	// seconds since the start after which the recording is ignored (the device wasn't stopped), 0 for none
 	TrimEnd float64 `json:"trim_end"`
 	// seconds between the start and the end of the whole recording, trimmed or not; 0 for the activities
@@ -317,8 +320,8 @@ func (db *DB) SetActivityTrimp(id uuid.UUID, trimp float64) error {
 }
 
 // UpdateActivityTimeStamps saves what an engine upgrade re-analyses (the time stamps of the sparse
-// series, the recording device, the power, the temperature, the start and end positions and the public
-// trace) and the engine version. privacy alone, when not nil, holds the public trace computed again
+// series, the recording device, the power, the temperature, the altitudes and the elevation, the start and
+// end positions and the public trace) and the engine version. privacy alone, when not nil, holds the public trace computed again
 // without the FIT file.
 func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, privacy *types.GpsPointArray, version int) error {
 	updates := map[string]interface{}{"engine_version": version}
@@ -340,8 +343,40 @@ func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, privacy
 		updates["temperatures"] = analysed.Temperatures
 		updates["temperature_time_stamps"] = analysed.TemperatureTimeStamps
 		updates["recorded_duration"] = analysed.RecordedDuration
+		for column, value := range elevationUpdates(analysed) {
+			updates[column] = value
+		}
 	}
 	return db.Model(&Activity{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// elevationUpdates are the columns that depend on the altitudes: the profile, the elevation, and the power
+// estimated from their slope (of the activity and of its legs)
+func elevationUpdates(analysed *Activity) map[string]interface{} {
+	return map[string]interface{}{
+		"altitudes":            analysed.Altitudes,
+		"positive_elevation":   analysed.PositiveElevation,
+		"negative_elevation":   analysed.NegativeElevation,
+		"elevation_correction": analysed.ElevationCorrection,
+		"powers":               analysed.Powers,
+		"power_ts":             analysed.PowerTS,
+		"avg_power":            analysed.AvgPower,
+		"legs":                 analysed.Legs,
+	}
+}
+
+// UpdateActivityElevation saves what depends on the altitudes of an activity analysed again with the
+// altitude correction of its device
+func (db *DB) UpdateActivityElevation(id uuid.UUID, analysed *Activity) error {
+	return db.Model(&Activity{}).Where("id = ?", id).Updates(elevationUpdates(analysed)).Error
+}
+
+// GetDeviceActivities returns the ids of the activities of a device of a user, oldest first
+func (db *DB) GetDeviceActivities(userID uint, deviceID uuid.UUID) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := db.Model(&Activity{}).Where("user_id = ? AND device_id = ?", userID, deviceID).Order("date").
+		Pluck("id", &ids).Error
+	return ids, err
 }
 
 // CountActivitiesWithFile returns the number of activities analysed from the FIT file at path

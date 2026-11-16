@@ -39,9 +39,10 @@ func (e *InvalidFitError) Unwrap() error {
 
 // AnalyzeTrimmed analyses a FIT file, ignoring what was recorded after trimEnd seconds since the start
 // (0 for the whole recording), see TrimActivity. restHR gives the resting heart rate of the training score,
-// nil for DefaultRestHR.
+// nil for DefaultRestHR. correction gives the altitude correction of the recording device, nil for none.
 // At most MaxConcurrentAnalyses files are analysed at a time, ErrBusy after waiting QueueTimeout.
-func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipments, trimEnd float64, restHR RestHRFunc) (models.Activity, error) {
+func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipments, trimEnd float64, restHR RestHRFunc,
+	correction CorrectionFunc) (models.Activity, error) {
 	release, err := analysisSlots.acquire(QueueTimeout)
 	if err != nil {
 		return models.Activity{}, err
@@ -64,7 +65,7 @@ func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipme
 		if err != nil {
 			return models.Activity{}, &InvalidFitError{err}
 		}
-		activity, err = decodeFit(fit, user, equipment, trimEnd, restHR)
+		activity, err = decodeFit(fit, user, equipment, trimEnd, restHR, correction)
 		if err != nil {
 			return models.Activity{}, err
 		}
@@ -83,7 +84,8 @@ func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipme
 // 	return decodeFit(fit, user, equipment, 0, nil)
 // }
 
-func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, trimEnd float64, restHR RestHRFunc) (models.Activity, error) {
+func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, trimEnd float64, restHR RestHRFunc,
+	correction CorrectionFunc) (models.Activity, error) {
 	var activity models.Activity
 	var err error
 	fitActivity := filedef.NewActivity(fit.Messages...)
@@ -104,6 +106,12 @@ func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, t
 	}
 	activity.EngineVersion = vars.Engine_version
 	activity.Device, activity.DeviceName = AnalyzeDevice(fitActivity)
+	altitudeCorrection := models.AltitudeCorrectionNone
+	if correction != nil && activity.DeviceName != "" {
+		if altitudeCorrection, err = correction(activity.Device); err != nil {
+			return models.Activity{}, err
+		}
+	}
 	activity.User = user
 	activity.Equipment = equipment
 	activity.Lastimport = true
@@ -122,7 +130,7 @@ func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, t
 	// TODO : one day, I'll get the weight of the user and its equipment
 	activity.TotalWeight = 110
 
-	activity, err = AnalyzeRecords(fitActivity, activity)
+	activity, err = AnalyzeRecords(fitActivity, activity, altitudeCorrection)
 	if err != nil {
 		return models.Activity{}, err
 	}
@@ -187,7 +195,9 @@ func summarizeSession(activity *models.Activity, session *mesgdef.Session) {
 	activity.TotalDescent = session.TotalDescent
 }
 
-func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (models.Activity, error) {
+// AnalyzeRecords computes the series of an activity from its records, its altitudes corrected by
+// correction (models.AltitudeCorrectionNone...) when the ground elevation of its trace is known
+func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity, correction string) (models.Activity, error) {
 	var startmeters, stopmeters, meters = 0.0, 0.0, 0.0
 	var startaltitude, stopaltitude = 0.0, 0.0
 	var avgSpeedT = 0.0
@@ -209,6 +219,12 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 	if distance == 0 {
 		distance = 1
 	}
+	// the altitude of every record, corrected, without gap: the profile, the elevation and the slope of the
+	// estimated power come from them
+	recorded, positions := recordAltitudes(fitActivity.Records)
+	corrected, applied := correctAltitudes(recorded, positions, correction, Terrain)
+	series := fillGaps(corrected)
+	activity.ElevationCorrection = applied
 	// the power is read or estimated per session: only the bike leg of a triathlon has some
 	sessions := sessionCursor{sessions: fitActivity.Sessions}
 
@@ -225,7 +241,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 			var deltaDistance, deltaAltitude float64
 			stopmeters = meters + 10
 			startmeters = fitActivity.Records[counter].DistanceScaled()
-			startaltitude = fitActivity.Records[counter].EnhancedAltitudeScaled()
+			startaltitude = series[counter]
 			//record := fitActivity.Records[counter]
 			var record *mesgdef.Record
 			for meters < stopmeters && counter < recordsCount-1 {
@@ -256,14 +272,10 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 						activity.Distances = append(activity.Distances, 0)
 					}
 					// not directly writing in the activity struct here, since we may want to apply a filter on the array
+					altitudes = append(altitudes, series[counter])
 					if !math.IsNaN(record.EnhancedAltitudeScaled()) && !math.IsNaN(record.DistanceScaled()) {
-						altitudes = append(altitudes, record.EnhancedAltitudeScaled())
 						km = record.DistanceScaled() / 1000
 						meters = record.DistanceScaled()
-					} else if !math.IsNaN(record.AltitudeScaled()) && !math.IsNaN(record.DistanceScaled()) {
-						altitudes = append(altitudes, record.AltitudeScaled())
-					} else {
-						altitudes = append(altitudes, 0)
 					}
 					if record.PositionLat != math.MaxInt32 && record.PositionLong != math.MaxInt32 {
 						activity.Lats = append(activity.Lats, utils.SemiCircleToDegres(record.PositionLat))
@@ -296,7 +308,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity) (mo
 				}
 				counter++
 			}
-			stopaltitude = record.EnhancedAltitudeScaled()
+			stopaltitude = series[counter-1]
 			if session := sessions.at(record.Timestamp); isCycling(session) && !hasPowerMeter(session) {
 				var slope float64
 				deltaDistance = stopmeters - startmeters

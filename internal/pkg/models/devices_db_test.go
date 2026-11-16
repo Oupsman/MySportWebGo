@@ -255,3 +255,118 @@ func TestDevicesStats(t *testing.T) {
 		t.Errorf("%d activities named Garmin Edge 530, want both units' 3", byName.Total)
 	}
 }
+
+func TestMergeDevices(t *testing.T) {
+	db, user, other := devicesTestDB(t)
+	day := time.Date(2026, 10, 1, 8, 0, 0, 0, time.UTC)
+	activities := 0
+	record := func(userID uint, device types.Device, name string) uuid.UUID {
+		t.Helper()
+		id, err := db.FindOrCreateDevice(userID, device, name, AltitudeCorrectionNone)
+		if err != nil {
+			t.Fatal(err)
+		}
+		activities++
+		activity := Activity{UserID: userID, Title: name, Sport: "cycling", Device: device, DeviceName: name,
+			DeviceID: id, Date: day.AddDate(0, 0, activities)}
+		if err := db.Omit("User", "Equipment").Create(&activity).Error; err != nil {
+			t.Fatal(err)
+		}
+		return *id
+	}
+	// a Karoo 2 whose files gave no serial number, then one after a firmware update
+	before := types.Device{Brand: "Hammerhead", Model: "Karoo 2"}
+	after := types.Device{Brand: "Hammerhead", Model: "Karoo 2", Serial: "K2-0042"}
+	old := record(user.ID, before, "Hammerhead Karoo 2")
+	record(user.ID, before, "Hammerhead Karoo 2")
+	karoo := record(user.ID, after, "Hammerhead Karoo 2")
+	edge := record(user.ID, types.Device{Brand: "Garmin", Model: "Edge 530", Serial: "1"}, "Garmin Edge 530")
+	theirs := record(other.ID, after, "Hammerhead Karoo 2")
+	if err := db.SetAltitudeCorrection(user.ID, karoo, AltitudeCorrectionReplace); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, c := range map[string]struct {
+		id, into uuid.UUID
+		want     error
+	}{
+		"into itself":         {old, old, ErrMergeDevice},
+		"into another user's": {old, theirs, gorm.ErrRecordNotFound},
+		"another user's":      {theirs, karoo, gorm.ErrRecordNotFound},
+		"unknown":             {uuid.New(), karoo, gorm.ErrRecordNotFound},
+	} {
+		if err := db.MergeDevices(user.ID, c.id, c.into); err != c.want {
+			t.Errorf("%s: %v, want %v", name, err, c.want)
+		}
+	}
+
+	if err := db.MergeDevices(user.ID, old, karoo); err != nil {
+		t.Fatal(err)
+	}
+	devices, err := db.GetDevicesStats(user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the merged device is gone from the list, its activities and its name on the other one
+	if len(devices) != 2 || devices[1].ID != karoo || devices[1].Activities != 3 || len(devices[1].Aliases) != 1 ||
+		devices[1].Aliases[0].Serial != "" || devices[1].Aliases[0].Name != "Hammerhead Karoo 2" {
+		t.Fatalf("devices after the merge %+v", devices)
+	}
+	if devices[0].ID != edge || len(devices[0].Aliases) != 0 {
+		t.Errorf("Edge %+v", devices[0])
+	}
+	if _, err := db.GetDeviceStats(user.ID, old); err != gorm.ErrRecordNotFound {
+		t.Errorf("merged device read: %v", err)
+	}
+	if err := db.SetAltitudeCorrection(user.ID, old, AltitudeCorrectionNone); err != gorm.ErrRecordNotFound {
+		t.Errorf("correction of the merged device: %v", err)
+	}
+	if err := db.MergeDevices(user.ID, old, edge); err != gorm.ErrRecordNotFound {
+		t.Errorf("merging a merged device again: %v", err)
+	}
+
+	// a file named as before goes to the device merged into, with its correction
+	if id, err := db.FindOrCreateDevice(user.ID, before, "Hammerhead Karoo 2", AltitudeCorrectionNone); err != nil || *id != karoo {
+		t.Errorf("import as before the merge: device %v, %v", id, err)
+	}
+	if correction, err := db.DeviceAltitudeCorrection(user.ID, before); err != nil || correction != AltitudeCorrectionReplace {
+		t.Errorf("correction as before the merge: %q, %v", correction, err)
+	}
+	// and so does an activity imported before the devices
+	unlinked := Activity{UserID: user.ID, Title: "old", Sport: "cycling", Device: before, DeviceName: "Hammerhead Karoo 2",
+		Date: day}
+	if err := db.Omit("User", "Equipment").Create(&unlinked).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.BackfillDevices(); err != nil {
+		t.Fatal(err)
+	}
+	var linked Activity
+	if err := db.Select("device_id").First(&linked, "id = ?", unlinked.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if linked.DeviceID == nil || *linked.DeviceID != karoo {
+		t.Errorf("backfilled activity on device %v, want %s", linked.DeviceID, karoo)
+	}
+
+	// merged again: its aliases follow it, every name goes to the last device
+	if err := db.MergeDevices(user.ID, karoo, edge); err != nil {
+		t.Fatal(err)
+	}
+	devices, err = db.GetDevicesStats(user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(devices) != 1 || devices[0].ID != edge || devices[0].Activities != 5 || len(devices[0].Aliases) != 2 {
+		t.Fatalf("devices after the second merge %+v", devices)
+	}
+	for _, device := range []types.Device{before, after} {
+		if id, err := db.FindOrCreateDevice(user.ID, device, "Hammerhead Karoo 2", AltitudeCorrectionNone); err != nil || *id != edge {
+			t.Errorf("import of %+v: device %v, %v", device, id, err)
+		}
+	}
+	// the other user's devices are untouched
+	if mine, err := db.GetDevicesStats(other.ID); err != nil || len(mine) != 1 || mine[0].ID != theirs || mine[0].Activities != 1 {
+		t.Errorf("other user's devices %+v, %v", mine, err)
+	}
+}

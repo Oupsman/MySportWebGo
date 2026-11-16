@@ -48,6 +48,8 @@ func TestUpdateDevice(t *testing.T) {
 	router.Use(func(c *gin.Context) { c.Set("App", App); c.Next() })
 	router.GET("/device/:id", middlewares.IsAuthorized(models.ActivitiesRead), GetDevice)
 	router.POST("/device/:id", middlewares.IsAuthorized(models.ActivitiesWrite), UpdateDevice)
+	router.POST("/device/:id/merge", middlewares.IsAuthorized(models.ActivitiesWrite), MergeDevice)
+	router.POST("/device/:id/recompute", middlewares.IsAuthorized(models.ActivitiesWrite), RecomputeDevice)
 	client := sessionClient{t: t, router: router}
 	correction := func(id string) string {
 		var device models.Devices
@@ -91,5 +93,54 @@ func TestUpdateDevice(t *testing.T) {
 	if code, answer := client.send(http.MethodGet, "/device/"+hers.String(), token, ""); code != http.StatusOK ||
 		answer["name"] != "Garmin Edge 530" {
 		t.Errorf("reading her device: %d %v", code, answer)
+	}
+
+	// merges
+	older, err := db.FindOrCreateDevice(alice.ID, types.Device{Brand: "Garmin", Model: "Edge 530"}, "Garmin Edge 530",
+		models.AltitudeCorrectionNone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	merge := func(id string, body string) (int, map[string]string) {
+		return client.send(http.MethodPost, "/device/"+id+"/merge", token, body)
+	}
+	for _, refused := range []struct {
+		name, id, body string
+		code           int
+	}{
+		{"into itself", older.String(), `{"into": "` + older.String() + `"}`, http.StatusBadRequest},
+		{"into nothing", older.String(), `{}`, http.StatusBadRequest},
+		{"into not an id", older.String(), `{"into": "edge"}`, http.StatusBadRequest},
+		{"into another user's", older.String(), `{"into": "` + his.String() + `"}`, http.StatusNotFound},
+		{"another user's", his.String(), `{"into": "` + hers.String() + `"}`, http.StatusNotFound},
+	} {
+		if code, answer := merge(refused.id, refused.body); code != refused.code {
+			t.Errorf("merge %s: %d %v, want %d", refused.name, code, answer, refused.code)
+		}
+	}
+	if code, answer := merge(older.String(), `{"into": "`+hers.String()+`"}`); code != http.StatusOK ||
+		answer["id"] != hers.String() {
+		t.Errorf("merge: %d %v", code, answer)
+	}
+	if code, _ := client.send(http.MethodGet, "/device/"+older.String(), token, ""); code != http.StatusNotFound {
+		t.Errorf("reading the merged device: %d", code)
+	}
+
+	// recomputes: of her device (no activity, done at once), not of another user's nor of a merged one
+	recompute := func(id string) int {
+		code, _ := client.send(http.MethodPost, "/device/"+id+"/recompute", token, "")
+		return code
+	}
+	if code := recompute(hers.String()); code != http.StatusAccepted {
+		t.Errorf("recompute: %d", code)
+	}
+	for name, id := range map[string]string{"another user's": his.String(), "merged": older.String(), "not an id": "edge"} {
+		want := http.StatusNotFound
+		if name == "not an id" {
+			want = http.StatusBadRequest
+		}
+		if code := recompute(id); code != want {
+			t.Errorf("recompute of the %s device: %d, want %d", name, code, want)
+		}
 	}
 }
