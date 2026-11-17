@@ -11,8 +11,8 @@ import (
 // 4: the measured power of every sport and the time stamps of the temperatures, 5: the privacy zones
 // around the first and the last GPS fixes (they were around the first and the last records),
 // 6: the altitude correction of the device, the missing altitudes interpolated (they were 0) and the
-// slope of the estimated power from them
-const Engine_version int = 6
+// slope of the estimated power from them, 7: the running dynamics in the metrics
+const Engine_version int = 7
 
 var ListenPort string
 

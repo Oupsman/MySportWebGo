@@ -208,6 +208,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity, cor
 	var recordsCount = len(fitActivity.Records)
 	var altitudes, filtered []float64
 	var startPosition, endPosition types.GpsPoint
+	var running runningSeries
 
 	distance := activity.Distance
 	weight := activity.TotalWeight
@@ -305,6 +306,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity, cor
 						activity.Cadences = append(activity.Cadences, uint16(record.Cadence))
 						activity.CadenceTimeStamps = append(activity.CadenceTimeStamps, offset)
 					}
+					running.add(record, offset)
 				}
 				counter++
 			}
@@ -357,6 +359,7 @@ func AnalyzeRecords(fitActivity *filedef.Activity, activity models.Activity, cor
 
 	}
 	counter = 0
+	activity.Metrics.Running = running.metrics()
 
 	if len(altitudes) > 200 {
 		filter, err := savitzkygolay.NewFilterWindow(47)
