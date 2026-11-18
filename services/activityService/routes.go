@@ -2,6 +2,9 @@ package activityService
 
 import (
 	"MySportWeb/internal/pkg/models"
+	"math"
+
+	"sort"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -18,19 +21,76 @@ func canHaveRoute(activity models.Activity) bool {
 		activity.StartPosition != nil && activity.EndPosition != nil
 }
 
-// MatchRoute returns the route the activity follows with the best similarity, nil if there is none
-func MatchRoute(activity models.Activity, routes []models.Route) *models.Route {
+// RouteMembersCompared is the number of activities of a route, the most recent ones, an activity is compared
+// to besides the route's reference: a single reference, taken from the first activity, may be a poor
+// recording of the route
+const RouteMembersCompared = 5
+
+// routeReference returns the reference trace of a route
+func routeReference(route models.Route) models.RouteReference {
+	return models.RouteReference{RouteID: route.ID, Distance: route.Distance, StartPosition: route.StartPosition,
+		EndPosition: route.EndPosition, SimplifiedGpsPoints: route.SimplifiedGpsPoints}
+}
+
+// activityReference returns the trace of an activity, to compare it to route references
+func activityReference(activity models.Activity) models.RouteReference {
+	routeID := uuid.Nil
+	if activity.RouteID != nil {
+		routeID = *activity.RouteID
+	}
+	return models.RouteReference{RouteID: routeID, Distance: activity.Distance, StartPosition: activity.StartPosition,
+		EndPosition: activity.EndPosition, SimplifiedGpsPoints: activity.SimplifiedGpsPoints}
+}
+
+// referencesSimilarity returns the similarity of two traces, 0 when their distances or endpoints don't match
+func referencesSimilarity(a, b models.RouteReference) float64 {
+	if !DistancesMatch(a.Distance, b.Distance) ||
+		!EndpointsMatch(a.StartPosition, a.EndPosition, b.StartPosition, b.EndPosition) {
+		return 0
+	}
+	return TraceSimilarity(a.SimplifiedGpsPoints, b.SimplifiedGpsPoints)
+}
+
+// bestSimilarity returns the best similarity between a trace of as and a trace of bs
+func bestSimilarity(as, bs []models.RouteReference) float64 {
+	best := 0.0
+	for _, a := range as {
+		for _, b := range bs {
+			best = math.Max(best, referencesSimilarity(a, b))
+		}
+	}
+	return best
+}
+
+// referencesByRoute groups the routes' references with their members' traces
+func referencesByRoute(routes []models.Route, members []models.RouteReference) map[uuid.UUID][]models.RouteReference {
+	references := make(map[uuid.UUID][]models.RouteReference, len(routes))
+	for _, route := range routes {
+		references[route.ID] = append(references[route.ID], routeReference(route))
+	}
+	for _, member := range members {
+		if _, ok := references[member.RouteID]; ok {
+			references[member.RouteID] = append(references[member.RouteID], member)
+		}
+	}
+	return references
+}
+
+// MatchRoute returns the route the activity follows with the best similarity, nil if there is none. The
+// activity is compared to the reference of each route and to the traces of its members.
+func MatchRoute(activity models.Activity, routes []models.Route, members []models.RouteReference) *models.Route {
+	references := referencesByRoute(routes, members)
+	trace := []models.RouteReference{activityReference(activity)}
 	var best *models.Route
-	bestSimilarity := 0.0
+	bestSoFar := 0.0
 	for i, route := range routes {
-		if route.Sport != activity.Sport || !DistancesMatch(activity.Distance, route.Distance) ||
-			!EndpointsMatch(activity.StartPosition, activity.EndPosition, route.StartPosition, route.EndPosition) {
+		if route.Sport != activity.Sport {
 			continue
 		}
-		similarity := TraceSimilarity(activity.SimplifiedGpsPoints, route.SimplifiedGpsPoints)
-		if similarity >= similarMinCoverage && similarity > bestSimilarity {
+		similarity := bestSimilarity(trace, references[route.ID])
+		if similarity >= similarMinCoverage && similarity > bestSoFar {
 			best = &routes[i]
-			bestSimilarity = similarity
+			bestSoFar = similarity
 		}
 	}
 	return best
@@ -59,12 +119,12 @@ func assignRoute(db *models.DB, activity *models.Activity) error {
 	if err != nil {
 		return err
 	}
-	routes, err := db.GetRouteCandidates(activity.UserID, activity.Sport,
-		activity.Distance*(1-SimilarDistanceTolerance), activity.Distance*(1+SimilarDistanceTolerance))
+	routes, members, err := db.GetRouteCandidates(activity.UserID, activity.Sport,
+		activity.Distance*(1-SimilarDistanceTolerance), activity.Distance*(1+SimilarDistanceTolerance), RouteMembersCompared)
 	if err != nil {
 		return err
 	}
-	route := MatchRoute(*activity, routes)
+	route := MatchRoute(*activity, routes, members)
 	if route == nil {
 		newRoute := NewRoute(*activity)
 		newRoute.ActivityCount = 1
@@ -195,4 +255,76 @@ func BackfillRoutes(db *models.DB, logger zerolog.Logger) error {
 	}
 	logger.Info().Msg("routes assigned")
 	return nil
+}
+
+// MergeRoutes merges the routes of a user whose traces match: the routes created when an activity didn't
+// match the reference of its route, before the activities were also compared to the members of the routes.
+// Each route absorbs the routes matching it directly, the ones with the most activities first: merging
+// doesn't chain, a route only absorbs the routes similar to itself.
+func MergeRoutes(db *models.DB, logger zerolog.Logger) error {
+	pairs, err := db.GetRouteSports()
+	if err != nil {
+		return err
+	}
+	mergedTotal := 0
+	for _, pair := range pairs {
+		err = db.Transaction(func(tx *gorm.DB) error {
+			txDB := &models.DB{DB: *tx}
+			if err := txDB.LockUserRoutes(pair.UserID); err != nil {
+				return err
+			}
+			routes, members, err := txDB.GetRouteCandidates(pair.UserID, pair.Sport, 0, math.MaxFloat64, RouteMembersCompared)
+			if err != nil {
+				return err
+			}
+			groups := groupRoutes(routes, members)
+			for _, group := range groups {
+				if err := txDB.MergeRoutes(group[0], group[1:]); err != nil {
+					return err
+				}
+				mergedTotal += len(group) - 1
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	if mergedTotal > 0 {
+		logger.Info().Int("routes", mergedTotal).Msg("similar routes merged")
+	}
+	return nil
+}
+
+// groupRoutes returns the groups of routes to merge, each one starting with the route to keep: the one with
+// the most activities, the oldest when equal
+func groupRoutes(routes []models.Route, members []models.RouteReference) [][]models.Route {
+	sort.SliceStable(routes, func(i, j int) bool {
+		if routes[i].ActivityCount != routes[j].ActivityCount {
+			return routes[i].ActivityCount > routes[j].ActivityCount
+		}
+		return routes[i].CreatedAt.Before(routes[j].CreatedAt)
+	})
+	references := referencesByRoute(routes, members)
+	absorbed := make([]bool, len(routes))
+	var groups [][]models.Route
+	for i := range routes {
+		if absorbed[i] {
+			continue
+		}
+		group := []models.Route{routes[i]}
+		for j := i + 1; j < len(routes); j++ {
+			if absorbed[j] {
+				continue
+			}
+			if bestSimilarity(references[routes[i].ID], references[routes[j].ID]) >= similarMinCoverage {
+				absorbed[j] = true
+				group = append(group, routes[j])
+			}
+		}
+		if len(group) > 1 {
+			groups = append(groups, group)
+		}
+	}
+	return groups
 }

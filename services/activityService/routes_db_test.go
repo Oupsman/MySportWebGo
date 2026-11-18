@@ -174,3 +174,75 @@ func TestRoutesDatabase(t *testing.T) {
 		t.Fatalf("second backfill changed the routes: %+v", routes)
 	}
 }
+
+// routes split by a poor reference are merged, with their activities, count and commute flag
+func TestMergeRoutesDatabase(t *testing.T) {
+	db := testDB(t)
+	user := models.Users{Username: "merge", Email: "merge@test.local"}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	var ids []uuid.UUID
+	for _, name := range sameRouteFiles[:4] {
+		activity := importFit(t, name, user, models.Equipments{})
+		if err := CreateActivity(db, &activity, nil); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, activity.ID)
+	}
+	other := importFit(t, otherRouteFile, user, models.Equipments{})
+	if err := CreateActivity(db, &other, nil); err != nil {
+		t.Fatal(err)
+	}
+	routes := countRoutes(t, db)
+	if len(routes) != 2 {
+		t.Fatalf("expected 2 routes, got %d", len(routes))
+	}
+	kept := routes[0]
+
+	// a second route of the same path, whose reference doesn't match, flagged as a commute
+	first, err := db.GetActivityForRoute(ids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Distance *= 1.3
+	split := NewRoute(*first)
+	split.ActivityCount = 2
+	if err := db.CreateRoute(&split); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&models.Activity{}).Where("id IN ?", ids[2:]).Update("route_id", split.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.SetRouteCommute(split.ID, true); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := MergeRoutes(db, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	routes = countRoutes(t, db)
+	if len(routes) != 2 || routes[0].ID != kept.ID || routes[0].ActivityCount != 4 || routes[1].ActivityCount != 1 {
+		t.Fatalf("expected the routes of 4 and 1 activities, got %+v", routes)
+	}
+	if !routes[0].IsCommute {
+		t.Error("the merged route lost the commute flag")
+	}
+	for _, id := range ids {
+		activity, err := db.GetActivity(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if activity.RouteID == nil || *activity.RouteID != kept.ID || !activity.IsCommute {
+			t.Errorf("activity %s: route %v, commute %v", id, activity.RouteID, activity.IsCommute)
+		}
+	}
+
+	// running it again is a no-op
+	if err := MergeRoutes(db, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	if again := countRoutes(t, db); len(again) != 2 || again[0].ActivityCount != 4 {
+		t.Fatalf("second merge changed the routes: %+v", again)
+	}
+}

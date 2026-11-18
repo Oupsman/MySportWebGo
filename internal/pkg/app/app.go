@@ -48,6 +48,11 @@ func (app *App) Start() error {
 		if err != nil {
 			app.Logger.Error().Err(err).Msg("failed to re-analyse activities")
 		}
+		// after BackfillTimeStamps: it fixes the endpoints of the activities and routes of the old engines
+		err = activityService.MergeRoutes(&app.DB, app.Logger)
+		if err != nil {
+			app.Logger.Error().Err(err).Msg("failed to merge similar routes")
+		}
 		// after BackfillTimeStamps: the TRIMP needs the time stamps of the heart rates
 		err = activityService.BackfillTrimp(&app.DB, app.Logger)
 		if err != nil {
