@@ -56,6 +56,14 @@ func CreateOrMigrate(db *DB) error {
 	if err != nil {
 		return err
 	}
+	// AutoMigrate doesn't drop the columns gone from the models: the running dynamics moved to metrics
+	for _, column := range []string{"step_lengths", "vertical_oscis", "vertical_ratios", "stances", "stance_times"} {
+		if db.Migrator().HasColumn(&Activity{}, column) {
+			if err := db.Migrator().DropColumn(&Activity{}, column); err != nil {
+				return err
+			}
+		}
+	}
 	// AutoMigrate doesn't change the type of an existing column: the target weight was whole kilos
 	return alterIntegerColumn(db, &Users{}, "WeightObjective", "weight_objective")
 }

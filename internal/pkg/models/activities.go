@@ -61,17 +61,14 @@ type Activity struct {
 	Distances           types.FloatArray    `json:"dist_array"`
 	Lats                types.FloatArray    `json:"lats"`
 	Lons                types.FloatArray    `json:"lons"`
-	StepLengths         types.FloatArray    `json:"step_lengths"`
 	GpsPoints           types.GpsPointArray `json:"gps_points"`
 	PublicGpsPoints     types.GpsPointArray `json:"public_gps_points"`
 	SimplifiedGpsPoints types.GpsPointArray `json:"-"` // Douglas-Peucker simplified trace, used to find similar activities
 	RouteID             *uuid.UUID          `json:"route_id" gorm:"type:uuid;index"`
-	VerticalOscis       types.FloatArray    `json:"vertical_oscis"`
-	VerticalRatios      types.FloatArray    `json:"vertical_ratios"`
-	Stances             types.FloatArray    `json:"stance"`
-	StanceTimes         types.FloatArray    `json:"stance_times"`
-	Temperatures        types.Int16Array    `json:"temperatures"`
-	TimeStamps          types.MultiString   `json:"time_stamps"`
+	// the measures only some sensors or sports record (running dynamics...), absent without any
+	Metrics      types.ActivityMetrics `json:"metrics" gorm:"type:jsonb"`
+	Temperatures types.Int16Array      `json:"temperatures"`
+	TimeStamps   types.MultiString     `json:"time_stamps"`
 	// seconds since the start of each value of the sparse series, which skip the records without a value
 	GpsTimeStamps         types.FloatArray    `json:"gps_time_stamps"`
 	HeartTimeStamps       types.FloatArray    `json:"heart_time_stamps"`
@@ -383,6 +380,7 @@ func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, privacy
 		updates["temperatures"] = analysed.Temperatures
 		updates["temperature_time_stamps"] = analysed.TemperatureTimeStamps
 		updates["recorded_duration"] = analysed.RecordedDuration
+		updates["metrics"] = analysed.Metrics
 		for column, value := range elevationUpdates(analysed) {
 			updates[column] = value
 		}

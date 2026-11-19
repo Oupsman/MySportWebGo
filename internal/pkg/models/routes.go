@@ -33,15 +33,79 @@ func (db *DB) LockUserRoutes(userID uint) error {
 
 const advisoryLockRoutes = 1
 
-// GetRouteCandidates returns the user's routes of the same sport with a distance between minDistance and maxDistance
-func (db *DB) GetRouteCandidates(userID uint, sport string, minDistance, maxDistance float64) ([]Route, error) {
-	var routes []Route
-	err := db.Where("user_id = ? AND sport = ? AND distance BETWEEN ? AND ?", userID, sport, minDistance, maxDistance).
-		Find(&routes).Error
+// RouteReference is a trace an activity is compared to when looking for its route: one of the activities of
+// the route
+type RouteReference struct {
+	RouteID             uuid.UUID
+	Distance            float64
+	StartPosition       *types.GpsPoint
+	EndPosition         *types.GpsPoint
+	SimplifiedGpsPoints types.GpsPointArray
+}
+
+// GetRouteCandidates returns the user's routes of the sport whose reference, or one of the activities, has a
+// distance between minDistance and maxDistance, and the traces of these activities: at most perRoute per
+// route, the most recent ones
+func (db *DB) GetRouteCandidates(userID uint, sport string, minDistance, maxDistance float64, perRoute int) ([]Route, []RouteReference, error) {
+	var members []RouteReference
+	err := db.Raw(`SELECT route_id, distance, start_position, end_position, simplified_gps_points FROM (
+			SELECT route_id, distance, start_position, end_position, simplified_gps_points,
+				ROW_NUMBER() OVER (PARTITION BY route_id ORDER BY date DESC) AS n
+			FROM activities
+			WHERE user_id = ? AND sport = ? AND route_id IS NOT NULL AND distance BETWEEN ? AND ?
+				AND start_position IS NOT NULL AND end_position IS NOT NULL AND simplified_gps_points IS NOT NULL
+		) m WHERE n <= ?`, userID, sport, minDistance, maxDistance, perRoute).Scan(&members).Error
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return routes, nil
+	routeIDs := []uuid.UUID{}
+	for _, member := range members {
+		routeIDs = append(routeIDs, member.RouteID)
+	}
+	var routes []Route
+	err = db.Where("user_id = ? AND sport = ? AND (distance BETWEEN ? AND ? OR id IN ?)",
+		userID, sport, minDistance, maxDistance, routeIDs).Find(&routes).Error
+	if err != nil {
+		return nil, nil, err
+	}
+	return routes, members, nil
+}
+
+// GetRouteSports returns the users and sports having routes
+func (db *DB) GetRouteSports() ([]Route, error) {
+	var pairs []Route
+	err := db.Model(&Route{}).Distinct("user_id", "sport").Order("user_id, sport").Find(&pairs).Error
+	return pairs, err
+}
+
+// MergeRoutes moves the activities of the merged routes to the kept one, and deletes them. The kept route
+// is a commute when one of them was, its activities are then all commutes, see SetRouteCommute.
+func (db *DB) MergeRoutes(kept Route, merged []Route) error {
+	ids := make([]uuid.UUID, len(merged))
+	isCommute, allCommutes := kept.IsCommute, kept.IsCommute
+	for i, route := range merged {
+		ids[i] = route.ID
+		isCommute = isCommute || route.IsCommute
+		allCommutes = allCommutes && route.IsCommute
+	}
+	err := db.Model(&Activity{}).Where("route_id IN ?", ids).Update("route_id", kept.ID).Error
+	if err != nil {
+		return err
+	}
+	err = db.Where("id IN ?", ids).Delete(&Route{}).Error
+	if err != nil {
+		return err
+	}
+	// counted again rather than summed: fixes a count gone wrong
+	err = db.Model(&Route{}).Where("id = ?", kept.ID).
+		Update("activity_count", db.Model(&Activity{}).Select("count(*)").Where("route_id = ?", kept.ID)).Error
+	if err != nil {
+		return err
+	}
+	if isCommute && !allCommutes {
+		_, err = db.SetRouteCommute(kept.ID, true)
+	}
+	return err
 }
 
 func (db *DB) GetRoute(id uuid.UUID) (*Route, error) {

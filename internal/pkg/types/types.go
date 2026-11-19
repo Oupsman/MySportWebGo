@@ -447,6 +447,85 @@ func (s Int16Array) Value() (driver.Value, error) {
 	return json.Marshal(s)
 }
 
+// Series is a sparse series of an activity: the values and the seconds since the start of each, the
+// records without a value skipped
+type Series struct {
+	Values     []float64 `json:"values"`
+	TimeStamps []float64 `json:"time_stamps"`
+}
+
+// Add appends a value recorded offset seconds after the start
+func (s *Series) Add(offset, value float64) {
+	s.Values = append(s.Values, value)
+	s.TimeStamps = append(s.TimeStamps, offset)
+}
+
+// Empty tells whether the series has no value
+func (s *Series) Empty() bool {
+	return s == nil || len(s.Values) == 0
+}
+
+// Avg returns the mean of the values, 0 without any
+func (s *Series) Avg() float64 {
+	if s.Empty() {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range s.Values {
+		sum += v
+	}
+	return sum / float64(len(s.Values))
+}
+
+// ActivityMetrics are the measures an activity has only with some sensors or sports, one object per
+// family, absent when the recording has none of its measures
+type ActivityMetrics struct {
+	Running *RunningMetrics `json:"running,omitempty"`
+}
+
+// RunningMetrics are the running dynamics (HRM-Pro, HRM-Run, Running Dynamics Pod, some watches), in the
+// FIT units. A measure the sensor doesn't record is absent; the averages are those of the series, so they
+// follow the trimming of the activity.
+type RunningMetrics struct {
+	AvgVerticalOscillation float64 `json:"avg_vertical_oscillation,omitempty"` // mm
+	AvgVerticalRatio       float64 `json:"avg_vertical_ratio,omitempty"`       // %
+	AvgStanceTime          float64 `json:"avg_stance_time,omitempty"`          // ground contact time, ms
+	AvgStanceTimePercent   float64 `json:"avg_stance_time_percent,omitempty"`  // % of the step
+	AvgStanceTimeBalance   float64 `json:"avg_stance_time_balance,omitempty"`  // % of the left foot
+	AvgStepLength          float64 `json:"avg_step_length,omitempty"`          // mm
+
+	VerticalOscillations *Series `json:"vertical_oscillations,omitempty"`
+	VerticalRatios       *Series `json:"vertical_ratios,omitempty"`
+	StanceTimes          *Series `json:"stance_times,omitempty"`
+	StanceTimePercents   *Series `json:"stance_time_percents,omitempty"`
+	StanceTimeBalances   *Series `json:"stance_time_balances,omitempty"`
+	StepLengths          *Series `json:"step_lengths,omitempty"`
+}
+
+// Scan accepts NULL: the activities analysed before the metrics existed have none
+func (s *ActivityMetrics) Scan(src interface{}) error {
+	*s = ActivityMetrics{}
+	if src == nil {
+		return nil
+	}
+	switch v := src.(type) {
+	case []byte:
+		return json.Unmarshal(v, s)
+	case string:
+		return json.Unmarshal([]byte(v), s)
+	}
+	return nil
+}
+
+func (s ActivityMetrics) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+// GormDataType stores the metrics as jsonb, so that SQL can read into them
+func (ActivityMetrics) GormDataType() string {
+	return "jsonb"
+}
+
 // WeeklyHrZones sums the seconds spent in each heart rate zone during a week (week: its Monday, YYYY-MM-DD)
 type WeeklyHrZones struct {
 	Week  string    `json:"week"`

@@ -116,28 +116,40 @@ func pairwiseGroups(activities []fitActivity) ([][]int, []string) {
 	return groups, nearMisses
 }
 
-// assignRoutes mimics the import: activities are processed oldest first and matched against
-// the reference trace of the existing routes, a new route is created when none matches
-func assignRoutes(activities []fitActivity) (routeOf []int, references []int) {
-	var routes []models.Route
+// assignRoutes mimics the import: activities are processed oldest first and matched against the reference
+// trace of the existing routes and their RouteMembersCompared latest activities, a new route is created when
+// none matches. It returns the routes and their members' traces too.
+func assignRoutes(activities []fitActivity) (routeOf []int, references []int, routes []models.Route, members []models.RouteReference) {
 	routeOf = make([]int, len(activities))
+	membersOf := map[uuid.UUID][]models.RouteReference{}
 	for i, a := range activities {
-		route := MatchRoute(a.activity, routes)
+		var latest []models.RouteReference
+		for _, routeMembers := range membersOf {
+			latest = append(latest, routeMembers[max(0, len(routeMembers)-RouteMembersCompared):]...)
+		}
+		route := MatchRoute(a.activity, routes, latest)
 		if route == nil {
 			newRoute := NewRoute(a.activity)
 			newRoute.ID = uuid.New()
 			routes = append(routes, newRoute)
 			references = append(references, i)
 			routeOf[i] = len(routes) - 1
-			continue
-		}
-		for r := range routes {
-			if routes[r].ID == route.ID {
-				routeOf[i] = r
+		} else {
+			for r := range routes {
+				if routes[r].ID == route.ID {
+					routeOf[i] = r
+				}
 			}
 		}
+		routes[routeOf[i]].ActivityCount++
+		member := activityReference(a.activity)
+		member.RouteID = routes[routeOf[i]].ID
+		membersOf[member.RouteID] = append(membersOf[member.RouteID], member)
 	}
-	return routeOf, references
+	for _, routeMembers := range membersOf {
+		members = append(members, routeMembers[max(0, len(routeMembers)-RouteMembersCompared):]...)
+	}
+	return routeOf, references, routes, members
 }
 
 func TestSimilarFitFiles(t *testing.T) {
@@ -151,13 +163,21 @@ func TestSimilarFitFiles(t *testing.T) {
 	sort.SliceStable(activities, func(i, j int) bool { return activities[i].activity.Date.Before(activities[j].activity.Date) })
 	t.Logf("%d activities with GPS data", len(activities))
 
-	routeOf, references := assignRoutes(activities)
+	routeOf, references, routes, members := assignRoutes(activities)
 	membersOf := make([][]int, len(references))
 	for i, r := range routeOf {
 		membersOf[r] = append(membersOf[r], i)
-		reference := activities[references[r]].activity
-		if !TracesSimilar(activities[i].activity.SimplifiedGpsPoints, reference.SimplifiedGpsPoints) {
-			t.Errorf("%s is not similar to the reference of its route %s", activities[i].file, activities[references[r]].file)
+	}
+	// each activity joined its route by matching the reference or an activity imported before it
+	for _, group := range membersOf {
+		for n, i := range group[1:] {
+			similar := false
+			for _, j := range group[:n+1] {
+				similar = similar || ActivitiesSimilar(activities[i].activity, activities[j].activity)
+			}
+			if !similar {
+				t.Errorf("%s is not similar to any earlier activity of its route", activities[i].file)
+			}
 		}
 	}
 	var routeGroups [][]int
@@ -205,6 +225,12 @@ func TestSimilarFitFiles(t *testing.T) {
 			fmt.Fprintf(&report, "    %s\n", strings.Join(split[r], ", "))
 		}
 	}
+
+	merged := 0
+	for _, group := range groupRoutes(routes, members) {
+		merged += len(group) - 1
+	}
+	fmt.Fprintf(&report, "MergeRoutes would merge %d routes\n", merged)
 
 	fmt.Fprintf(&report, "%d near misses (same sport, distance and endpoints, different route)\n", len(nearMisses))
 	report.WriteString(strings.Join(nearMisses, "\n"))

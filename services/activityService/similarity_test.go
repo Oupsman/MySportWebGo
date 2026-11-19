@@ -5,6 +5,8 @@ import (
 	"MySportWeb/internal/pkg/types"
 	"math"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 // offsetMeters moves a point by dx (east) and dy (north) meters
@@ -126,13 +128,76 @@ func TestRouteRequiresSameSport(t *testing.T) {
 	}
 	runRoute := NewRoute(activity("running"))
 
-	if MatchRoute(activity("cycling"), []models.Route{runRoute}) != nil {
+	if MatchRoute(activity("cycling"), []models.Route{runRoute}, nil) != nil {
 		t.Error("a ride matched a running route")
 	}
 	if ActivitiesSimilar(activity("running"), activity("cycling")) {
 		t.Error("a run is similar to a ride")
 	}
-	if MatchRoute(activity("running"), []models.Route{runRoute}) == nil {
+	if MatchRoute(activity("running"), []models.Route{runRoute}, nil) == nil {
 		t.Error("a run did not match the same running route")
+	}
+}
+
+// an activity matches a route through one of its members when the route's reference is a poor recording
+func TestRouteMatchesThroughMembers(t *testing.T) {
+	trace := SimplifyTrace(buildTrace(loop, nil))
+	start, end := trace[0], trace[len(trace)-1]
+	activity := models.Activity{Sport: "running", Distance: 7000, StartPosition: &start, EndPosition: &end, SimplifiedGpsPoints: trace}
+	// recorded with a GPS gone wrong: 30% too long
+	poor := activity
+	poor.Distance = 9100
+	route := NewRoute(poor)
+	route.ID = uuid.New()
+
+	if MatchRoute(activity, []models.Route{route}, nil) != nil {
+		t.Fatal("the activity matched the poor reference")
+	}
+	member := activityReference(activity)
+	member.RouteID = route.ID
+	if MatchRoute(activity, []models.Route{route}, []models.RouteReference{member}) == nil {
+		t.Error("the activity did not match the route through its member")
+	}
+	// the members of the other routes are ignored
+	member.RouteID = uuid.New()
+	if MatchRoute(activity, []models.Route{route}, []models.RouteReference{member}) != nil {
+		t.Error("the activity matched the route through a member of another route")
+	}
+}
+
+func TestGroupRoutes(t *testing.T) {
+	trace := SimplifyTrace(buildTrace(loop, nil))
+	start, end := trace[0], trace[len(trace)-1]
+	run := models.Activity{Sport: "running", Distance: 7000, StartPosition: &start, EndPosition: &end, SimplifiedGpsPoints: trace}
+	poor := run
+	poor.Distance = 9100
+	other := SimplifyTrace(buildTrace([][2]float64{{0, 0}, {0, 2000}, {-1500, 2000}, {-1500, 0}, {0, 0}}, nil))
+	otherRun := run
+	otherRun.SimplifiedGpsPoints = other
+
+	newRoute := func(reference models.Activity, count int) models.Route {
+		route := NewRoute(reference)
+		route.ID = uuid.New()
+		route.ActivityCount = count
+		return route
+	}
+	// the references of a and b don't match, their members do
+	a, b, c := newRoute(run, 2), newRoute(poor, 5), newRoute(otherRun, 3)
+	memberOf := func(route models.Route, activity models.Activity) models.RouteReference {
+		member := activityReference(activity)
+		member.RouteID = route.ID
+		return member
+	}
+	members := []models.RouteReference{memberOf(a, run), memberOf(b, run), memberOf(c, otherRun)}
+
+	groups := groupRoutes([]models.Route{a, b, c}, members)
+	if len(groups) != 1 || len(groups[0]) != 2 {
+		t.Fatalf("expected one group of 2 routes, got %v", groups)
+	}
+	if groups[0][0].ID != b.ID || groups[0][1].ID != a.ID {
+		t.Error("the route with the most activities should be kept")
+	}
+	if groups := groupRoutes([]models.Route{a, b, c}, nil); len(groups) != 0 {
+		t.Errorf("routes merged without matching traces: %v", groups)
 	}
 }
