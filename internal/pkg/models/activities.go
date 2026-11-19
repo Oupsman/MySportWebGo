@@ -102,6 +102,9 @@ type Activity struct {
 	// until computed; and the heart rates bounding them: resting, lower limits of the zones 2 to 5, maximum
 	HrZones      types.FloatArray  `json:"hr_zones"`
 	HrZoneBounds types.Uint16Array `json:"hr_zone_bounds"`
+	// the fastest stretches over distances and the best powers over durations (activityService.BestEfforts),
+	// empty without any, nil until computed
+	BestEfforts types.BestEffortArray `json:"best_efforts"`
 }
 
 // HidePrivate removes what only the owner of the activity may see: the trace inside the privacy zones
@@ -381,6 +384,7 @@ func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, privacy
 		updates["temperature_time_stamps"] = analysed.TemperatureTimeStamps
 		updates["recorded_duration"] = analysed.RecordedDuration
 		updates["metrics"] = analysed.Metrics
+		updates["best_efforts"] = analysed.BestEfforts
 		for column, value := range elevationUpdates(analysed) {
 			updates[column] = value
 		}

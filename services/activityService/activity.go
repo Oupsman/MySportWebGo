@@ -151,6 +151,7 @@ func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, t
 	if err := setHRZones(&activity, restHR); err != nil {
 		return models.Activity{}, err
 	}
+	activity.BestEfforts = BestEfforts(fitActivity)
 
 	return activity, nil
 }

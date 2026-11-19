@@ -420,3 +420,36 @@ func Calendar(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{"month": month.Format("2006-01"), "activities": calendar})
 }
+
+// Records returns the best efforts of the user (see models.GetRecords): ?sport= for one sport, ?since=
+// YYYY-MM-DD for the activities since that day in their timezone, ?top=N (1 to models.MaxRecordsRank, 3 by
+// default) efforts per target. The distances and durations measured come along.
+func Records(c *gin.Context) {
+	db := c.MustGet("App").(*app.App).DB
+	user, location := currentUserLocation(c)
+	top := 3
+	if value := c.Query("top"); value != "" {
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 1 || n > models.MaxRecordsRank {
+			c.JSON(400, gin.H{"error": fmt.Sprintf("top must be between 1 and %d", models.MaxRecordsRank)})
+			return
+		}
+		top = n
+	}
+	var since *time.Time
+	if value := c.Query("since"); value != "" {
+		day, err := time.ParseInLocation("2006-01-02", value, location)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "since must be YYYY-MM-DD"})
+			return
+		}
+		since = &day
+	}
+	records, err := db.GetRecords(user.ID, c.Query("sport"), since, top)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(200, gin.H{"distances": activityService.EffortSports, "power_durations": activityService.PowerDurations,
+		"records": records})
+}

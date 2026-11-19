@@ -63,6 +63,10 @@ func (app *App) Start() error {
 		if err != nil {
 			app.Logger.Error().Err(err).Msg("failed to compute the heart rate zones of activities")
 		}
+		err = activityService.BackfillBestEfforts(&app.DB, app.Logger)
+		if err != nil {
+			app.Logger.Error().Err(err).Msg("failed to compute the best efforts of activities")
+		}
 		err = activityService.BackfillTitles(&app.DB, app.Logger)
 		if err != nil {
 			app.Logger.Error().Err(err).Msg("failed to rename activities")

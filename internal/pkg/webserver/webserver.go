@@ -112,6 +112,7 @@ func RunHttp(listenAddr string, App *app.App) error {
 	// the readiness reads the resting heart rates of the health data too
 	apiv1.GET("/user/readiness", middlewares.IsAuthorized(models.ActivitiesRead, models.HealthDatasRead), apicontrollers.GetReadiness)
 	apiv1.GET("/user/calendar", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.Calendar)
+	apiv1.GET("/user/records", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.Records)
 	apiv1.GET("/user", middlewares.IsAuthorized(), apicontrollers.GetUser)
 	apiv1.POST("/user", middlewares.IsAuthorized(), apicontrollers.UpdateUser)
 

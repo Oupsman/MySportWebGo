@@ -531,3 +531,52 @@ type WeeklyHrZones struct {
 	Week  string    `json:"week"`
 	Zones []float64 `json:"zones"`
 }
+
+// The kinds of best efforts
+const (
+	EffortDistance = "distance" // the shortest time over a distance: Target in meters, Value in seconds
+	EffortPower    = "power"    // the highest average power over a duration: Target in seconds, Value in watts
+)
+
+// BestEffort is the best stretch of an activity of a sport (the sport of its leg in a multisport one): the
+// fastest over a distance, or the most powerful over a duration (measured power only)
+type BestEffort struct {
+	Sport       string  `json:"sport"`
+	Kind        string  `json:"kind"`
+	Target      float64 `json:"target"`
+	Value       float64 `json:"value"`
+	StartOffset float64 `json:"start_offset"` // seconds since the start of the activity
+}
+
+// BestEffortArray holds the best efforts of an activity: empty when it has none, nil until computed (stored
+// as JSON null, the backfill computes them)
+type BestEffortArray []BestEffort
+
+func (s *BestEffortArray) Scan(src interface{}) error {
+	*s = nil
+	switch v := src.(type) {
+	case []byte:
+		return json.Unmarshal(v, s)
+	case string:
+		return json.Unmarshal([]byte(v), s)
+	}
+	return nil
+}
+
+func (s BestEffortArray) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+// GormDataType stores the efforts as jsonb, so that SQL can rank them
+func (BestEffortArray) GormDataType() string {
+	return "jsonb"
+}
+
+// EffortRecord is a best effort ranked among the ones of the user, with its activity
+type EffortRecord struct {
+	BestEffort
+	Rank          int       `json:"rank"` // 1 for the record
+	ActivityID    uuid.UUID `json:"activity_id"`
+	ActivityTitle string    `json:"activity_title"`
+	Date          time.Time `json:"date"`
+}
