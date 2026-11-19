@@ -8,10 +8,12 @@ import (
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/services/activityService"
 	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"net/mail"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -271,6 +273,27 @@ func (u userUpdate) fields(now time.Time) (map[string]interface{}, error) {
 	return fields, nil
 }
 
+// maxHRChanged tells whether an update changes the maximum heart rate of the user: theirs, or the date of
+// birth it's estimated from
+func maxHRChanged(user models.Users, update userUpdate) bool {
+	return (update.MaxHR != nil && *update.MaxHR != user.MaxHR) ||
+		(update.DateOfBirth != nil && !update.DateOfBirth.Equal(user.DateOfBirth))
+}
+
+// recomputeHrZones computes again, in the background, the heart rate zones of the activities of a user whose
+// maximum heart rate changed
+func recomputeHrZones(App *app.App, userID uint) {
+	if err := App.DB.ResetHrZones(userID); err != nil {
+		App.Logger.Error().Err(err).Uint("user_id", userID).Msg("heart rate zones not reset")
+		return
+	}
+	go func() {
+		if err := activityService.BackfillHrZones(&App.DB, App.Logger); err != nil {
+			App.Logger.Error().Err(err).Uint("user_id", userID).Msg("heart rate zones not computed")
+		}
+	}()
+}
+
 // UpdateUser changes the account of the user of the request, who confirms it with their password. Only the
 // fields sent change. A new password ends the other sessions, the answer carries a new token.
 func UpdateUser(c *gin.Context) {
@@ -324,6 +347,9 @@ func UpdateUser(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "could not update the user"})
 		return
 	}
+	if maxHRChanged(currentUser, update) {
+		recomputeHrZones(App, currentUser.ID)
+	}
 
 	if update.Password == "" {
 		c.JSON(200, gin.H{"message": "user updated successfully"})
@@ -354,6 +380,28 @@ func Dashboard(c *gin.Context) {
 		return
 	}
 	c.JSON(200, dashboard)
+}
+
+// HrZones returns the time in heart rate zones of the user per week, ?weeks=N (1 to models.MaxZoneWeeks,
+// models.DashboardWeeks by default) ending with the current one, weeks starting on Monday in their timezone
+func HrZones(c *gin.Context) {
+	db := c.MustGet("App").(*app.App).DB
+	user, location := currentUserLocation(c)
+	weeks := models.DashboardWeeks
+	if value := c.Query("weeks"); value != "" {
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 1 || n > models.MaxZoneWeeks {
+			c.JSON(400, gin.H{"error": fmt.Sprintf("weeks must be between 1 and %d", models.MaxZoneWeeks)})
+			return
+		}
+		weeks = n
+	}
+	zones, err := db.GetWeeklyHrZones(user.ID, time.Now().In(location), weeks)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(200, gin.H{"limits": activityService.HRZoneLimits, "weeks": zones})
 }
 
 // Calendar returns the activities of a month, ?month=YYYY-MM

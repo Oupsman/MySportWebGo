@@ -345,7 +345,12 @@ func (s MultiString) Value() (driver.Value, error) {
 	return json.Marshal(s)
 }
 
+// Scan accepts NULL: the columns added after the import of an activity are NULL until computed
 func (s *FloatArray) Scan(src interface{}) error {
+	if src == nil {
+		*s = nil
+		return nil
+	}
 	return json.Unmarshal(src.([]byte), s)
 }
 
@@ -411,7 +416,12 @@ func (s GpsPointArray) Value() (driver.Value, error) {
 // 	return result, nil
 // }
 
+// Scan accepts NULL: as FloatArray
 func (s *Uint16Array) Scan(src interface{}) error {
+	if src == nil {
+		*s = nil
+		return nil
+	}
 	return json.Unmarshal(src.([]byte), s)
 }
 
@@ -435,4 +445,10 @@ func (s *Int16Array) Scan(src interface{}) error {
 
 func (s Int16Array) Value() (driver.Value, error) {
 	return json.Marshal(s)
+}
+
+// WeeklyHrZones sums the seconds spent in each heart rate zone during a week (week: its Monday, YYYY-MM-DD)
+type WeeklyHrZones struct {
+	Week  string    `json:"week"`
+	Zones []float64 `json:"zones"`
 }

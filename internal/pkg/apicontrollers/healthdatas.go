@@ -209,3 +209,44 @@ func SetWeightTarget(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, estimate)
 }
+
+// defaultReadinessDays is the period of the readiness when none is asked for
+const defaultReadinessDays = 90
+
+// GetReadiness returns the training state of the user (fitness, fatigue and form from the training scores
+// of their activities, the trend of their resting heart rate) on each of the last ?days=N days (7 to
+// health.MaxReadinessDays, 90 by default), days in their timezone
+func GetReadiness(c *gin.Context) {
+	db := c.MustGet("App").(*app.App).DB
+	user, location := currentUserLocation(c)
+	days := defaultReadinessDays
+	if value := c.Query("days"); value != "" {
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 7 || n > health.MaxReadinessDays {
+			c.JSON(http.StatusBadRequest,
+				gin.H{"error": "days must be between 7 and " + strconv.Itoa(health.MaxReadinessDays)})
+			return
+		}
+		days = n
+	}
+	now := time.Now().In(location)
+	activities, err := db.GetTrainingLoads(user.ID, health.ReadinessFrom(now, days))
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	measures, err := db.GetRestHRs(user.ID, health.RestFrom(now))
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	loads := make([]health.Load, len(activities))
+	for i, a := range activities {
+		loads[i] = health.Load{Date: a.Date, Score: a.Trimp}
+	}
+	rests := make([]health.RestMeasure, len(measures))
+	for i, m := range measures {
+		rests[i] = health.RestMeasure{Date: m.Date, BPM: float64(m.RestHR)}
+	}
+	c.JSON(http.StatusOK, health.ComputeReadiness(loads, rests, now, days))
+}

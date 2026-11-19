@@ -170,3 +170,76 @@ func (db *DB) GetDashboard(userID uint, now time.Time) (types.Dashboard, error) 
 	err = db.Table("equipments").Where("user_id = ?", userID).Count(&dashboard.NbEquipments).Error
 	return dashboard, err
 }
+
+// HRZones is the number of heart rate zones (activityService.HRZoneLimits)
+const HRZones = 5
+
+// MaxZoneWeeks is the most weeks of time in heart rate zones that can be asked for
+const MaxZoneWeeks = 104
+
+// weekStart returns the Monday (midnight) of the week of t, in the location of t
+func weekStart(t time.Time) time.Time {
+	week, _, _ := dashboardPeriods(t)
+	return week
+}
+
+// GetWeeklyHrZones sums the time in heart rate zones of the activities of a user per week, over the weeks
+// ending with the current one, oldest first; weeks start on Monday in the timezone of now, a week without
+// activity has zeros
+func (db *DB) GetWeeklyHrZones(userID uint, now time.Time, weeks int) ([]types.WeeklyHrZones, error) {
+	current := weekStart(now)
+	// AddDate keeps midnight across daylight saving changes
+	first := current.AddDate(0, 0, -7*(weeks-1))
+	result := make([]types.WeeklyHrZones, weeks)
+	index := map[string]int{}
+	for i := range result {
+		week := first.AddDate(0, 0, 7*i).Format("2006-01-02")
+		result[i] = types.WeeklyHrZones{Week: week, Zones: make([]float64, HRZones)}
+		index[week] = i
+	}
+	activities, err := db.GetZonesSince(userID, first)
+	if err != nil {
+		return nil, err
+	}
+	for _, activity := range activities {
+		i, ok := index[weekStart(activity.Date.In(now.Location())).Format("2006-01-02")]
+		if !ok {
+			continue
+		}
+		for zone, seconds := range activity.HrZones {
+			if zone < HRZones {
+				result[i].Zones[zone] += seconds
+			}
+		}
+	}
+	return result, nil
+}
+
+// TrainingLoad is the training score of an activity at its date
+type TrainingLoad struct {
+	Date  time.Time
+	Trimp float64
+}
+
+// GetTrainingLoads returns the training scores of the activities of a user since from, those without one
+// left out
+func (db *DB) GetTrainingLoads(userID uint, from time.Time) ([]TrainingLoad, error) {
+	var loads []TrainingLoad
+	err := db.Model(&Activity{}).Select("date", "trimp").
+		Where("user_id = ? AND date >= ? AND trimp > 0", userID, from).Scan(&loads).Error
+	return loads, err
+}
+
+// RestHRMeasure is a resting heart rate measured at a date
+type RestHRMeasure struct {
+	Date   time.Time
+	RestHR uint16
+}
+
+// GetRestHRs returns the resting heart rates measured by a user since from
+func (db *DB) GetRestHRs(userID uint, from time.Time) ([]RestHRMeasure, error) {
+	var measures []RestHRMeasure
+	err := db.Model(&HealthData{}).Select("date", "rest_hr").
+		Where("user_id = ? AND date >= ? AND rest_hr > 0", userID, from).Scan(&measures).Error
+	return measures, err
+}

@@ -1,4 +1,5 @@
-// Package health estimates when a target weight is reached, from the trend of the recent measures
+// Package health estimates when a target weight is reached, from the trend of the recent measures, and the
+// readiness to train, from the training loads and the resting heart rate
 package health
 
 import (

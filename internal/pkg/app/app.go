@@ -53,6 +53,11 @@ func (app *App) Start() error {
 		if err != nil {
 			app.Logger.Error().Err(err).Msg("failed to compute the TRIMP of activities")
 		}
+		// after BackfillTimeStamps too: the zones need the time stamps of the heart rates
+		err = activityService.BackfillHrZones(&app.DB, app.Logger)
+		if err != nil {
+			app.Logger.Error().Err(err).Msg("failed to compute the heart rate zones of activities")
+		}
 		err = activityService.BackfillTitles(&app.DB, app.Logger)
 		if err != nil {
 			app.Logger.Error().Err(err).Msg("failed to rename activities")

@@ -108,6 +108,9 @@ func RunHttp(listenAddr string, App *app.App) error {
 	// Routes given permissions are also open to device tokens holding them, the others to sessions only
 	apiv1.GET("/user/logout", middlewares.IsAuthorized(), apicontrollers.Logout)
 	apiv1.GET("/user/dashboard", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.Dashboard)
+	apiv1.GET("/user/hrzones", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.HrZones)
+	// the readiness reads the resting heart rates of the health data too
+	apiv1.GET("/user/readiness", middlewares.IsAuthorized(models.ActivitiesRead, models.HealthDatasRead), apicontrollers.GetReadiness)
 	apiv1.GET("/user/calendar", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.Calendar)
 	apiv1.GET("/user", middlewares.IsAuthorized(), apicontrollers.GetUser)
 	apiv1.POST("/user", middlewares.IsAuthorized(), apicontrollers.UpdateUser)

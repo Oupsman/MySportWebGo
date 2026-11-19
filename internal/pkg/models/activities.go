@@ -101,6 +101,10 @@ type Activity struct {
 	// training score: the one recorded by the device (Garmin's training load, else the TSS), else the
 	// Banister TRIMP of the heart rate stream; 0 without any, nil until computed
 	Trimp *float64 `json:"trimp"`
+	// seconds in each heart rate reserve zone (activityService.HRZoneLimits), zeros without heart rate, nil
+	// until computed; and the heart rates bounding them: resting, lower limits of the zones 2 to 5, maximum
+	HrZones      types.FloatArray  `json:"hr_zones"`
+	HrZoneBounds types.Uint16Array `json:"hr_zone_bounds"`
 }
 
 // HidePrivate removes what only the owner of the activity may see: the trace inside the privacy zones
@@ -317,6 +321,42 @@ func (db *DB) GetActivityHearts(id uuid.UUID) (Activity, error) {
 // SetActivityTrimp saves the TRIMP of an activity
 func (db *DB) SetActivityTrimp(id uuid.UUID, trimp float64) error {
 	return db.Model(&Activity{}).Where("id = ?", id).Update("trimp", trimp).Error
+}
+
+// GetActivitiesWithoutHrZones returns the ids of the activities whose heart rate zones were never computed
+// (NULL, or a nil array saved as JSON null), oldest first
+func (db *DB) GetActivitiesWithoutHrZones() ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := db.Model(&Activity{}).Where("hr_zones IS NULL OR hr_zones = 'null'").Order("date asc").Pluck("id", &ids).Error
+	return ids, err
+}
+
+// SetActivityHrZones saves the time in heart rate zones of an activity and the heart rates bounding them
+func (db *DB) SetActivityHrZones(id uuid.UUID, zones types.FloatArray, bounds types.Uint16Array) error {
+	return db.Model(&Activity{}).Where("id = ?", id).
+		Updates(map[string]interface{}{"hr_zones": zones, "hr_zone_bounds": bounds}).Error
+}
+
+// ResetHrZones forgets the heart rate zones of the activities of a user, to compute them again: their
+// maximum heart rate changed
+func (db *DB) ResetHrZones(userID uint) error {
+	return db.Model(&Activity{}).Where("user_id = ?", userID).
+		Updates(map[string]interface{}{"hr_zones": nil, "hr_zone_bounds": nil}).Error
+}
+
+// ActivityZones is the time in heart rate zones of an activity at its date
+type ActivityZones struct {
+	Date    time.Time
+	HrZones types.FloatArray
+}
+
+// GetZonesSince returns the time in heart rate zones of the activities of a user since from, oldest first
+func (db *DB) GetZonesSince(userID uint, from time.Time) ([]ActivityZones, error) {
+	var zones []ActivityZones
+	err := db.Model(&Activity{}).Select("date", "hr_zones").
+		Where("user_id = ? AND date >= ? AND hr_zones IS NOT NULL", userID, from).
+		Order("date asc").Scan(&zones).Error
+	return zones, err
 }
 
 // UpdateActivityTimeStamps saves what an engine upgrade re-analyses (the time stamps of the sparse

@@ -105,19 +105,28 @@ func setTrainingScore(activity *models.Activity, sessions []*mesgdef.Session, tr
 
 // computeTrimp sets the Banister TRIMP of an activity, with the resting heart rate of its user at its date
 func computeTrimp(activity *models.Activity, restHR RestHRFunc) error {
+	rest, err := restHRAt(restHR, activity.Date)
+	if err != nil {
+		return err
+	}
+	trimp := BanisterTRIMP(*activity, rest)
+	activity.Trimp = &trimp
+	return nil
+}
+
+// restHRAt returns the resting heart rate of the user at date, DefaultRestHR when it's unknown
+func restHRAt(restHR RestHRFunc, date time.Time) (uint16, error) {
 	var rest uint16
 	if restHR != nil {
 		var err error
-		if rest, err = restHR(activity.Date); err != nil {
-			return err
+		if rest, err = restHR(date); err != nil {
+			return 0, err
 		}
 	}
 	if rest == 0 {
 		rest = DefaultRestHR
 	}
-	trimp := BanisterTRIMP(*activity, rest)
-	activity.Trimp = &trimp
-	return nil
+	return rest, nil
 }
 
 // BackfillTrimp sets the training score of the activities imported before it existed: their FIT file is
