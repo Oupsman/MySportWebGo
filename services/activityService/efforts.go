@@ -282,6 +282,39 @@ func round1(value float64) float64 {
 	return math.Round(value*10) / 10
 }
 
+// BackfillProgressInterval is how often a backfill logs how far it is
+var BackfillProgressInterval = 30 * time.Second
+
+// backfillProgress logs the progress of a backfill: at its start, then at most every
+// BackfillProgressInterval, with an estimate of the time left
+type backfillProgress struct {
+	logger  zerolog.Logger
+	total   int
+	started time.Time
+	logged  time.Time
+}
+
+func newBackfillProgress(logger zerolog.Logger, total int, msg string) *backfillProgress {
+	now := time.Now()
+	logger.Info().Int("activities", total).Msg(msg)
+	return &backfillProgress{logger: logger, total: total, started: now, logged: now}
+}
+
+// done logs the progress after done activities, when the last log is old enough
+func (p *backfillProgress) done(done int, fields func(*zerolog.Event) *zerolog.Event) {
+	now := time.Now()
+	if done >= p.total || now.Sub(p.logged) < BackfillProgressInterval {
+		return
+	}
+	p.logged = now
+	elapsed := now.Sub(p.started)
+	left := time.Duration(float64(elapsed) / float64(done) * float64(p.total-done)).Round(time.Second)
+	event := p.logger.Info().Int("done", done).Int("total", p.total).
+		Str("percent", strconv.FormatFloat(float64(done)*100/float64(p.total), 'f', 1, 64)).
+		Str("elapsed", elapsed.Round(time.Second).String()).Str("left", left.String())
+	fields(event).Msg("backfill in progress")
+}
+
 // BackfillBestEfforts computes the best efforts of the activities analysed before they existed: their FIT
 // file is analysed again; without readable file, the distance ones come from the stored series
 func BackfillBestEfforts(db *models.DB, logger zerolog.Logger) error {
@@ -289,8 +322,10 @@ func BackfillBestEfforts(db *models.DB, logger zerolog.Logger) error {
 	if err != nil || len(ids) == 0 {
 		return err
 	}
+	logger = logger.With().Str("backfill", "best_efforts").Logger()
+	progress := newBackfillProgress(logger, len(ids), "computing the best efforts of activities")
 	fromSeries := 0
-	for _, id := range ids {
+	for i, id := range ids {
 		activity, err := db.GetActivityDistances(id)
 		if err != nil {
 			return err
@@ -303,8 +338,10 @@ func BackfillBestEfforts(db *models.DB, logger zerolog.Logger) error {
 		if err := db.SetActivityBestEfforts(id, efforts); err != nil {
 			return err
 		}
+		progress.done(i+1, func(e *zerolog.Event) *zerolog.Event { return e.Int("without_file", fromSeries) })
 	}
-	logger.Info().Int("activities", len(ids)).Int("without_file", fromSeries).Msg("best efforts computed")
+	logger.Info().Int("activities", len(ids)).Int("without_file", fromSeries).
+		Str("elapsed", time.Since(progress.started).Round(time.Second).String()).Msg("best efforts computed")
 	return nil
 }
 
