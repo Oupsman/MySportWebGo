@@ -19,8 +19,12 @@ services:
 steps:
   - name: test
     image: golang:1.26-bookworm
+    # the latest image of the tag, not the copy cached by the agent
+    pull: true
     environment:
       MYSPORTWEB_TEST_DSN: host=postgres user=postgres password=ci dbname=mysportweb_test sslmode=disable
+      # the toolchain of go.mod at least, see the Dockerfile
+      GOTOOLCHAIN: auto
     commands:
       - test -z "$(gofmt -l cmd internal services)" || (gofmt -l cmd internal services && exit 1)
       - go vet ./cmd/... ./internal/... ./services/...

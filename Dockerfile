@@ -1,5 +1,8 @@
 # Backend of MySportWeb: the API, and the thumbnails of the activities drawn by a headless Chromium
 FROM golang:1.26-bookworm AS build
+# the toolchain of go.mod at least (security fixes of the standard library), downloaded when the image has an
+# older one: a cached image can lag behind its tag. The golang images set GOTOOLCHAIN=local, which ignores it.
+ENV GOTOOLCHAIN=auto
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
