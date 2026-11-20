@@ -24,6 +24,17 @@ func NewApp(logger zerolog.Logger, driver string, dsn string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	if current, latest, err := models.SchemaVersion(DB); err == nil {
+		logger.Info().Int64("version", current).Int64("latest", latest).Msg("database schema up to date")
+	}
+	// a model changed without its migration: the queries on the missing columns will fail
+	missing, err := models.SchemaDrift(DB)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range missing {
+		logger.Error().Str("missing", m).Msg("the database lacks a column of the models: a migration is missing")
+	}
 
 	var httpClient = &http.Client{}
 

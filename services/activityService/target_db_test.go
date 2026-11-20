@@ -5,7 +5,8 @@ import (
 	"testing"
 )
 
-// the target weight was whole kilos (smallint): the migration makes it a decimal, keeping the targets
+// the target weight was whole kilos (smallint): the adoption of a database of before the versioned
+// migrations makes it a decimal, keeping the targets
 func TestWeightObjectiveMigration(t *testing.T) {
 	db := testDB(t)
 	user := models.Users{Username: "target", Email: "target@test.local"}
@@ -16,6 +17,10 @@ func TestWeightObjectiveMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := db.Exec("UPDATE users SET weight_objective = 72 WHERE id = ?", user.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	// a database of before the versioned migrations: no versions table
+	if err := db.Exec("DROP TABLE goose_db_version").Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := models.CreateOrMigrate(db); err != nil {

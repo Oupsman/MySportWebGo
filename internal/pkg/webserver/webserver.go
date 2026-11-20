@@ -8,6 +8,7 @@ import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/pictures"
 	"MySportWeb/internal/pkg/vars"
+	"net/http"
 	"os"
 	"time"
 
@@ -176,8 +177,35 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.POST("/healthdatas/:id", middlewares.IsAuthorized(models.HealthDatasWrite), apicontrollers.UpdateHealthData)
 	apiv1.DELETE("/healthdatas/:id", middlewares.IsAuthorized(models.HealthDatasDelete), apicontrollers.DeleteHealthData)
 
-	// Start and run the server
-	err := httpRouter.Run(listenAddr)
-	return err
+	return newHTTPServer(listenAddr, httpRouter).ListenAndServe()
+}
 
+// The limits of the HTTP connections: without them (gin's Run), a client sending its request slowly, or
+// reading the response slowly, holds a connection and its goroutine forever
+var (
+	// ReadHeaderTimeout: the headers come at once from a real client, slowly from a slowloris attack
+	ReadHeaderTimeout = 10 * time.Second
+	// ReadTimeout reads the whole request: FitBodyLimit over a slow mobile connection
+	ReadTimeout = 5 * time.Minute
+	// WriteTimeout counts from the end of the headers until the response is sent, so it holds the upload
+	// of the body, the wait for an analysis slot (activityService.QueueTimeout), the analysis and the
+	// thumbnail
+	WriteTimeout = 10 * time.Minute
+	// IdleTimeout closes the kept-alive connections without request
+	IdleTimeout = 2 * time.Minute
+)
+
+// MaxHeaderBytes: the headers of the API are small, the session token the largest
+const MaxHeaderBytes = 64 << 10
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: ReadHeaderTimeout,
+		ReadTimeout:       ReadTimeout,
+		WriteTimeout:      WriteTimeout,
+		IdleTimeout:       IdleTimeout,
+		MaxHeaderBytes:    MaxHeaderBytes,
+	}
 }

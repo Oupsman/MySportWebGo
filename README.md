@@ -41,6 +41,11 @@ docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_POR
   `MSW_DBNAME`, and `MSW_DBSSLMODE`. The default, `prefer`, uses TLS when the database offers it without checking
   its certificate: set `verify-full` (or `require`) for a database reached over a network you don't control.
   The tables are created at the first start.
+* **Upgrades**: each version migrates the database schema at its start (versioned migrations, see
+  [internal/pkg/models/migrations/README.md](internal/pkg/models/migrations/README.md)), one server at a time. Back
+  up the database before upgrading: the backend refuses to start on a database migrated by a newer version, going
+  back to an older one needs that backup. A database created before the versioned migrations is adopted by the
+  first version that has them: upgrade through it, the later versions refuse such a database.
 * `MSW_DOMAIN` is the URL users open: the API refuses requests from any other origin.
 * The uploaded files are in the `media` volume.
 * The images are pulled from `MSW_REGISTRY` with the tag `MSW_TAG` (`latest`, a short commit sha, or a version
