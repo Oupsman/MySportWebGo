@@ -54,3 +54,28 @@ func TestBackfillTrimp(t *testing.T) {
 		t.Errorf("%d activities still without TRIMP (%v)", len(ids), err)
 	}
 }
+
+// a backfill stopped while the server is busy saves nothing: the file wasn't read, the TRIMP isn't computed
+// from the heart rates instead
+func TestBackfillTrimpStoppedWhileBusy(t *testing.T) {
+	db := emptyDB(t)
+	user := models.Users{Username: "busy", Email: "busy@test.local", MaxHR: 190}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	activity := steadyActivity(user, 60, 125)
+	activity.User, activity.UserID, activity.Sport = models.Users{}, user.ID, "running"
+	if err := db.Omit("User", "Equipment").Create(&activity).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	fillAnalysisSlots(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if err := BackfillTrimp(ctx, db, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	if ids, err := db.GetActivitiesWithoutTrimp(); err != nil || len(ids) != 1 {
+		t.Errorf("%d activities without TRIMP, want 1 (%v)", len(ids), err)
+	}
+}

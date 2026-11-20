@@ -150,7 +150,11 @@ func BackfillTrimp(ctx context.Context, db *models.DB, logger zerolog.Logger) er
 		}
 		restHR := UserRestHR(db, activity.UserID)
 		// only the heart rates are used: the altitudes needn't be corrected
-		analysed, err := analyzeFile(activity.FilePath, activity.User, activity.TrimEnd, Analysis{RestHR: restHR})
+		analysed, err := analyzeFileWhenFree(ctx, activity.FilePath, activity.User, activity.TrimEnd, Analysis{RestHR: restHR})
+		if ctx.Err() != nil {
+			// stopped while waiting for an analysis slot: the file wasn't read, not unreadable
+			return nil
+		}
 		if err == nil && analysed.Trimp != nil {
 			activity.Trimp = analysed.Trimp
 		} else {

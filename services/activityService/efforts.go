@@ -4,7 +4,6 @@ import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
 	"context"
-	"errors"
 	"math"
 	"strconv"
 	"time"
@@ -357,18 +356,10 @@ func BackfillBestEfforts(ctx context.Context, db *models.DB, logger zerolog.Logg
 // fileBestEfforts analyses the FIT file of an activity again, as it was trimmed, for its best efforts,
 // waiting for an analysis slot as long as the server is busy
 func fileBestEfforts(ctx context.Context, activity models.Activity) (types.BestEffortArray, error) {
-	for {
-		// only the records are used: no resting heart rate nor altitude correction
-		analysed, err := analyzeFile(activity.FilePath, activity.User, activity.TrimEnd, Analysis{})
-		if errors.Is(err, ErrBusy) {
-			if err := waitRetry(ctx); err != nil {
-				return nil, err
-			}
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		return analysed.BestEfforts, nil
+	// only the records are used: no resting heart rate nor altitude correction
+	analysed, err := analyzeFileWhenFree(ctx, activity.FilePath, activity.User, activity.TrimEnd, Analysis{})
+	if err != nil {
+		return nil, err
 	}
+	return analysed.BestEfforts, nil
 }

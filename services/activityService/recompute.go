@@ -111,18 +111,10 @@ func recomputeActivity(ctx context.Context, db *models.DB, id uuid.UUID, correct
 	if err != nil {
 		return err
 	}
-	for {
-		analysed, err := analyzeFile(stored.FilePath, stored.User, stored.TrimEnd,
-			Analysis{Correction: correction, Weight: ActivityWeight(db, stored.UserID, stored.EquipmentID)})
-		if errors.Is(err, ErrBusy) {
-			if err := waitRetry(ctx); err != nil {
-				return err
-			}
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		return db.UpdateActivityElevation(id, &analysed)
+	analysed, err := analyzeFileWhenFree(ctx, stored.FilePath, stored.User, stored.TrimEnd,
+		Analysis{Correction: correction, Weight: ActivityWeight(db, stored.UserID, stored.EquipmentID)})
+	if err != nil {
+		return err
 	}
+	return db.UpdateActivityElevation(id, &analysed)
 }

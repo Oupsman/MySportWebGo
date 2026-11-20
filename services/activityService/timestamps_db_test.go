@@ -5,6 +5,7 @@ import (
 	"MySportWeb/internal/pkg/vars"
 	"context"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -61,5 +62,57 @@ func TestBackfillTimeStamps(t *testing.T) {
 	ids, err := db.GetActivitiesBelowEngine(vars.Engine_version)
 	if err != nil || len(ids) != 0 {
 		t.Fatalf("activities still below engine %d: %v %v", vars.Engine_version, ids, err)
+	}
+}
+
+// while the uploads take every analysis slot, the backfill waits for one instead of taking the refused
+// analysis for an unreadable file; stopped while waiting, it leaves the activity for the next start
+func TestBackfillTimeStampsWaitsWhenBusy(t *testing.T) {
+	db := testDB(t)
+	user := models.Users{Username: "stamps-busy", Email: "stamps-busy@test.local"}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	equipment := models.Equipments{Name: "bike", UserID: int(user.ID), IsDefault: true}
+	if err := db.Create(&equipment).Error; err != nil {
+		t.Fatal(err)
+	}
+	old := importFit(t, sameRouteFiles[0], user, equipment)
+	old.FilePath = "../../prototypes/" + sameRouteFiles[0] + ".fit"
+	want := len(old.GpsTimeStamps)
+	old.EngineVersion = 1
+	old.GpsTimeStamps, old.HeartTimeStamps, old.CadenceTimeStamps = nil, nil, nil
+	if err := db.CreateActivity(&old); err != nil {
+		t.Fatal(err)
+	}
+	engine := func() int {
+		got, err := db.GetActivity(old.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got.EngineVersion
+	}
+
+	release := fillAnalysisSlots(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if err := BackfillTimeStamps(ctx, db, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	if got := engine(); got != 1 {
+		t.Fatalf("stopped while busy: engine %d, want 1 (left for the next start)", got)
+	}
+
+	time.AfterFunc(100*time.Millisecond, release)
+	if err := BackfillTimeStamps(context.Background(), db, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := db.GetActivity(old.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.EngineVersion != vars.Engine_version || len(got.GpsTimeStamps) != want {
+		t.Fatalf("after the wait: engine %d, %d gps time stamps (want %d): degraded instead of re-analysed",
+			got.EngineVersion, len(got.GpsTimeStamps), want)
 	}
 }

@@ -10,11 +10,13 @@ import (
 const (
 	MaxConcurrentAnalyses   = 4
 	MaxConcurrentThumbnails = 2
-	// QueueTimeout is how long a request waits for its turn before giving up with ErrBusy
-	QueueTimeout = time.Minute
 	// ThumbnailTimeout is the longest a thumbnail is drawn: a stuck Chromium must free its slot
 	ThumbnailTimeout = time.Minute
 )
+
+// QueueTimeout is how long a request waits for its turn before giving up with ErrBusy (a variable for the
+// tests)
+var QueueTimeout = time.Minute
 
 // ErrBusy is returned when the work waited QueueTimeout for its turn: the client should try again later
 var ErrBusy = errors.New("the server is busy, try again in a moment")

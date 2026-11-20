@@ -160,18 +160,10 @@ func reweigh(ctx context.Context, db *models.DB, row models.ActivityWeightRow) e
 		}
 		return db.SetActivityTotalWeight(row.ID, uint16(math.Round(w)))
 	}
-	for {
-		analysed, err := analyzeFile(stored.FilePath, stored.User, stored.TrimEnd,
-			Analysis{Correction: DeviceCorrection(db, stored.UserID), Weight: weight})
-		if errors.Is(err, ErrBusy) {
-			if err := waitRetry(ctx); err != nil {
-				return err
-			}
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		return db.UpdateActivityElevation(row.ID, &analysed)
+	analysed, err := analyzeFileWhenFree(ctx, stored.FilePath, stored.User, stored.TrimEnd,
+		Analysis{Correction: DeviceCorrection(db, stored.UserID), Weight: weight})
+	if err != nil {
+		return err
 	}
+	return db.UpdateActivityElevation(row.ID, &analysed)
 }

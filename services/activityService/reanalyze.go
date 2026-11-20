@@ -5,6 +5,7 @@ import (
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/vars"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -24,6 +25,33 @@ func analyzeFile(filePath string, user models.Users, trimEnd float64, opts Analy
 		}
 	}()
 	return AnalyzeTrimmed(filePath, user, models.Equipments{}, trimEnd, opts)
+}
+
+// analyzeFileWhenFree runs analyzeFile, waiting for an analysis slot as long as the server is busy: a
+// background job must not take a refused analysis for an unreadable file. ctx.Err() when ctx is done first.
+func analyzeFileWhenFree(ctx context.Context, filePath string, user models.Users, trimEnd float64, opts Analysis) (models.Activity, error) {
+	for {
+		activity, err := analyzeFile(filePath, user, trimEnd, opts)
+		if !errors.Is(err, ErrBusy) {
+			return activity, err
+		}
+		if err := waitRetry(ctx); err != nil {
+			return models.Activity{}, err
+		}
+	}
+}
+
+// generateThumbnailWhenFree runs GenerateThumbnail, waiting for a drawing slot as long as the server is busy
+func generateThumbnailWhenFree(ctx context.Context, activity models.Activity) error {
+	for {
+		err := GenerateThumbnail(activity)
+		if !errors.Is(err, ErrBusy) {
+			return err
+		}
+		if err := waitRetry(ctx); err != nil {
+			return err
+		}
+	}
 }
 
 // BackfillTimeStamps re-reads the FIT file of the activities analysed by an older engine, to fill the
@@ -57,8 +85,12 @@ func BackfillTimeStamps(ctx context.Context, db *models.DB, logger zerolog.Logge
 			user.SecurityDistance = DefaultSecurityDistance
 		}
 		// the series must stay as long as the trimmed activity
-		analysed, err := analyzeFile(stored.FilePath, user, stored.TrimEnd,
+		analysed, err := analyzeFileWhenFree(ctx, stored.FilePath, user, stored.TrimEnd,
 			Analysis{Correction: DeviceCorrection(db, stored.UserID), Weight: ActivityWeight(db, stored.UserID, stored.EquipmentID)})
+		if ctx.Err() != nil {
+			// stopped while waiting for an analysis slot: the file wasn't read, not unreadable
+			return nil
+		}
 		var public types.GpsPointArray
 		if err != nil {
 			failed++
@@ -83,7 +115,7 @@ func BackfillTimeStamps(ctx context.Context, db *models.DB, logger zerolog.Logge
 		}
 		if user.UUID != uuid.Nil && !slices.Equal(public, stored.PublicGpsPoints) {
 			redrawn := models.Activity{ID: id, User: user, PublicGpsPoints: public}
-			if err := GenerateThumbnail(redrawn); err != nil {
+			if err := generateThumbnailWhenFree(ctx, redrawn); err != nil {
 				logger.Warn().Err(err).Str("activity", id.String()).Msg("thumbnail not drawn again with the new public trace")
 			}
 		}

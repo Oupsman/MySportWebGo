@@ -6,6 +6,9 @@ import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
 	"context"
+	"sync"
+	"testing"
+	"time"
 )
 
 // SumAnalyze analyses a whole FIT file, its training score computed with DefaultRestHR when the device
@@ -33,4 +36,34 @@ type testBackground struct{}
 
 func (testBackground) Go(fn func(ctx context.Context)) {
 	go fn(context.Background())
+}
+
+// fillAnalysisSlots takes every analysis slot, as a burst of uploads does, with QueueTimeout and
+// BusyRetryDelay shortened so that analyses are refused with ErrBusy at once. The returned function frees
+// the slots (once); the timeouts are restored at the end of the test.
+func fillAnalysisSlots(t *testing.T) (release func()) {
+	t.Helper()
+	savedQueue, savedRetry := QueueTimeout, BusyRetryDelay
+	QueueTimeout, BusyRetryDelay = 20*time.Millisecond, 10*time.Millisecond
+	var releases []func()
+	for range MaxConcurrentAnalyses {
+		r, err := analysisSlots.acquire(time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		releases = append(releases, r)
+	}
+	var once sync.Once
+	release = func() {
+		once.Do(func() {
+			for _, r := range releases {
+				r()
+			}
+		})
+	}
+	t.Cleanup(func() {
+		release()
+		QueueTimeout, BusyRetryDelay = savedQueue, savedRetry
+	})
+	return release
 }
