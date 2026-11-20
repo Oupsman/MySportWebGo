@@ -54,6 +54,109 @@ services:
       backend:
         condition: service_healthy
 
+  # Nightly dump of the database, and copy of the media volume, into MSW_BACKUP_DIR: to send elsewhere
+  # (Kopia, restic, rsync...), a backup on the same disk doesn't survive the disk. A backup now (before an
+  # upgrade): docker compose run --rm backup now. The restore: see the README.
+  backup:
+    # pg_dump can't dump a server more recent than itself: the major version of the database
+    image: ${MSW_BACKUP_IMAGE:-postgres:16-bookworm}
+    restart: unless-stopped
+    environment:
+      PGHOST: ${MSW_DBHOST:-db}
+      PGPORT: ${MSW_DBPORT:-5432}
+      PGUSER: ${MSW_DBUSER:-mysportweb}
+      PGPASSWORD: ${MSW_DBPASSWORD:?set MSW_DBPASSWORD}
+      PGDATABASE: ${MSW_DBNAME:-mysportweb}
+      PGSSLMODE: ${MSW_DBSSLMODE:-prefer}
+      # the time of the nightly backup, HH:MM in TZ
+      BACKUP_TIME: ${MSW_BACKUP_TIME:-03:30}
+      TZ: ${MSW_BACKUP_TZ:-Europe/Paris}
+      # the dumps older than that are deleted, once a new one succeeded
+      BACKUP_KEEP_DAYS: ${MSW_BACKUP_KEEP_DAYS:-14}
+      # uid:gid owning the backups, readable by it only: the user of the tool sending them elsewhere
+      BACKUP_OWNER: ${MSW_BACKUP_OWNER:-1000:1000}
+    volumes:
+      - media:/media:ro
+      - ${MSW_BACKUP_DIR:-./backups}:/backups
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -u
+        umask 077
+        # PID 1 ignores SIGTERM without a handler: docker stop would wait, then kill a dump midway
+        trap 'log "stopped"; exit 0' TERM INT
+        log() { echo "$$(date '+%F %T') $$*"; }
+        if ! date -d "today $$BACKUP_TIME" > /dev/null 2>&1; then
+          log "ERROR: BACKUP_TIME must be HH:MM, not $$BACKUP_TIME"
+          exit 1
+        fi
+        mkdir -p /backups/db /backups/media
+
+        # backup dumps the database, checks the dump, copies the media, then deletes the old dumps
+        backup() {
+          local name="/backups/db/$$PGDATABASE-$$(date +%F_%H%M%S).dump"
+          log "dumping $$PGDATABASE from $$PGHOST:$$PGPORT"
+          # a dump is written under another name until checked: a stopped or failed dump is never a backup
+          if ! pg_dump --format=custom --file="$$name.partial"; then
+            log "ERROR: pg_dump failed"
+            rm -f "$$name.partial"
+            return 1
+          fi
+          if ! pg_restore --list "$$name.partial" > /dev/null; then
+            log "ERROR: the dump can't be read back"
+            rm -f "$$name.partial"
+            return 1
+          fi
+          mv "$$name.partial" "$$name"
+          log "database dumped: $$name ($$(du -h "$$name" | cut -f1))"
+          # incremental: only the new and changed files; the files deleted since stay in the copy
+          if ! cp -a -u /media/. /backups/media/; then
+            log "ERROR: the media copy failed"
+            return 1
+          fi
+          log "media copied ($$(du -sh /backups/media | cut -f1))"
+          # only after a successful dump: failing backups never delete the last good ones
+          find /backups/db -name '*.dump' -mtime "+$$BACKUP_KEEP_DAYS" -print -delete | sed 's/^/deleted /'
+          find /backups/db -name '*.partial' -mmin +1440 -delete
+          # the copy keeps the modes of the media: the traces lead to the users' homes, the owner only
+          chown -R "$$BACKUP_OWNER" /backups
+          chmod -R go= /backups
+          touch /backups/.last-success
+        }
+
+        if [ "$${1:-schedule}" = now ]; then
+          backup
+          exit
+        fi
+        # a backup at the start unless there is a recent one: the first deployment, a long stop
+        if [ -z "$$(find /backups/.last-success -mmin -1200 2>/dev/null)" ]; then
+          backup || true
+        fi
+        while :; do
+          now=$$(date +%s)
+          next=$$(date -d "today $$BACKUP_TIME" +%s)
+          if [ "$$next" -le "$$now" ]; then
+            next=$$(date -d "tomorrow $$BACKUP_TIME" +%s)
+          fi
+          log "next backup at $$(date -d "@$$next" '+%F %T %Z')"
+          sleep $$((next - now)) &
+          wait $$!
+          backup || true
+        done
+      - backup
+    command: ["schedule"]
+    # unhealthy when the last successful backup is more than 26 hours old
+    healthcheck:
+      test: ["CMD-SHELL", "test -n \"$$(find /backups/.last-success -mmin -1560 2>/dev/null)\""]
+      interval: 5m
+      timeout: 10s
+      start_period: 30m
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+
   db:
     image: postgres:16-bookworm
     profiles: [db]

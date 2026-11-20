@@ -48,6 +48,29 @@ docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_POR
   first version that has them: upgrade through it, the later versions refuse such a database.
 * `MSW_DOMAIN` is the URL users open: the API refuses requests from any other origin.
 * The uploaded files are in the `media` volume.
+* **Backups**: the `backup` service dumps the database every night (`MSW_BACKUP_TIME`, 03:30 by default) into
+  `MSW_BACKUP_DIR/db` (`./backups` by default), and copies the media volume into `MSW_BACKUP_DIR/media`. Send that
+  directory elsewhere (Kopia, restic...): a backup on the disk of the server doesn't survive the disk. Each dump is
+  checked before it counts, the dumps older than `MSW_BACKUP_KEEP_DAYS` (14) are deleted once a new one succeeded,
+  and the service is unhealthy when the last backup is more than 26 hours old. The media copy is incremental: the
+  files deleted since stay in it. A backup now, before an upgrade: `docker compose run --rm backup now`.
+  With an external database, `MSW_BACKUP_IMAGE` is a postgres image of its major version (pg_dump can't dump a
+  more recent server).
+* **Restore** (the backend stopped, from the directory of `docker-compose.yaml`):
+
+  ```sh
+  docker compose stop backend
+  # the database: replaces its tables by the ones of the dump
+  docker compose exec -T db pg_restore -U mysportweb -d mysportweb --clean --if-exists --no-owner \
+    < backups/db/mysportweb-2026-11-20_033000.dump
+  # the media: the files of the copy, owned by the user of the backend
+  docker run --rm -v mysportweb_media:/media -v ./backups/media:/copy:ro debian:bookworm-slim \
+    sh -c 'cp -a /copy/. /media/ && chown -R 1000:1000 /media'
+  docker compose start backend
+  ```
+
+  The backend refuses a dump made by a more recent version of it (a newer database schema): restore it with that
+  version. Try a restore once, on another machine or database: an untested backup isn't a backup.
 * The images are pulled from `MSW_REGISTRY` with the tag `MSW_TAG` (`latest`, a short commit sha, or a version
   `1.2.3`, `1.2`, `1`), at each deployment: run `docker login` to the registry first (with Portainer: add the
   registry in its Registries). `docker-compose.yaml` never builds them, Portainer can't build.

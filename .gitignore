@@ -4,3 +4,5 @@ MEDIA/
 MEDIA.tgz
 tmp/
 prototypes/*.fit
+# the backups of docker compose: personal data, password hashes
+backups/
