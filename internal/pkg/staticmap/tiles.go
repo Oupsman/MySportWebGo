@@ -28,8 +28,8 @@ const TileSize = 256
 // tiles kept at least 7 days, and the attribution on the map: Tiles and Render do so.
 const DefaultURL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
-// UserAgent identifies the application to the tile server
-const UserAgent = "MySportWeb/1.0 (self-hosted sport activity tracker)"
+// UserAgent identifies the application to the tile server, with its version (set at the start)
+var UserAgent = "MySportWeb (self-hosted sport activity tracker)"
 
 const (
 	// MaxAge is how long a downloaded tile is used before being downloaded again; past it, the old one is

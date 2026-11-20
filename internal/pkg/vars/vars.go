@@ -14,6 +14,10 @@ import (
 // slope of the estimated power from them, 7: the running dynamics in the metrics
 const Engine_version int = 7
 
+// Version is the version of the backend: X.Y.Z for a release, the short commit sha for an image of the
+// default branch, dev for a local build. Set at the build (-ldflags -X, see the Dockerfile).
+var Version = "dev"
+
 var ListenPort string
 
 // DemDir is the directory of the elevation tiles of the altitude correction: DEM_DIR, MEDIA/dem by default

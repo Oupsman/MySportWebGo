@@ -24,6 +24,7 @@ import (
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	vars.Init()
+	log.Info().Str("version", vars.Version).Msg("starting MySportWeb")
 	// the tiles are downloaded at the first activity corrected in their area only
 	demURL := vars.DemURL
 	switch demURL {
@@ -42,6 +43,7 @@ func main() {
 	case "none":
 		tileURL = ""
 	}
+	staticmap.UserAgent = "MySportWeb/" + vars.Version + " (self-hosted sport activity tracker)"
 	activityService.MapTiles = staticmap.NewTiles(vars.MapTileDir, tileURL)
 	driver := "postgres"
 	dsn := vars.Dsn

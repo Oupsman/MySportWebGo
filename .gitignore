@@ -9,3 +9,6 @@ backups/
 # the data of docker compose (MSW_DATA_DIR): the database, the FIT files
 data/
 /scripts/migrate-to-host-dirs.sh
+# written by the CI (ci/image-tags.sh)
+/.tags
+/.version

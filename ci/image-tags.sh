@@ -3,6 +3,7 @@
 # - a version tag vX.Y.Z (or X.Y.Z): X.Y.Z, X.Y and X, to deploy a fixed version or follow a major one
 # - any other tag (1.2.0-rc1...): itself only
 # - otherwise (the default branch): latest and the short commit sha, to roll back to a known image
+# and .version, the version built into the image: the first of these tags, the short sha instead of latest.
 set -eu
 
 # a Docker tag: letters, digits, _ . - and 128 characters at most
@@ -21,5 +22,7 @@ if [ "${CI_PIPELINE_EVENT:-}" = "tag" ]; then
 else
 	printf 'latest\n%s\n' "$(printf '%s' "$CI_COMMIT_SHA" | cut -c1-8)"
 fi > .tags
+grep -v '^latest$' .tags | head -n 1 > .version
 
 cat .tags
+echo "version: $(cat .version)"

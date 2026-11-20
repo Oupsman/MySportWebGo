@@ -7,7 +7,10 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/mysportweb ./cmd/mysportweb \
+# .version: written by the CI (ci/image-tags.sh), X.Y.Z or the short commit sha; dev without it
+RUN version=$(cat .version 2>/dev/null || echo dev) \
+ && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X MySportWeb/internal/pkg/vars.Version=$version" \
+    -o /out/mysportweb ./cmd/mysportweb \
  && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/cleanmedia ./cmd/cleanmedia
 
 FROM debian:trixie-slim

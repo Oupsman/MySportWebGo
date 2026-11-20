@@ -32,7 +32,7 @@ with a device token, see [desktop/README.md](desktop/README.md).
 with an optional Postgres:
 
 ```sh
-cp compose.env.sample .env   # then set MSW_DOMAIN, MSW_SECRET_KEY and MSW_DBPASSWORD
+cp compose.env.sample .env   # then set MSW_TAG, MSW_DOMAIN, MSW_SECRET_KEY and MSW_DBPASSWORD
 docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_PORT)
 ```
 
@@ -112,19 +112,53 @@ docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_POR
   rm -r backups/media
   ```
 
-* The images are pulled from `MSW_REGISTRY` with the tag `MSW_TAG` (`latest`, a short commit sha, or a version
-  `1.2.3`, `1.2`, `1`), at each deployment: run `docker login` to the registry first (with Portainer: add the
-  registry in its Registries). `docker-compose.yaml` never builds them, Portainer can't build.
-* To build the images locally instead: `docker compose -f docker-compose.yaml -f docker-compose.build.yaml up --build`,
-  the frontend one from `MSW_FRONTEND_PATH` (`../mysportweb-vuetify`).
+* The images are pulled from `MSW_REGISTRY` with the tag `MSW_TAG`, required: a version `X.Y.Z` (see
+  [Releases and upgrades](#releases-and-upgrades)), or for a test a short commit sha or `latest`. Run `docker login`
+  to the registry first (with Portainer: add the registry in its Registries). `docker-compose.yaml` never builds
+  them, Portainer can't build.
+* To build the images locally instead: `MSW_TAG=dev docker compose -f docker-compose.yaml -f docker-compose.build.yaml
+  up --build`, the frontend one from `MSW_FRONTEND_PATH` (`../mysportweb-vuetify`).
 
 The variables are prefixed `MSW_` because docker compose also reads the `.env` used for development.
+
+## Releases and upgrades
+
+The backend and the frontend are released together, with the same version: `vX.Y.Z` is a tag in both repositories,
+even when one of them didn't change, and `MSW_TAG=X.Y.Z` deploys both images.
+
+**Release**: from the default branch of both repositories, committed and pushed:
+
+```sh
+scripts/release.sh 1.4.0   # checks both repositories, asks, tags both v1.4.0 and pushes the tags
+```
+
+The CI of each repository tests the tagged commit and publishes its image `1.4.0` (and `1.4`, `1`). The backend
+logs its version at start, and `/api/v1/healthcheck` answers it.
+
+**Upgrade**: a new version may migrate the database schema at its start, and an older backend refuses to start on
+a schema migrated by a newer one. So, before each upgrade, take a dump:
+
+```sh
+docker compose run --rm backup now                   # a dump in MSW_BACKUP_DIR/db, checked
+# with Portainer (no compose file on the host), through the backup container of the stack:
+#   docker exec mysportweb-backup-1 bash -c 'pg_dump --format=custom --file=/backups/db/pre-upgrade-$(date +%F).dump'
+# MSW_TAG=1.4.0 in .env (Portainer: in the environment of the stack), then
+docker compose up -d
+docker compose exec frontend curl -s localhost/api/v1/healthcheck   # {"status":"OK","version":"1.4.0"}
+```
+
+**Rollback**: put the previous `MSW_TAG` back and redeploy. If the backend then logs `the database schema is newer
+than this version of the backend`, the new version migrated the database: restore the dump taken before the upgrade
+(see **Restore** in [Deploy with Docker Compose](#deploy-with-docker-compose)). The changes made since the upgrade
+are lost.
+
+Pin `X.Y.Z`: `1.4` or `1` follow the next releases at each redeploy, migrations included.
 
 ## CI with Woodpecker
 
 `.woodpecker.yaml` (the frontend repository has its own) tests every push and pull request, then builds the image.
 The default branch pushes `latest` and the short commit sha; a version tag `v1.2.3` pushes `1.2.3`, `1.2` and `1`
-(`ci/image-tags.sh`). Pull requests and other branches build the image without pushing it.
+(`ci/image-tags.sh`, which also writes the version built into the backend). Pull requests and other branches build the image without pushing it.
 
 * Secrets of each repository: `docker_registry` (the host, e.g. `registry.example.com`), `docker_repo` (the image,
   e.g. `registry.example.com/oupsman/mysportwebgo`), `docker_username`, `docker_password`.

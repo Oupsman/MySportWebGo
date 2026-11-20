@@ -2,6 +2,7 @@ package apicontrollers
 
 import (
 	"MySportWeb/internal/pkg/app"
+	"MySportWeb/internal/pkg/vars"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -19,7 +20,9 @@ func HealthCheck(c *gin.Context) {
 		return
 	}
 
+	// the version: which release answers, after an upgrade
 	c.JSON(http.StatusOK, gin.H{
-		"status": "OK",
+		"status":  "OK",
+		"version": vars.Version,
 	})
 }

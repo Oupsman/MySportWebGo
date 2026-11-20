@@ -10,14 +10,16 @@
 # postgres/ (the bundled database); the dumps of the database in MSW_BACKUP_DIR (./backups). With Portainer,
 # absolute paths: the relative ones are inside the stack directory of Portainer.
 #
-# The images are pulled from MSW_REGISTRY, this file never builds them: Portainer can't build.
-# To build them here instead: docker compose -f docker-compose.yaml -f docker-compose.build.yaml up --build
+# The images are pulled from MSW_REGISTRY, version MSW_TAG (both images share it: see Releases in the README);
+# this file never builds them: Portainer can't build. To build them here instead (MSW_TAG=dev for instance):
+#   docker compose -f docker-compose.yaml -f docker-compose.build.yaml up --build
 name: mysportweb
 
 services:
   backend:
-    image: ${MSW_REGISTRY:-ghcr.io/oupsman}/mysportwebgo:${MSW_TAG:-latest}
-    # latest moves with each push: a redeploy must not keep an old local copy
+    # a version, never latest: an upgrade may migrate the database, which the previous version then refuses
+    image: ${MSW_REGISTRY:-ghcr.io/oupsman}/mysportwebgo:${MSW_TAG:?set MSW_TAG, the version to deploy (X.Y.Z)}
+    # a moving tag (1.2, latest) must not keep an old local copy
     pull_policy: always
     restart: unless-stopped
     # a stop lets the running requests finish (90 s at most) and the backfills stop at their next activity
@@ -57,7 +59,7 @@ services:
   # Gives the media directory to the user of the backend (uid 1000) before it starts: docker creates a missing
   # directory as root. The image of the backend, run once as root.
   init:
-    image: ${MSW_REGISTRY:-ghcr.io/oupsman}/mysportwebgo:${MSW_TAG:-latest}
+    image: ${MSW_REGISTRY:-ghcr.io/oupsman}/mysportwebgo:${MSW_TAG:?set MSW_TAG, the version to deploy (X.Y.Z)}
     pull_policy: always
     user: "0:0"
     entrypoint:
@@ -68,7 +70,7 @@ services:
       - ${MSW_DATA_DIR:-./data}/media:/app/MEDIA
 
   frontend:
-    image: ${MSW_REGISTRY:-ghcr.io/oupsman}/mysportweb-frontend:${MSW_TAG:-latest}
+    image: ${MSW_REGISTRY:-ghcr.io/oupsman}/mysportweb-frontend:${MSW_TAG:?set MSW_TAG, the version to deploy (X.Y.Z)}
     pull_policy: always
     restart: unless-stopped
     environment:
