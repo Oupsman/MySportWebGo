@@ -182,3 +182,42 @@ func (db *DB) ImportHealthDatas(userID uint, measures []HealthData) (HealthImpor
 	})
 	return result, err
 }
+
+// GetRiderWeight returns the weight of a user at a date (kg): the last measure before it, else the first one
+// after it, else the weight of their profile; 0 when none is known
+func (db *DB) GetRiderWeight(userID uint, date time.Time) (float64, error) {
+	var weights []float64
+	err := db.Model(&HealthData{}).Where("user_id = ? AND weight > 0 AND date <= ?", userID, date).
+		Order("date desc").Limit(1).Pluck("weight", &weights).Error
+	if err != nil || len(weights) > 0 {
+		return firstWeight(weights), err
+	}
+	err = db.Model(&HealthData{}).Where("user_id = ? AND weight > 0 AND date > ?", userID, date).
+		Order("date asc").Limit(1).Pluck("weight", &weights).Error
+	if err != nil || len(weights) > 0 {
+		return firstWeight(weights), err
+	}
+	err = db.Model(&Users{}).Where("id = ?", userID).Pluck("weight", &weights).Error
+	return firstWeight(weights), err
+}
+
+// WeightMeasure is a weight of a user measured at a date (kg)
+type WeightMeasure struct {
+	Date   time.Time
+	Weight float64
+}
+
+// GetWeightMeasures returns the weights measured by a user, oldest first
+func (db *DB) GetWeightMeasures(userID uint) ([]WeightMeasure, error) {
+	var measures []WeightMeasure
+	err := db.Model(&HealthData{}).Select("date", "weight").Where("user_id = ? AND weight > 0", userID).
+		Order("date asc").Scan(&measures).Error
+	return measures, err
+}
+
+func firstWeight(weights []float64) float64 {
+	if len(weights) == 0 || weights[0] < 0 {
+		return 0
+	}
+	return weights[0]
+}

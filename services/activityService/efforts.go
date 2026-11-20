@@ -3,6 +3,7 @@ package activityService
 import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
+	"context"
 	"errors"
 	"math"
 	"strconv"
@@ -317,7 +318,7 @@ func (p *backfillProgress) done(done int, fields func(*zerolog.Event) *zerolog.E
 
 // BackfillBestEfforts computes the best efforts of the activities analysed before they existed: their FIT
 // file is analysed again; without readable file, the distance ones come from the stored series
-func BackfillBestEfforts(db *models.DB, logger zerolog.Logger) error {
+func BackfillBestEfforts(ctx context.Context, db *models.DB, logger zerolog.Logger) error {
 	ids, err := db.GetActivitiesWithoutBestEfforts()
 	if err != nil || len(ids) == 0 {
 		return err
@@ -326,11 +327,19 @@ func BackfillBestEfforts(db *models.DB, logger zerolog.Logger) error {
 	progress := newBackfillProgress(logger, len(ids), "computing the best efforts of activities")
 	fromSeries := 0
 	for i, id := range ids {
+		// stopping: what is done stays done, the rest goes on at the next start
+		if ctx.Err() != nil {
+			return nil
+		}
 		activity, err := db.GetActivityDistances(id)
 		if err != nil {
 			return err
 		}
-		efforts, err := fileBestEfforts(activity)
+		efforts, err := fileBestEfforts(ctx, activity)
+		if ctx.Err() != nil {
+			// stopped while waiting for an analysis slot: the file wasn't read, not unreadable
+			return nil
+		}
 		if err != nil {
 			fromSeries++
 			efforts = StoredBestEfforts(activity)
@@ -347,12 +356,14 @@ func BackfillBestEfforts(db *models.DB, logger zerolog.Logger) error {
 
 // fileBestEfforts analyses the FIT file of an activity again, as it was trimmed, for its best efforts,
 // waiting for an analysis slot as long as the server is busy
-func fileBestEfforts(activity models.Activity) (types.BestEffortArray, error) {
+func fileBestEfforts(ctx context.Context, activity models.Activity) (types.BestEffortArray, error) {
 	for {
 		// only the records are used: no resting heart rate nor altitude correction
-		analysed, err := analyzeFile(activity.FilePath, activity.User, activity.TrimEnd, nil, nil)
+		analysed, err := analyzeFile(activity.FilePath, activity.User, activity.TrimEnd, Analysis{})
 		if errors.Is(err, ErrBusy) {
-			time.Sleep(BusyRetryDelay)
+			if err := waitRetry(ctx); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		if err != nil {

@@ -60,7 +60,7 @@ func TestTrimRide(t *testing.T) {
 	}
 
 	end := math.Round(full.RecordedDuration / 2)
-	trimmed, err := AnalyzeTrimmed(path, user, models.Equipments{}, end, nil, nil)
+	trimmed, err := AnalyzeTrimmed(path, user, models.Equipments{}, end, Analysis{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestTrimRide(t *testing.T) {
 	}
 
 	// at or after the end of the recording, nothing is trimmed
-	whole, err := AnalyzeTrimmed(path, user, models.Equipments{}, full.RecordedDuration+10, nil, nil)
+	whole, err := AnalyzeTrimmed(path, user, models.Equipments{}, full.RecordedDuration+10, Analysis{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestTrimRide(t *testing.T) {
 		t.Errorf("trimmed after the end: trim end %v distance %v duration %d", whole.TrimEnd, whole.Distance, whole.Duration)
 	}
 
-	if _, err := AnalyzeTrimmed(path, user, models.Equipments{}, TrimMinDuration-1, nil, nil); !errors.Is(err, ErrTrimTooShort) {
+	if _, err := AnalyzeTrimmed(path, user, models.Equipments{}, TrimMinDuration-1, Analysis{}); !errors.Is(err, ErrTrimTooShort) {
 		t.Errorf("trimmed to %d s: error %v, want ErrTrimTooShort", TrimMinDuration-1, err)
 	}
 }
@@ -117,7 +117,7 @@ func TestTrimMultisport(t *testing.T) {
 	bike := full.Legs[1]
 	// in the middle of the bike leg: the run is dropped, the bike leg cut
 	end := math.Round(bike.StartOffset + bike.Duration/2)
-	trimmed, err := AnalyzeTrimmed(path, user, models.Equipments{}, end, nil, nil)
+	trimmed, err := AnalyzeTrimmed(path, user, models.Equipments{}, end, Analysis{})
 	if err != nil {
 		t.Fatal(err)
 	}

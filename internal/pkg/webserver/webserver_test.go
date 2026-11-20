@@ -2,16 +2,19 @@ package webserver
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"net"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
-// serve runs newHTTPServer on a free port with the timeouts of the test, returns its address
-func serve(t *testing.T) string {
+// startTestServer runs newHTTPServer on a free port with the timeouts of the test, returns its address
+func startTestServer(t *testing.T) string {
 	t.Helper()
 	saved := []time.Duration{ReadHeaderTimeout, ReadTimeout, WriteTimeout, IdleTimeout}
 	t.Cleanup(func() {
@@ -31,7 +34,7 @@ func serve(t *testing.T) string {
 }
 
 func TestSlowHeadersClosed(t *testing.T) {
-	addr := serve(t)
+	addr := startTestServer(t)
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +57,7 @@ func TestSlowHeadersClosed(t *testing.T) {
 }
 
 func TestCompleteRequestServed(t *testing.T) {
-	addr := serve(t)
+	addr := startTestServer(t)
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		t.Fatal(err)
@@ -83,5 +86,77 @@ func TestServerLimits(t *testing.T) {
 	}
 	if server.MaxHeaderBytes != MaxHeaderBytes {
 		t.Errorf("MaxHeaderBytes %d", server.MaxHeaderBytes)
+	}
+}
+
+// shutdownServer runs serve with a handler taking delay, returns its address, a cancel of its context, and
+// the result of serve
+func shutdownServer(t *testing.T, delay time.Duration) (string, context.CancelFunc, chan error) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := listener.Addr().String()
+	listener.Close() // serve listens itself
+	server := newHTTPServer(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(delay)
+		_, _ = io.WriteString(w, "done")
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() { result <- serve(ctx, server, zerolog.Nop()) }()
+	for i := 0; i < 100; i++ { // listening
+		if conn, err := net.Dial("tcp", addr); err == nil {
+			conn.Close()
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return addr, cancel, result
+}
+
+// TestShutdownFinishesRequests: a request running at the shutdown gets its answer, the new ones are refused
+func TestShutdownFinishesRequests(t *testing.T) {
+	addr, cancel, result := shutdownServer(t, 500*time.Millisecond)
+	answer := make(chan string, 1)
+	go func() {
+		response, err := http.Get("http://" + addr)
+		if err != nil {
+			answer <- err.Error()
+			return
+		}
+		body, _ := io.ReadAll(response.Body)
+		answer <- string(body)
+	}()
+	time.Sleep(100 * time.Millisecond) // the request is running
+	cancel()
+	if got := <-answer; got != "done" {
+		t.Errorf("the request running at the shutdown got %q, want done", got)
+	}
+	if err := <-result; err != nil {
+		t.Errorf("serve: %v", err)
+	}
+	if _, err := net.Dial("tcp", addr); err == nil {
+		t.Error("a connection accepted after the shutdown")
+	}
+}
+
+// TestShutdownTimeout: a request longer than ShutdownTimeout is cut, serve tells it
+func TestShutdownTimeout(t *testing.T) {
+	saved := ShutdownTimeout
+	defer func() { ShutdownTimeout = saved }()
+	ShutdownTimeout = 100 * time.Millisecond
+	addr, cancel, result := shutdownServer(t, 2*time.Second)
+	go func() { _, _ = http.Get("http://" + addr) }()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-result:
+		if err == nil {
+			t.Error("serve: no error with a request still running")
+		}
+	case <-time.After(time.Second):
+		t.Error("serve still waiting after ShutdownTimeout")
 	}
 }

@@ -24,6 +24,9 @@ steps:
     commands:
       - test -z "$(gofmt -l cmd internal services)" || (gofmt -l cmd internal services && exit 1)
       - go vet ./cmd/... ./internal/... ./services/...
+      # the known vulnerabilities of the Go modules the code calls (golang.org/x/vuln database): a new one fails
+      # the build until the module is upgraded
+      - go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./cmd/... ./internal/... ./services/...
       # Postgres opens its port once initialized
       - bash -c 'for i in $(seq 60); do (echo > /dev/tcp/postgres/5432) 2>/dev/null && exit 0; sleep 1; done; exit 1'
       # prototypes/ is not tested: its files each have their own main. -p 1: the packages share the

@@ -2,6 +2,7 @@ package activityService
 
 import (
 	"MySportWeb/internal/pkg/models"
+	"context"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"os"
@@ -146,7 +147,7 @@ func TestRoutesDatabase(t *testing.T) {
 		}
 		backfilled = append(backfilled, activity.ID)
 	}
-	if err := BackfillRoutes(db, zerolog.Nop()); err != nil {
+	if err := BackfillRoutes(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	var routeIDs []uuid.UUID
@@ -167,7 +168,7 @@ func TestRoutesDatabase(t *testing.T) {
 		t.Fatalf("expected 2 routes after backfill, got %d", len(routes))
 	}
 	// running it again is a no-op
-	if err := BackfillRoutes(db, zerolog.Nop()); err != nil {
+	if err := BackfillRoutes(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	if routes = countRoutes(t, db); len(routes) != 2 || routes[1].ActivityCount != 2 {
@@ -218,7 +219,7 @@ func TestMergeRoutesDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := MergeRoutes(db, zerolog.Nop()); err != nil {
+	if err := MergeRoutes(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	routes = countRoutes(t, db)
@@ -239,7 +240,7 @@ func TestMergeRoutesDatabase(t *testing.T) {
 	}
 
 	// running it again is a no-op
-	if err := MergeRoutes(db, zerolog.Nop()); err != nil {
+	if err := MergeRoutes(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	if again := countRoutes(t, db); len(again) != 2 || again[0].ActivityCount != 4 {

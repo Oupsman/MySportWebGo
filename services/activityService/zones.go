@@ -3,6 +3,7 @@ package activityService
 import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
+	"context"
 	"math"
 
 	"github.com/rs/zerolog"
@@ -70,12 +71,16 @@ func setHRZones(activity *models.Activity, restHR RestHRFunc) error {
 
 // BackfillHrZones sets the time in heart rate zones of the activities without it: imported before it
 // existed, or whose user changed their maximum heart rate. Only the stored heart rate stream is used.
-func BackfillHrZones(db *models.DB, logger zerolog.Logger) error {
+func BackfillHrZones(ctx context.Context, db *models.DB, logger zerolog.Logger) error {
 	ids, err := db.GetActivitiesWithoutHrZones()
 	if err != nil || len(ids) == 0 {
 		return err
 	}
 	for _, id := range ids {
+		// stopping: what is done stays done, the rest goes on at the next start
+		if ctx.Err() != nil {
+			return nil
+		}
 		activity, err := db.GetActivityHearts(id)
 		if err != nil {
 			return err

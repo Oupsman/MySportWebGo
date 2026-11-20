@@ -4,6 +4,7 @@ import (
 	"MySportWeb/internal/pkg/cities"
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
+	"context"
 	"strings"
 	"time"
 
@@ -87,7 +88,7 @@ func legacyTitles(sport string) []string {
 
 // BackfillTitles renames the activities still having a legacy title, the ones renamed by their user are kept.
 // The activities of users without timezone wait for it: once renamed, they couldn't be fixed anymore.
-func BackfillTitles(db *models.DB, logger zerolog.Logger) error {
+func BackfillTitles(ctx context.Context, db *models.DB, logger zerolog.Logger) error {
 	activities, err := db.GetActivitiesToRetitle(legacyTitles)
 	if err != nil {
 		return err
@@ -97,6 +98,10 @@ func BackfillTitles(db *models.DB, logger zerolog.Logger) error {
 	}
 	renamed, skipped := 0, 0
 	for _, a := range activities {
+		// stopping: what is done stays done, the rest goes on at the next start
+		if ctx.Err() != nil {
+			return nil
+		}
 		location, ok := userLocation(a.Timezone)
 		if !ok {
 			skipped++

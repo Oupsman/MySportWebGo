@@ -218,7 +218,7 @@ func (db *DB) GetActivitiesByUser(userID uint, start, number int) ([]types.Activ
 }
 
 func (db *DB) ResetImportStatus(userID uint) error {
-	err := db.Debug().Table("activities").Where("user_id = ?", userID).Update("lastimport", false)
+	err := db.Table("activities").Where("user_id = ?", userID).Update("lastimport", false)
 	if err != nil {
 		return err.Error
 	}
@@ -294,11 +294,12 @@ func (db *DB) SetActivityTitle(id uuid.UUID, oldTitle, title string) error {
 }
 
 // GetActivityToReanalyze returns what re-analysing an activity needs: its FIT file, where it is trimmed, its
-// user (empty when deleted), its route, and its traces to compute the public one again without the file
+// user (empty when deleted), its route, its equipment (the weight of the estimated power), and its traces to
+// compute the public one again without the file
 func (db *DB) GetActivityToReanalyze(id uuid.UUID) (Activity, error) {
 	var activity Activity
-	err := db.Select("id", "user_id", "file_path", "trim_end", "route_id", "gps_points", "public_gps_points").
-		Preload("User").First(&activity, "id = ?", id).Error
+	err := db.Select("id", "user_id", "file_path", "trim_end", "route_id", "gps_points", "public_gps_points",
+		"equipment_id").Preload("User").First(&activity, "id = ?", id).Error
 	return activity, err
 }
 
@@ -393,9 +394,10 @@ func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, privacy
 }
 
 // elevationUpdates are the columns that depend on the altitudes: the profile, the elevation, and the power
-// estimated from their slope (of the activity and of its legs)
+// estimated from their slope (of the activity and of its legs) and from the weight it moves
 func elevationUpdates(analysed *Activity) map[string]interface{} {
 	return map[string]interface{}{
+		"total_weight":         analysed.TotalWeight,
 		"altitudes":            analysed.Altitudes,
 		"positive_elevation":   analysed.PositiveElevation,
 		"negative_elevation":   analysed.NegativeElevation,

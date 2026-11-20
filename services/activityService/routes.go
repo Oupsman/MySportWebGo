@@ -2,6 +2,7 @@ package activityService
 
 import (
 	"MySportWeb/internal/pkg/models"
+	"context"
 	"math"
 
 	"sort"
@@ -209,7 +210,7 @@ func CreateActivity(db *models.DB, activity *models.Activity, store func(activit
 
 // BackfillRoutes assigns a route to the activities imported before routes existed, oldest first,
 // so the first activity of a route provides its reference trace
-func BackfillRoutes(db *models.DB, logger zerolog.Logger) error {
+func BackfillRoutes(ctx context.Context, db *models.DB, logger zerolog.Logger) error {
 	ids, err := db.GetActivitiesWithoutRoute(RouteMinDistance)
 	if err != nil {
 		return err
@@ -219,6 +220,10 @@ func BackfillRoutes(db *models.DB, logger zerolog.Logger) error {
 	}
 	logger.Info().Int("activities", len(ids)).Msg("assigning routes to activities")
 	for _, id := range ids {
+		// stopping: what is done stays done, the rest goes on at the next start
+		if ctx.Err() != nil {
+			return nil
+		}
 		activity, err := db.GetActivityForRoute(id)
 		if err != nil {
 			return err
@@ -261,7 +266,10 @@ func BackfillRoutes(db *models.DB, logger zerolog.Logger) error {
 // match the reference of its route, before the activities were also compared to the members of the routes.
 // Each route absorbs the routes matching it directly, the ones with the most activities first: merging
 // doesn't chain, a route only absorbs the routes similar to itself.
-func MergeRoutes(db *models.DB, logger zerolog.Logger) error {
+func MergeRoutes(ctx context.Context, db *models.DB, logger zerolog.Logger) error {
+	if ctx.Err() != nil {
+		return nil
+	}
 	pairs, err := db.GetRouteSports()
 	if err != nil {
 		return err

@@ -7,6 +7,7 @@ import (
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/services/activityService"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -287,11 +288,11 @@ func recomputeHrZones(App *app.App, userID uint) {
 		App.Logger.Error().Err(err).Uint("user_id", userID).Msg("heart rate zones not reset")
 		return
 	}
-	go func() {
-		if err := activityService.BackfillHrZones(&App.DB, App.Logger); err != nil {
+	App.Go(func(ctx context.Context) {
+		if err := activityService.BackfillHrZones(ctx, &App.DB, App.Logger); err != nil {
 			App.Logger.Error().Err(err).Uint("user_id", userID).Msg("heart rate zones not computed")
 		}
-	}()
+	})
 }
 
 // UpdateUser changes the account of the user of the request, who confirms it with their password. Only the

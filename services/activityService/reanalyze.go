@@ -4,6 +4,7 @@ import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/vars"
+	"context"
 	"fmt"
 	"slices"
 
@@ -16,13 +17,13 @@ import (
 const DefaultSecurityDistance = 500
 
 // analyzeFile runs AnalyzeTrimmed, turning its panics (a FIT file without session for instance) into errors
-func analyzeFile(filePath string, user models.Users, trimEnd float64, restHR RestHRFunc, correction CorrectionFunc) (activity models.Activity, err error) {
+func analyzeFile(filePath string, user models.Users, trimEnd float64, opts Analysis) (activity models.Activity, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic while analysing: %v", r)
 		}
 	}()
-	return AnalyzeTrimmed(filePath, user, models.Equipments{}, trimEnd, restHR, correction)
+	return AnalyzeTrimmed(filePath, user, models.Equipments{}, trimEnd, opts)
 }
 
 // BackfillTimeStamps re-reads the FIT file of the activities analysed by an older engine, to fill the
@@ -31,7 +32,7 @@ func analyzeFile(filePath string, user models.Users, trimEnd float64, restHR Res
 // trace, are drawn again when it changed.
 // Activities whose file can't be read are marked as done without them, the frontend then falls back on the
 // records time stamps; their public trace is computed again from the trace saved in the database.
-func BackfillTimeStamps(db *models.DB, logger zerolog.Logger) error {
+func BackfillTimeStamps(ctx context.Context, db *models.DB, logger zerolog.Logger) error {
 	ids, err := db.GetActivitiesBelowEngine(vars.Engine_version)
 	if err != nil {
 		return err
@@ -42,6 +43,10 @@ func BackfillTimeStamps(db *models.DB, logger zerolog.Logger) error {
 	logger.Info().Int("activities", len(ids)).Int("engine_version", vars.Engine_version).Msg("re-analysing activities")
 	failed := 0
 	for _, id := range ids {
+		// stopping: what is done stays done, the rest goes on at the next start
+		if ctx.Err() != nil {
+			return nil
+		}
 		stored, err := db.GetActivityToReanalyze(id)
 		if err != nil {
 			return err
@@ -52,7 +57,8 @@ func BackfillTimeStamps(db *models.DB, logger zerolog.Logger) error {
 			user.SecurityDistance = DefaultSecurityDistance
 		}
 		// the series must stay as long as the trimmed activity
-		analysed, err := analyzeFile(stored.FilePath, user, stored.TrimEnd, nil, DeviceCorrection(db, stored.UserID))
+		analysed, err := analyzeFile(stored.FilePath, user, stored.TrimEnd,
+			Analysis{Correction: DeviceCorrection(db, stored.UserID), Weight: ActivityWeight(db, stored.UserID, stored.EquipmentID)})
 		var public types.GpsPointArray
 		if err != nil {
 			failed++

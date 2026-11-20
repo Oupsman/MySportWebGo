@@ -3,6 +3,7 @@ package activityService
 import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
+	"context"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ func TestBackfillTitles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := BackfillTitles(db, zerolog.Nop()); err != nil {
+	if err := BackfillTitles(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range []struct {
@@ -75,7 +76,7 @@ func TestBackfillTitles(t *testing.T) {
 	if err := db.Model(&noTimezone).Update("timezone", "Europe/Paris").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := BackfillTitles(db, zerolog.Nop()); err != nil {
+	if err := BackfillTitles(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := db.GetActivity(waiting.ID); err != nil || got.Title != "Paris lunch ride" {

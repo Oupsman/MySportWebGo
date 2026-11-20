@@ -2,6 +2,7 @@ package activityService
 
 import (
 	"MySportWeb/internal/pkg/models"
+	"context"
 	// "MySportWeb/internal/pkg/utils" // used by the dead code below
 	"math"
 	"time"
@@ -132,20 +133,24 @@ func restHRAt(restHR RestHRFunc, date time.Time) (uint16, error) {
 // BackfillTrimp sets the training score of the activities imported before it existed: their FIT file is
 // analysed again for the score the device recorded; without readable file, the TRIMP is computed from the
 // stored heart rate stream
-func BackfillTrimp(db *models.DB, logger zerolog.Logger) error {
+func BackfillTrimp(ctx context.Context, db *models.DB, logger zerolog.Logger) error {
 	ids, err := db.GetActivitiesWithoutTrimp()
 	if err != nil || len(ids) == 0 {
 		return err
 	}
 	fromHearts := 0
 	for _, id := range ids {
+		// stopping: what is done stays done, the rest goes on at the next start
+		if ctx.Err() != nil {
+			return nil
+		}
 		activity, err := db.GetActivityHearts(id)
 		if err != nil {
 			return err
 		}
 		restHR := UserRestHR(db, activity.UserID)
 		// only the heart rates are used: the altitudes needn't be corrected
-		analysed, err := analyzeFile(activity.FilePath, activity.User, activity.TrimEnd, restHR, nil)
+		analysed, err := analyzeFile(activity.FilePath, activity.User, activity.TrimEnd, Analysis{RestHR: restHR})
 		if err == nil && analysed.Trimp != nil {
 			activity.Trimp = analysed.Trimp
 		} else {

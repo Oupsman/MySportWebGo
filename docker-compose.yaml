@@ -16,6 +16,9 @@ services:
     # latest moves with each push: a redeploy must not keep an old local copy
     pull_policy: always
     restart: unless-stopped
+    # a stop lets the running requests finish (90 s at most) and the backfills stop at their next activity
+    # (30 s): docker kills after 10 s by default
+    stop_grace_period: 2m30s
     environment:
       DBHOST: ${MSW_DBHOST:-db}
       DBPORT: ${MSW_DBPORT:-5432}
@@ -48,6 +51,9 @@ services:
     restart: unless-stopped
     environment:
       BACKEND_URL: http://backend:8080
+      # Content-Security-Policy-Report-Only: the browser console tells what the policy would block, nothing
+      # is blocked; Content-Security-Policy once the console stays clean on every page (map included)
+      CSP_HEADER: ${MSW_CSP_HEADER:-Content-Security-Policy-Report-Only}
     ports:
       - "${MSW_HTTP_PORT:-8080}:80"
     depends_on:

@@ -5,6 +5,7 @@ import (
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/internal/pkg/vars"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -82,7 +83,7 @@ func TestBackfillFixesPrivacyZones(t *testing.T) {
 		}
 	}
 
-	if err := BackfillTimeStamps(db, zerolog.Nop()); err != nil {
+	if err := BackfillTimeStamps(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 

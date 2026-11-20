@@ -3,6 +3,7 @@ package activityService
 import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/vars"
+	"context"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -37,7 +38,7 @@ func TestBackfillTimeStamps(t *testing.T) {
 		}
 	}
 
-	if err := BackfillTimeStamps(db, zerolog.Nop()); err != nil {
+	if err := BackfillTimeStamps(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 

@@ -3,6 +3,7 @@ package activityService
 import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -73,7 +74,7 @@ func TestRecords(t *testing.T) {
 		t.Fatalf("activities without best efforts: %v %v, want the one not computed", ids, err)
 	}
 	// without FIT file, from the stored series: none here, but computed
-	if err := BackfillBestEfforts(db, zerolog.Nop()); err != nil {
+	if err := BackfillBestEfforts(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	if ids, err = db.GetActivitiesWithoutBestEfforts(); err != nil || len(ids) != 0 {

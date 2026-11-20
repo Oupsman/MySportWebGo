@@ -237,3 +237,19 @@ func (user *Users) GetMaxHR(date time.Time) uint16 {
 // 	}
 // 	return float64(user.GetWeight()) * 2.20462
 // }
+
+// GetProfileWeights returns the weight of the profile of every user (kg), 0 when unset
+func (db *DB) GetProfileWeights() (map[uint]float64, error) {
+	var rows []struct {
+		ID     uint
+		Weight float64
+	}
+	if err := db.Model(&Users{}).Select("id", "weight").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	weights := make(map[uint]float64, len(rows))
+	for _, r := range rows {
+		weights[r.ID] = r.Weight
+	}
+	return weights, nil
+}

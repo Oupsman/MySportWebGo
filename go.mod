@@ -19,7 +19,7 @@ require (
 	github.com/rs/zerolog v1.34.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/exp v0.0.0-20261109185158-a52e3aef5920
-	golang.org/x/image v0.11.0
+	golang.org/x/image v0.45.0
 	golang.org/x/sync v0.25.0
 	golang.org/x/term v0.47.0
 	gorm.io/driver/postgres v1.6.0

@@ -282,8 +282,11 @@ func TrimActivity(db *models.DB, activity *models.Activity, trimEnd float64, log
 	if activity.FilePath == "" {
 		return nil, ErrNoFitFile
 	}
-	analysed, err := analyzeFile(activity.FilePath, activity.User, trimEnd, UserRestHR(db, activity.UserID),
-		DeviceCorrection(db, activity.UserID))
+	analysed, err := analyzeFile(activity.FilePath, activity.User, trimEnd, Analysis{
+		RestHR:     UserRestHR(db, activity.UserID),
+		Correction: DeviceCorrection(db, activity.UserID),
+		Weight:     ActivityWeight(db, activity.UserID, activity.EquipmentID),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +310,6 @@ func TrimActivity(db *models.DB, activity *models.Activity, trimEnd float64, log
 	trimmed.Visibility = activity.Visibility
 	trimmed.CanComments = activity.CanComments
 	trimmed.Medias = activity.Medias
-	trimmed.TotalWeight = activity.TotalWeight
 	trimmed.UserAge = activity.UserAge
 	trimmed.Thumbnail = activity.Thumbnail
 	trimmed.RouteID = nil

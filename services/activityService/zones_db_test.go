@@ -3,6 +3,7 @@ package activityService
 import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
+	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -36,7 +37,7 @@ func TestBackfillHrZones(t *testing.T) {
 	done.Date, done.HrZones = trimpDate.Add(2*time.Hour), types.FloatArray{1, 2, 3, 4, 5}
 	done = add(done)
 
-	if err := BackfillHrZones(db, zerolog.Nop()); err != nil {
+	if err := BackfillHrZones(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	check := func(activity models.Activity, zones types.FloatArray, bounds types.Uint16Array) {
@@ -64,7 +65,7 @@ func TestBackfillHrZones(t *testing.T) {
 	if err := db.ResetHrZones(user.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := BackfillHrZones(db, zerolog.Nop()); err != nil {
+	if err := BackfillHrZones(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	check(steady, types.FloatArray{0, 0, 3600, 0, 0}, types.Uint16Array{80, 128, 136, 144, 152, 160})

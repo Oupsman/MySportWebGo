@@ -8,12 +8,15 @@ import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/pictures"
 	"MySportWeb/internal/pkg/vars"
+	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog"
 )
 
 // The largest request bodies accepted
@@ -47,7 +50,8 @@ func AppHandler(App *app.App) gin.HandlerFunc {
 	}
 }
 
-func RunHttp(listenAddr string, App *app.App) error {
+// RunHttp serves the API until ctx is done, then waits for the requests running (see serve)
+func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 
 	// release mode unless GIN_MODE says otherwise (debug for development): debug mode logs the routes and
 	// its warnings at each start
@@ -177,7 +181,34 @@ func RunHttp(listenAddr string, App *app.App) error {
 	apiv1.POST("/healthdatas/:id", middlewares.IsAuthorized(models.HealthDatasWrite), apicontrollers.UpdateHealthData)
 	apiv1.DELETE("/healthdatas/:id", middlewares.IsAuthorized(models.HealthDatasDelete), apicontrollers.DeleteHealthData)
 
-	return newHTTPServer(listenAddr, httpRouter).ListenAndServe()
+	return serve(ctx, newHTTPServer(listenAddr, httpRouter), App.Logger)
+}
+
+// ShutdownTimeout is how long the requests running at the shutdown have to finish: an upload waits for an
+// analysis slot (activityService.QueueTimeout), then is analysed and drawn. Below the stop_grace_period of
+// the backend in docker-compose.yaml, after which the container is killed.
+var ShutdownTimeout = 90 * time.Second
+
+// serve runs server until ctx is done, then stops accepting connections and waits for the requests running,
+// at most ShutdownTimeout
+func serve(ctx context.Context, server *http.Server, logger zerolog.Logger) error {
+	failed := make(chan error, 1)
+	go func() { failed <- server.ListenAndServe() }()
+	select {
+	case err := <-failed:
+		return err
+	case <-ctx.Done():
+	}
+	logger.Info().Dur("timeout", ShutdownTimeout).Msg("shutting down: finishing the requests running")
+	shutdown, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
+	defer cancel()
+	if err := server.Shutdown(shutdown); err != nil {
+		// the requests still running are cut
+		_ = server.Close()
+		return fmt.Errorf("requests still running after %v: %w", ShutdownTimeout, err)
+	}
+	logger.Info().Msg("HTTP server stopped")
+	return nil
 }
 
 // The limits of the HTTP connections: without them (gin's Run), a client sending its request slowly, or

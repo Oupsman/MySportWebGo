@@ -6,7 +6,12 @@ import (
 	"MySportWeb/internal/pkg/vars"
 	"MySportWeb/internal/pkg/webserver"
 	"MySportWeb/services/activityService"
+	"context"
 	"fmt"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -37,18 +42,32 @@ func main() {
 		log.Fatal().Err(err).Msg("cannot connect to the database")
 	}
 
-	var g errgroup.Group
-	var host = ""
-	var listenAddr string
-	listenAddr = fmt.Sprintf("%s:%s", host, vars.ListenPort)
-	g.Go(func() error {
-		//		return webserver.RunHttp(":8080", storeApp, update.Message.Chat.ID)
-		return webserver.RunHttp(listenAddr, App)
-	})
-	g.Go(func() error { return App.Start() })
-
-	if err := g.Wait(); err != nil {
+	// SIGTERM (docker stop) or SIGINT (Ctrl+C): the server stops accepting requests, finishes the running ones
+	// and the background work at its next step, then exits
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	defer stop()
+	g, ctx := errgroup.WithContext(ctx)
+	listenAddr := fmt.Sprintf(":%s", vars.ListenPort)
+	g.Go(func() error { return webserver.RunHttp(ctx, listenAddr, App) })
+	g.Go(func() error { return App.Start(ctx) })
+	err = g.Wait()
+	if err != nil {
 		log.Error().Err(err).Msg("failed to run")
-
+	}
+	// the HTTP server stopped (or failed): the background work stops too
+	stop()
+	if !App.Wait(BackgroundStopTimeout) {
+		log.Warn().Dur("timeout", BackgroundStopTimeout).Msg("background work still running, stopping anyway")
+	}
+	if sqlDB, dbErr := App.DB.DB.DB(); dbErr == nil {
+		_ = sqlDB.Close()
+	}
+	log.Info().Msg("stopped")
+	if err != nil {
+		os.Exit(1)
 	}
 }
+
+// BackgroundStopTimeout is how long the background work (backfills, recomputes) has to stop at its next
+// activity, after the HTTP server stopped
+const BackgroundStopTimeout = 30 * time.Second

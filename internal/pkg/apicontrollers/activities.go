@@ -66,8 +66,11 @@ func UploadActivity(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
-	activity, err := activityService.AnalyzeTrimmed(tmpPath, user, equipment, 0, activityService.UserRestHR(&db, user.ID),
-		activityService.DeviceCorrection(&db, user.ID))
+	activity, err := activityService.AnalyzeTrimmed(tmpPath, user, equipment, 0, activityService.Analysis{
+		RestHR:     activityService.UserRestHR(&db, user.ID),
+		Correction: activityService.DeviceCorrection(&db, user.ID),
+		Weight:     activityService.UserWeight(&db, user.ID, equipment.Weight),
+	})
 	if err != nil {
 		analysisError(c, err)
 		return

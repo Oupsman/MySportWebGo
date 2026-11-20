@@ -37,12 +37,23 @@ func (e *InvalidFitError) Unwrap() error {
 	return e.err
 }
 
+// Analysis is what the analysis of a FIT file needs from the database, nil for the defaults: the analyses
+// whose result doesn't depend on one leave it nil
+type Analysis struct {
+	// RestHR gives the resting heart rate of the training score and the zones, nil for DefaultRestHR
+	RestHR RestHRFunc
+	// Correction gives the altitude correction of the recording device, nil for none
+	Correction CorrectionFunc
+	// Weight gives the weight of the rider and the equipment, of the power estimated without power meter,
+	// nil for DefaultRiderWeight and DefaultEquipmentWeight
+	Weight WeightFunc
+}
+
 // AnalyzeTrimmed analyses a FIT file, ignoring what was recorded after trimEnd seconds since the start
-// (0 for the whole recording), see TrimActivity. restHR gives the resting heart rate of the training score,
-// nil for DefaultRestHR. correction gives the altitude correction of the recording device, nil for none.
+// (0 for the whole recording), see TrimActivity.
 // At most MaxConcurrentAnalyses files are analysed at a time, ErrBusy after waiting QueueTimeout.
-func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipments, trimEnd float64, restHR RestHRFunc,
-	correction CorrectionFunc) (models.Activity, error) {
+func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipments, trimEnd float64,
+	opts Analysis) (models.Activity, error) {
 	release, err := analysisSlots.acquire(QueueTimeout)
 	if err != nil {
 		return models.Activity{}, err
@@ -65,7 +76,7 @@ func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipme
 		if err != nil {
 			return models.Activity{}, &InvalidFitError{err}
 		}
-		activity, err = decodeFit(fit, user, equipment, trimEnd, restHR, correction)
+		activity, err = decodeFit(fit, user, equipment, trimEnd, opts)
 		if err != nil {
 			return models.Activity{}, err
 		}
@@ -84,8 +95,9 @@ func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipme
 // 	return decodeFit(fit, user, equipment, 0, nil)
 // }
 
-func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, trimEnd float64, restHR RestHRFunc,
-	correction CorrectionFunc) (models.Activity, error) {
+func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, trimEnd float64,
+	opts Analysis) (models.Activity, error) {
+	restHR, correction := opts.RestHR, opts.Correction
 	var activity models.Activity
 	var err error
 	fitActivity := filedef.NewActivity(fit.Messages...)
@@ -127,8 +139,12 @@ func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, t
 		continuousDistances(fitActivity.Records, fitActivity.Sessions)
 	}
 
-	// TODO : one day, I'll get the weight of the user and its equipment
-	activity.TotalWeight = 110
+	// the estimated power of the rides moves the rider and the equipment
+	weight, err := totalWeight(opts.Weight, activity.Date, activity.Sport)
+	if err != nil {
+		return models.Activity{}, err
+	}
+	activity.TotalWeight = uint16(math.Round(weight))
 
 	activity, err = AnalyzeRecords(fitActivity, activity, altitudeCorrection)
 	if err != nil {

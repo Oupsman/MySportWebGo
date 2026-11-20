@@ -145,7 +145,7 @@ func RecomputeDevice(c *gin.Context) {
 		lookupError(c, err, "device")
 		return
 	}
-	if _, err := activityService.StartRecompute(&db, user.ID, id, App.Logger); err != nil {
+	if _, err := activityService.StartRecompute(App, &db, user.ID, id, App.Logger); err != nil {
 		if errors.Is(err, activityService.ErrRecomputeRunning) {
 			c.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return

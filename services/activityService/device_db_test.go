@@ -3,6 +3,7 @@ package activityService
 import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/vars"
+	"context"
 	"testing"
 	"time"
 
@@ -100,7 +101,7 @@ func TestBackfillDevice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := BackfillTimeStamps(db, zerolog.Nop()); err != nil {
+	if err := BackfillTimeStamps(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	got, err := db.GetActivity(old.ID)

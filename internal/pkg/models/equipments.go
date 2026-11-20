@@ -179,3 +179,37 @@ func (db *DB) DeleteEquipment(uuid uuid.UUID) error {
 		return tx.Where("id = ?", uuid).Delete(&Equipments{}).Error
 	})
 }
+
+// GetEquipmentWeight returns the weight of an equipment (kg), 0 when it has none or doesn't exist
+func (db *DB) GetEquipmentWeight(id uuid.UUID) (int, error) {
+	var weights []int
+	err := db.Model(&Equipments{}).Where("id = ?", id).Pluck("weight", &weights).Error
+	if err != nil || len(weights) == 0 || weights[0] < 0 {
+		return 0, err
+	}
+	return weights[0], nil
+}
+
+// ActivityWeightRow is what the weight of an activity depends on, and the weight it was analysed with
+type ActivityWeightRow struct {
+	ID              uuid.UUID
+	UserID          uint
+	Date            time.Time
+	Sport           string
+	TotalWeight     uint16
+	EquipmentWeight int // 0 without equipment, or without weight
+}
+
+// GetActivityWeights returns, oldest first, what the weight of every activity depends on
+func (db *DB) GetActivityWeights() ([]ActivityWeightRow, error) {
+	var rows []ActivityWeightRow
+	err := db.Table("activities AS a").
+		Select("a.id, a.user_id, a.date, a.sport, COALESCE(a.total_weight, 0) AS total_weight, COALESCE(e.weight, 0) AS equipment_weight").
+		Joins("LEFT JOIN equipments AS e ON e.id = a.equipment_id").Order("a.date").Scan(&rows).Error
+	return rows, err
+}
+
+// SetActivityTotalWeight saves the weight an activity was analysed with, without analysing it again
+func (db *DB) SetActivityTotalWeight(id uuid.UUID, weight uint16) error {
+	return db.Model(&Activity{}).Where("id = ?", id).Update("total_weight", weight).Error
+}

@@ -2,6 +2,7 @@ package activityService
 
 import (
 	"MySportWeb/internal/pkg/models"
+	"context"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ func TestBackfillTrimp(t *testing.T) {
 	done := 12.5
 	computed := add(models.Activity{Date: trimpDate.Add(2 * time.Hour), Trimp: &done})
 
-	if err := BackfillTrimp(db, zerolog.Nop()); err != nil {
+	if err := BackfillTrimp(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	// with the measured resting heart rate (80), not the default one (60): below 50.1

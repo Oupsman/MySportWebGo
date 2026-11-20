@@ -5,12 +5,13 @@ package activityService
 import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
+	"context"
 )
 
 // SumAnalyze analyses a whole FIT file, its training score computed with DefaultRestHR when the device
 // didn't record one: see AnalyzeTrimmed for the user's resting heart rate
 func SumAnalyze(filePath string, user models.Users, equipment models.Equipments) (models.Activity, error) {
-	return AnalyzeTrimmed(filePath, user, equipment, 0, nil, nil)
+	return AnalyzeTrimmed(filePath, user, equipment, 0, Analysis{})
 }
 
 // TracesSimilar tells if two simplified traces follow the same route
@@ -25,4 +26,11 @@ func ActivitiesSimilar(a, b models.Activity) bool {
 		DistancesMatch(a.Distance, b.Distance) &&
 		EndpointsMatch(a.StartPosition, a.EndPosition, b.StartPosition, b.EndPosition) &&
 		TracesSimilar(a.SimplifiedGpsPoints, b.SimplifiedGpsPoints)
+}
+
+// testBackground runs the background work of the tests in a goroutine, never stopped
+type testBackground struct{}
+
+func (testBackground) Go(fn func(ctx context.Context)) {
+	go fn(context.Background())
 }

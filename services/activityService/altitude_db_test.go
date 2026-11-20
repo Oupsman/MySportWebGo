@@ -4,6 +4,7 @@ import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/vars"
+	"context"
 	"math"
 	"os"
 	"path/filepath"
@@ -118,7 +119,7 @@ func TestCorrectionOfReanalysisAndTrim(t *testing.T) {
 		return got
 	}
 
-	if err := BackfillTimeStamps(db, zerolog.Nop()); err != nil {
+	if err := BackfillTimeStamps(context.Background(), db, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	got := check("re-analysed", len(analysed.Altitudes))
@@ -206,11 +207,11 @@ func TestRecompute(t *testing.T) {
 		}
 		releases = append(releases, release)
 	}
-	status, err := StartRecompute(db, user.ID, *deviceID, zerolog.Nop())
+	status, err := StartRecompute(testBackground{}, db, user.ID, *deviceID, zerolog.Nop())
 	if err != nil || !status.Running || status.Total != 3 {
 		t.Fatalf("started: %+v, %v", status, err)
 	}
-	if _, err := StartRecompute(db, user.ID, *deviceID, zerolog.Nop()); err != ErrRecomputeRunning {
+	if _, err := StartRecompute(testBackground{}, db, user.ID, *deviceID, zerolog.Nop()); err != ErrRecomputeRunning {
 		t.Errorf("second recompute while running: %v", err)
 	}
 	for _, release := range releases {
@@ -261,7 +262,7 @@ func TestRecompute(t *testing.T) {
 	}
 
 	// done: it can start again
-	if _, err := StartRecompute(db, user.ID, *deviceID, zerolog.Nop()); err != nil {
+	if _, err := StartRecompute(testBackground{}, db, user.ID, *deviceID, zerolog.Nop()); err != nil {
 		t.Errorf("recompute after the first one: %v", err)
 	}
 	for RecomputeStatusOf(*deviceID).Running {
