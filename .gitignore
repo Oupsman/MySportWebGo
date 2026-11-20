@@ -6,3 +6,5 @@ tmp/
 prototypes/*.fit
 # the backups of docker compose: personal data, password hashes
 backups/
+# the data of docker compose (MSW_DATA_DIR): the database, the FIT files
+data/

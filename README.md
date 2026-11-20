@@ -36,7 +36,10 @@ cp compose.env.sample .env   # then set MSW_DOMAIN, MSW_SECRET_KEY and MSW_DBPAS
 docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_PORT)
 ```
 
-* **Bundled database**: `COMPOSE_PROFILES=db` in `.env` starts a Postgres, its data in the `db` volume.
+* **Data**: in `MSW_DATA_DIR` (`./data` by default): `media/` holds the uploaded FIT files, thumbnails, pictures and
+  elevation tiles, `postgres/` the bundled database. With Portainer, use absolute paths for `MSW_DATA_DIR` and
+  `MSW_BACKUP_DIR`: the relative ones end up inside the stack directory of Portainer.
+* **Bundled database**: `COMPOSE_PROFILES=db` in `.env` starts a Postgres, its data in `MSW_DATA_DIR/postgres`.
 * **External database**: remove `COMPOSE_PROFILES` and set `MSW_DBHOST`, `MSW_DBPORT`, `MSW_DBUSER`, `MSW_DBPASSWORD`,
   `MSW_DBNAME`, and `MSW_DBSSLMODE`. The default, `prefer`, uses TLS when the database offers it without checking
   its certificate: set `verify-full` (or `require`) for a database reached over a network you don't control.
@@ -47,30 +50,67 @@ docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_POR
   back to an older one needs that backup. A database created before the versioned migrations is adopted by the
   first version that has them: upgrade through it, the later versions refuse such a database.
 * `MSW_DOMAIN` is the URL users open: the API refuses requests from any other origin.
-* The uploaded files are in the `media` volume.
 * **Backups**: the `backup` service dumps the database every night (`MSW_BACKUP_TIME`, 03:30 by default) into
-  `MSW_BACKUP_DIR/db` (`./backups` by default), and copies the media volume into `MSW_BACKUP_DIR/media`. Send that
-  directory elsewhere (Kopia, restic...): a backup on the disk of the server doesn't survive the disk. Each dump is
-  checked before it counts, the dumps older than `MSW_BACKUP_KEEP_DAYS` (14) are deleted once a new one succeeded,
-  and the service is unhealthy when the last backup is more than 26 hours old. The media copy is incremental: the
-  files deleted since stay in it. A backup now, before an upgrade: `docker compose run --rm backup now`.
-  With an external database, `MSW_BACKUP_IMAGE` is a postgres image of its major version (pg_dump can't dump a
-  more recent server).
-* **Restore** (the backend stopped, from the directory of `docker-compose.yaml`):
+  `MSW_BACKUP_DIR/db` (`./backups` by default). Each dump is checked before it counts, the dumps older than
+  `MSW_BACKUP_KEEP_DAYS` (14) are deleted once a new one succeeded, and the service is unhealthy when the last
+  backup is more than 26 hours old. A backup now, before an upgrade: `docker compose run --rm backup now`.
+  Send `MSW_BACKUP_DIR` and `MSW_DATA_DIR/media` elsewhere: a backup on the disk of the server doesn't survive the
+  disk. With a backup of the whole machine (Proxmox Backup, a snapshot of the VM or of the container), schedule it
+  after `MSW_BACKUP_TIME` so that it holds the dump of the night; `MSW_DATA_DIR/postgres` is in it too, consistent
+  as after a power cut (in a VM: qemu-guest-agent installed and enabled, the file systems are frozen during the
+  snapshot). With a backup of files (restic, rsync, Kopia...), leave `MSW_DATA_DIR/postgres` out: its files copied
+  one by one while the database runs aren't a database. The dumps restore in any Postgres of the same major
+  version or newer, without restoring the machine. With an external database, `MSW_BACKUP_IMAGE` is a postgres
+  image of its major version (pg_dump can't dump a more recent server).
+* **Restore**, from the directory of `docker-compose.yaml`. On the same server, the database replaced by a dump:
 
   ```sh
-  docker compose stop backend
-  # the database: replaces its tables by the ones of the dump
+  docker compose stop backend backup
   docker compose exec -T db pg_restore -U mysportweb -d mysportweb --clean --if-exists --no-owner \
     < backups/db/mysportweb-2026-11-20_033000.dump
-  # the media: the files of the copy, owned by the user of the backend
-  docker run --rm -v mysportweb_media:/media -v ./backups/media:/copy:ro debian:bookworm-slim \
-    sh -c 'cp -a /copy/. /media/ && chown -R 1000:1000 /media'
-  docker compose start backend
+  docker compose start backend backup
   ```
 
-  The backend refuses a dump made by a more recent version of it (a newer database schema): restore it with that
-  version. Try a restore once, on another machine or database: an untested backup isn't a backup.
+  On a new server: the media restored into `MSW_DATA_DIR/media` (from the backup of the old one), then a new
+  database from the dump:
+
+  ```sh
+  docker compose up -d db
+  # a new database starts twice (initialized, then for good): the restore waits for the second start
+  until docker compose logs db | grep -q "PostgreSQL init process complete"; do sleep 1; done
+  docker compose up -d --wait db
+  docker compose exec -T db pg_restore -U mysportweb -d mysportweb --clean --if-exists --no-owner \
+    < backups/db/mysportweb-2026-11-20_033000.dump
+  docker compose up -d
+  ```
+
+  The `init` service gives the media to the user of the backend (uid 1000) at each start. The backend refuses a
+  dump made by a more recent version of it (a newer database schema): restore it with that version. Try a restore
+  once, on another machine or database: an untested backup isn't a backup.
+* **Moving from the volumes** (the versions before `MSW_DATA_DIR` kept the data in the `media` and `db` volumes):
+  a backup with the old version, the media copied out of its volume, the database restored from the dump.
+
+  ```sh
+  # with the old docker-compose.yaml: a backup, then the stack stopped (stop, not down -v: the volumes stay)
+  docker compose run --rm backup now
+  docker compose stop
+  # the media into the new directory (docker volume ls: <project>_media, mysportweb_media by default)
+  docker run --rm -v mysportweb_media:/from:ro -v /srv/mysportweb/data/media:/to debian:bookworm-slim \
+    cp -a /from/. /to/
+  # with the new docker-compose.yaml and MSW_DATA_DIR=/srv/mysportweb/data: the database from the dump, as on a
+  # new server above (Portainer starts everything on an update: stop backend and backup before pg_restore)
+  docker compose up -d db
+  until docker compose logs db | grep -q "PostgreSQL init process complete"; do sleep 1; done
+  docker compose up -d --wait db
+  docker compose exec -T db pg_restore -U mysportweb -d mysportweb --clean --if-exists --no-owner \
+    < backups/db/<the dump of the first step>.dump
+  docker compose up -d
+  # once the activities, thumbnails and pictures are checked: the volumes, and the copy of the media made by
+  # the old backup service
+  docker volume rm mysportweb_media mysportweb_db
+  rm -r backups/media
+  ```
+
 * The images are pulled from `MSW_REGISTRY` with the tag `MSW_TAG` (`latest`, a short commit sha, or a version
   `1.2.3`, `1.2`, `1`), at each deployment: run `docker login` to the registry first (with Portainer: add the
   registry in its Registries). `docker-compose.yaml` never builds them, Portainer can't build.

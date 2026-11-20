@@ -6,6 +6,10 @@
 # The variables are prefixed MSW_: the .env of the backend for development (DBHOST=127.0.0.1...)
 # is read by docker compose too and must not configure the containers.
 #
+# The data is in MSW_DATA_DIR (./data): media/ (FIT files, thumbnails, pictures, elevation tiles) and
+# postgres/ (the bundled database); the dumps of the database in MSW_BACKUP_DIR (./backups). With Portainer,
+# absolute paths: the relative ones are inside the stack directory of Portainer.
+#
 # The images are pulled from MSW_REGISTRY, this file never builds them: Portainer can't build.
 # To build them here instead: docker compose -f docker-compose.yaml -f docker-compose.build.yaml up --build
 name: mysportweb
@@ -38,12 +42,27 @@ services:
       DEM_URL: ${MSW_DEM_URL:-}
     volumes:
       # the uploaded FIT files, thumbnails, pictures and elevation tiles
-      - media:/app/MEDIA
+      - ${MSW_DATA_DIR:-./data}/media:/app/MEDIA
     depends_on:
+      init:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
         # absent with an external database
         required: false
+
+  # Gives the media directory to the user of the backend (uid 1000) before it starts: docker creates a missing
+  # directory as root. The image of the backend, run once as root.
+  init:
+    image: ${MSW_REGISTRY:-ghcr.io/oupsman}/mysportwebgo:${MSW_TAG:-latest}
+    pull_policy: always
+    user: "0:0"
+    entrypoint:
+      - sh
+      - -c
+      - '[ "$$(stat -c %u:%g /app/MEDIA)" = 1000:1000 ] || chown -R 1000:1000 /app/MEDIA'
+    volumes:
+      - ${MSW_DATA_DIR:-./data}/media:/app/MEDIA
 
   frontend:
     image: ${MSW_REGISTRY:-ghcr.io/oupsman}/mysportweb-frontend:${MSW_TAG:-latest}
@@ -60,9 +79,9 @@ services:
       backend:
         condition: service_healthy
 
-  # Nightly dump of the database, and copy of the media volume, into MSW_BACKUP_DIR: to send elsewhere
-  # (Kopia, restic, rsync...), a backup on the same disk doesn't survive the disk. A backup now (before an
-  # upgrade): docker compose run --rm backup now. The restore: see the README.
+  # Nightly dump of the database into MSW_BACKUP_DIR, to back up elsewhere with MSW_DATA_DIR/media (a backup of
+  # the machine after MSW_BACKUP_TIME, or of these files, see the README). A backup now (before an upgrade):
+  # docker compose run --rm backup now. The restore: see the README.
   backup:
     # pg_dump can't dump a server more recent than itself: the major version of the database
     image: ${MSW_BACKUP_IMAGE:-postgres:16-bookworm}
@@ -82,7 +101,6 @@ services:
       # uid:gid owning the backups, readable by it only: the user of the tool sending them elsewhere
       BACKUP_OWNER: ${MSW_BACKUP_OWNER:-1000:1000}
     volumes:
-      - media:/media:ro
       - ${MSW_BACKUP_DIR:-./backups}:/backups
     entrypoint:
       - bash
@@ -97,9 +115,9 @@ services:
           log "ERROR: BACKUP_TIME must be HH:MM, not $$BACKUP_TIME"
           exit 1
         fi
-        mkdir -p /backups/db /backups/media
+        mkdir -p /backups/db
 
-        # backup dumps the database, checks the dump, copies the media, then deletes the old dumps
+        # backup dumps the database, checks the dump, then deletes the old dumps
         backup() {
           local name="/backups/db/$$PGDATABASE-$$(date +%F_%H%M%S).dump"
           log "dumping $$PGDATABASE from $$PGHOST:$$PGPORT"
@@ -116,16 +134,10 @@ services:
           fi
           mv "$$name.partial" "$$name"
           log "database dumped: $$name ($$(du -h "$$name" | cut -f1))"
-          # incremental: only the new and changed files; the files deleted since stay in the copy
-          if ! cp -a -u /media/. /backups/media/; then
-            log "ERROR: the media copy failed"
-            return 1
-          fi
-          log "media copied ($$(du -sh /backups/media | cut -f1))"
           # only after a successful dump: failing backups never delete the last good ones
           find /backups/db -name '*.dump' -mtime "+$$BACKUP_KEEP_DAYS" -print -delete | sed 's/^/deleted /'
           find /backups/db -name '*.partial' -mmin +1440 -delete
-          # the copy keeps the modes of the media: the traces lead to the users' homes, the owner only
+          # the dumps hold the traces (the homes of the users) and the password hashes: the owner only
           chown -R "$$BACKUP_OWNER" /backups
           chmod -R go= /backups
           touch /backups/.last-success
@@ -172,13 +184,10 @@ services:
       POSTGRES_PASSWORD: ${MSW_DBPASSWORD:?set MSW_DBPASSWORD}
       POSTGRES_DB: ${MSW_DBNAME:-mysportweb}
     volumes:
-      - db:/var/lib/postgresql/data
+      # created by postgres at its first start, owned by its user (uid 999)
+      - ${MSW_DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
-
-volumes:
-  media:
-  db:
