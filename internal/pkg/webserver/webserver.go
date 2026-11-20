@@ -91,8 +91,12 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 		AllowMethods:  []string{"GET", "OPTIONS", "POST", "DELETE"},
 		AllowHeaders:  []string{"Origin", "Authorization", "Content-Type"},
 		ExposeHeaders: []string{"Content-Length", "Retry-After"},
-		MaxAge:        12 * time.Hour,
+		// the session cookie, for the frontend of the development server (another port: another origin)
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
 	}))
+	// the session is a cookie: a page of another origin must not change anything with it (CSRF)
+	httpRouter.Use(middlewares.CrossOriginProtection())
 
 	httpRouter.GET("/", apicontrollers.HealthCheck)
 	// httpRouter.GET("/login", controllers.Login)
@@ -111,7 +115,11 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.POST("/user/register", middlewares.RateLimit(middlewares.NewRateLimiter(RegistrationsPerHour, time.Hour)),
 		apicontrollers.Register)
 	// Routes given permissions are also open to device tokens holding them, the others to sessions only
-	apiv1.GET("/user/logout", middlewares.IsAuthorized(), apicontrollers.Logout)
+	// a POST: a GET would let any page log the user out (an image pointing to it). Without authentication,
+	// it clears the cookie of an ended session too.
+	apiv1.POST("/user/logout", apicontrollers.Logout)
+	// who is logged in: the web application can't read its cookie
+	apiv1.GET("/user/session", middlewares.IsAuthorized(), apicontrollers.GetSession)
 	apiv1.GET("/user/dashboard", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.Dashboard)
 	apiv1.GET("/user/hrzones", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.HrZones)
 	// the readiness reads the resting heart rates of the health data too

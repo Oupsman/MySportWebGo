@@ -50,7 +50,10 @@ docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_POR
   up the database before upgrading: the backend refuses to start on a database migrated by a newer version, going
   back to an older one needs that backup. A database created before the versioned migrations is adopted by the
   first version that has them: upgrade through it, the later versions refuse such a database.
-* `MSW_DOMAIN` is the URL users open: the API refuses requests from any other origin.
+* `MSW_DOMAIN` is the URL users open: the API refuses requests from any other origin. Its scheme sets the session
+  cookie: `https://` makes it `Secure` (sent over HTTPS only, named `__Host-msw_session`), `http://` doesn't (a
+  local network). A wrong scheme either never keeps the session (`https://` for an app served over HTTP) or lets
+  it travel in clear (`http://` for an app served over HTTPS).
 * **Backups**: the `backup` service dumps the database every night (`MSW_BACKUP_TIME`, 03:30 by default) into
   `MSW_BACKUP_DIR/db` (`./backups` by default). Each dump is checked before it counts, the dumps older than
   `MSW_BACKUP_KEEP_DAYS` (14) are deleted once a new one succeeded, and the service is unhealthy when the last

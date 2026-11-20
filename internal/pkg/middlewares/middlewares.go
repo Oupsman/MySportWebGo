@@ -31,19 +31,40 @@ func refuse(status int, message string) *authError {
 	return &authError{status, errors.New(message)}
 }
 
-// identify returns the user of the Authorization header, loaded from the database: a token of a
-// deleted user is refused. It accepts the session tokens (JWT) of the web application not logged out
-// nor ended by a password change, and the valid device tokens (msw_...), returned for the latter.
+func isDeviceToken(token string) bool {
+	return strings.HasPrefix(token, utils.DeviceTokenPrefix)
+}
+
+// credentials returns the token of the request: the one of the Authorization header (device tokens, API
+// clients), else the one of the session cookie (the web application); fromCookie tells which
+func credentials(c *gin.Context) (token string, fromCookie bool, err error) {
+	if header := c.GetHeader("Authorization"); header != "" {
+		token, err := utils.BearerToken(header)
+		return token, false, err
+	}
+	if token := sessionCookie(c); token != "" {
+		// the cookie only ever holds a session token
+		if isDeviceToken(token) {
+			return "", true, errors.New("a device token in the session cookie")
+		}
+		return token, true, nil
+	}
+	return "", false, errors.New("missing bearer token or session cookie")
+}
+
+// identify returns the user of the Authorization header or of the session cookie, loaded from the
+// database: a token of a deleted user is refused. It accepts the session tokens (JWT) of the web
+// application not logged out nor ended by a password change, and the valid device tokens (msw_...),
+// returned for the latter.
 func identify(c *gin.Context) (models.Users, *models.DeviceTokens, *authError) {
-	header := c.GetHeader("Authorization")
-	token, err := utils.BearerToken(header)
+	token, _, err := credentials(c)
 	if err != nil {
 		return models.Users{}, nil, &authError{http.StatusUnauthorized, err}
 	}
 	db := c.MustGet("App").(*app.App).DB
 
-	if !strings.HasPrefix(token, utils.DeviceTokenPrefix) {
-		session, err := utils.ParseSession(header)
+	if !isDeviceToken(token) {
+		session, err := utils.ParseSessionToken(token)
 		if err != nil {
 			return models.Users{}, nil, &authError{http.StatusUnauthorized, err}
 		}
@@ -180,18 +201,27 @@ func IsAuthorized(permissions ...models.Permission) gin.HandlerFunc {
 // 	}
 // }
 
-// OptionalUser sets the user of the request when there is an Authorization header, for routes also open
-// to anonymous users. An invalid token is refused rather than treated as anonymous, and a device token
-// needs the given permissions as with IsAuthorized.
+// OptionalUser sets the user of the request when there is an Authorization header or a session cookie, for
+// routes also open to anonymous users. An invalid token of the header is refused rather than treated as
+// anonymous; the cookie of an ended session is treated as anonymous (the browser keeps it until its
+// expiry). A device token needs the given permissions as with IsAuthorized.
 func OptionalUser(permissions ...models.Permission) gin.HandlerFunc {
 	required := combine(permissions)
 
 	return func(c *gin.Context) {
-		if c.GetHeader("Authorization") == "" {
+		_, fromCookie, err := credentials(c)
+		if err != nil && !fromCookie {
+			// no credentials: anonymous
 			c.Next()
 			return
 		}
 		user, authErr := authenticate(c, required)
+		if authErr != nil && fromCookie && authErr.status == http.StatusUnauthorized {
+			// a cookie of an ended session (logged out elsewhere, password changed): anonymous, the
+			// public activities stay visible
+			c.Next()
+			return
+		}
 		if authErr != nil {
 			abort(c, authErr)
 			return

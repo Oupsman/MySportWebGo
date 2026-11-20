@@ -43,10 +43,19 @@ func NewSessionToken(userID uint, userUUID uuid.UUID, role string, now time.Time
 	return token, session, err
 }
 
-// ParseSession returns the session of the token of an Authorization header. The tokens without id or
-// issue date (signed before sessions could be revoked) are refused: their users log in again.
+// ParseSession returns the session of the token of an Authorization header, see ParseSessionToken
 func ParseSession(header string) (Session, error) {
-	claims, err := ParseBearerToken(header)
+	token, err := BearerToken(header)
+	if err != nil {
+		return Session{}, err
+	}
+	return ParseSessionToken(token)
+}
+
+// ParseSessionToken returns the session of a session token. The tokens without id or issue date (signed
+// before sessions could be revoked) are refused: their users log in again.
+func ParseSessionToken(token string) (Session, error) {
+	claims, err := ParseToken(token)
 	if err != nil {
 		return Session{}, err
 	}

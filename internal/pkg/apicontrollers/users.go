@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"net/mail"
@@ -107,12 +108,38 @@ func Login(c *gin.Context) {
 	loginFailures.Reset(failuresKey)
 	logger.Debug().Uint("user_id", existingUser.ID).Msg("password ok, issuing token")
 
-	tokenString, _, err := utils.NewSessionToken(existingUser.ID, existingUser.UUID, existingUser.Role, time.Now())
+	tokenString, session, err := utils.NewSessionToken(existingUser.ID, existingUser.UUID, existingUser.Role, time.Now())
 	if err != nil {
 		c.JSON(500, gin.H{"error": "could not generate token"})
 		return
 	}
-	c.JSON(200, gin.H{"token": tokenString})
+	// the token goes to the cookie only: the page never sees it
+	middlewares.SetSessionCookie(c, tokenString, session.ExpiresAt)
+	c.JSON(200, gin.H{"session": newSessionInfo(existingUser, session)})
+}
+
+// sessionInfo is what the web application knows of its session: whose it is and until when. The token
+// itself stays in the HttpOnly cookie.
+type sessionInfo struct {
+	UserID    uint      `json:"sub"`
+	UUID      uuid.UUID `json:"uuid"`
+	Role      string    `json:"role"`
+	ExpiresAt int64     `json:"exp"` // seconds since the epoch
+}
+
+func newSessionInfo(user models.Users, session utils.Session) sessionInfo {
+	return sessionInfo{UserID: user.ID, UUID: user.UUID, Role: user.Role, ExpiresAt: session.ExpiresAt.Unix()}
+}
+
+// GetSession answers the session of the request: the web application asks it at its start, the cookie
+// can't be read by its scripts. 401 without valid session.
+func GetSession(c *gin.Context) {
+	session, ok := middlewares.CurrentSession(c)
+	if !ok {
+		c.JSON(400, gin.H{"error": "not a session token"})
+		return
+	}
+	c.JSON(200, gin.H{"session": newSessionInfo(middlewares.CurrentUser(c), session)})
 }
 
 func Register(c *gin.Context) {
@@ -162,17 +189,21 @@ func Register(c *gin.Context) {
 	c.JSON(201, gin.H{"success": "user registered"})
 }
 
-// Logout revokes the session token of the request: it is refused from now on, even if it was copied
+// Logout revokes the session token of the request (cookie or header): it is refused from now on, even if
+// it was copied
+//
+// The cookie is cleared whatever the state of the session: a browser holding the cookie of an ended session
+// (expired, revoked) must be able to get rid of it. No authentication then: revoking the session of a
+// validly signed token is all it does, the token is its proof.
 func Logout(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
-	session, ok := middlewares.CurrentSession(c)
-	if !ok {
-		c.JSON(400, gin.H{"error": "not a session token"})
-		return
-	}
-	if err := db.RevokeSession(session.ID, session.ExpiresAt); err != nil {
-		c.JSON(500, gin.H{"error": "could not log out"})
-		return
+	token := middlewares.SessionToken(c)
+	middlewares.ClearSessionCookie(c)
+	if session, err := utils.ParseSessionToken(token); err == nil {
+		if err := db.RevokeSession(session.ID, session.ExpiresAt); err != nil {
+			c.JSON(500, gin.H{"error": "could not log out"})
+			return
+		}
 	}
 	c.JSON(200, gin.H{"success": "user logged out"})
 }
@@ -356,13 +387,14 @@ func UpdateUser(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "user updated successfully"})
 		return
 	}
-	// the token of the request ended with the others: the client goes on with this one
-	token, _, err := utils.NewSessionToken(currentUser.ID, currentUser.UUID, currentUser.Role, now)
+	// the session of the request ended with the others: the browser goes on with this one
+	token, session, err := utils.NewSessionToken(currentUser.ID, currentUser.UUID, currentUser.Role, now)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "password changed, log in again"})
 		return
 	}
-	c.JSON(200, gin.H{"message": "user updated successfully", "token": token})
+	middlewares.SetSessionCookie(c, token, session.ExpiresAt)
+	c.JSON(200, gin.H{"message": "user updated successfully", "session": newSessionInfo(currentUser, session)})
 }
 
 // currentUserLocation returns the user of the request and their timezone (UTC when unknown):
