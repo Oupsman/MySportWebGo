@@ -5,7 +5,6 @@ import (
 	"gorm.io/driver/postgres"
 	_ "gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"strings"
 	"time"
 )
 
@@ -49,22 +48,4 @@ func (db *DB) Ping() error {
 		return err
 	}
 	return sqlDB.Ping()
-}
-
-// alterIntegerColumn gives a column its type in the model when the database still has it as an integer
-func alterIntegerColumn(db *DB, model interface{}, field, column string) error {
-	columns, err := db.Migrator().ColumnTypes(model)
-	if err != nil {
-		return err
-	}
-	for _, c := range columns {
-		if c.Name() != column {
-			continue
-		}
-		switch strings.ToLower(c.DatabaseTypeName()) {
-		case "int2", "int4", "int8", "smallint", "integer", "bigint":
-			return db.Migrator().AlterColumn(model, field)
-		}
-	}
-	return nil
 }

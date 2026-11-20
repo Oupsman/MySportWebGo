@@ -88,7 +88,8 @@ func TestLegacyDatabaseRefused(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
-	if err := legacyAutoMigrate(db); err != nil {
+	// the tables of the application without the versions table: what AutoMigrate created
+	if err := db.Exec(baselineSQL).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec("INSERT INTO users (username, email) VALUES ('legacy', 'legacy@test.local')").Error; err != nil {

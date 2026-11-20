@@ -10,7 +10,6 @@ import (
 
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/lock"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -32,7 +31,7 @@ var ErrDatabaseNewer = errors.New("the database schema is newer than this versio
 var ErrLegacyTooOld = errors.New("the database predates the versioned migrations and this version has migrations " +
 	"after the baseline: upgrade first to the last version with only the baseline migration, it adopts the database")
 
-// models are the tables of the application, in the order AutoMigrate creates them
+// models are the tables of the application: the schema must have their columns (SchemaDrift)
 func models() []interface{} {
 	return []interface{}{&Users{}, &Equipments{}, &Devices{}, &Services{}, &Activity{}, &Route{}, &HealthData{},
 		&Validations{}, &Keys{}, &Notifications{}, &DeviceTokens{}, &RevokedSessions{}}
@@ -109,40 +108,12 @@ func isLegacy(ctx context.Context, sqlDB *sql.DB) (bool, error) {
 	return users && !versions, err
 }
 
-// baseline is the migration 1: it creates the schema in a new database. A database created by AutoMigrate
-// is brought to the same schema by AutoMigrate one last time, with the fixes it can't make.
+// baseline is the migration 1: it creates the schema in a new database. The databases created by AutoMigrate,
+// before the versioned migrations, were adopted by the releases with only this migration; this one refuses
+// them (ErrLegacyTooOld) before migrating.
 func baseline(ctx context.Context, tx *sql.Tx) error {
-	var exists bool
-	if err := tx.QueryRowContext(ctx, `SELECT to_regclass('users') IS NOT NULL`).Scan(&exists); err != nil {
-		return err
-	}
-	if !exists {
-		_, err := tx.ExecContext(ctx, baselineSQL)
-		return err
-	}
-	gormTx, err := gorm.Open(postgres.New(postgres.Config{Conn: tx}), &gorm.Config{})
-	if err != nil {
-		return err
-	}
-	return legacyAutoMigrate(&DB{*gormTx})
-}
-
-// legacyAutoMigrate is how the schema was kept up to date before the versioned migrations. Only the
-// baseline uses it, to adopt the databases created then: a change of the schema is a migration now.
-func legacyAutoMigrate(db *DB) error {
-	if err := db.AutoMigrate(models()...); err != nil {
-		return err
-	}
-	// AutoMigrate doesn't drop the columns gone from the models: the running dynamics moved to metrics
-	for _, column := range []string{"step_lengths", "vertical_oscis", "vertical_ratios", "stances", "stance_times"} {
-		if db.Migrator().HasColumn(&Activity{}, column) {
-			if err := db.Migrator().DropColumn(&Activity{}, column); err != nil {
-				return err
-			}
-		}
-	}
-	// AutoMigrate doesn't change the type of an existing column: the target weight was whole kilos
-	return alterIntegerColumn(db, &Users{}, "WeightObjective", "weight_objective")
+	_, err := tx.ExecContext(ctx, baselineSQL)
+	return err
 }
 
 // SchemaDrift returns the tables and columns the models have and the database hasn't: a change of a model

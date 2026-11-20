@@ -148,6 +148,9 @@ services:
           touch /backups/.last-success
         }
 
+        # a successful backup in the last 26 hours: what the health check tells
+        recent() { [ -n "$$(find /backups/.last-success -mmin -1560 2>/dev/null)" ]; }
+
         if [ "$${1:-schedule}" = now ]; then
           backup
           exit
@@ -156,11 +159,17 @@ services:
         if [ -z "$$(find /backups/.last-success -mmin -1200 2>/dev/null)" ]; then
           backup || true
         fi
+        retry=$${BACKUP_RETRY_SECONDS:-300}
         while :; do
           now=$$(date +%s)
           next=$$(date -d "today $$BACKUP_TIME" +%s)
           if [ "$$next" -le "$$now" ]; then
             next=$$(date -d "tomorrow $$BACKUP_TIME" +%s)
+          fi
+          # without a recent backup (the one of the start or of the night failed: the database not ready,
+          # unreachable), tried again every few minutes rather than the next night
+          if ! recent && [ $$((now + retry)) -lt "$$next" ]; then
+            next=$$((now + retry))
           fi
           log "next backup at $$(date -d "@$$next" '+%F %T %Z')"
           sleep $$((next - now)) &
@@ -169,12 +178,14 @@ services:
         done
       - backup
     command: ["schedule"]
-    # unhealthy when the last successful backup is more than 26 hours old
+    # unhealthy when the last successful backup is more than 26 hours old. Healthy as soon as the backup of the
+    # start succeeds (checked every 10 s meanwhile, Docker 25+); unhealthy after 30 min without backup.
     healthcheck:
       test: ["CMD-SHELL", "test -n \"$$(find /backups/.last-success -mmin -1560 2>/dev/null)\""]
       interval: 5m
       timeout: 10s
       start_period: 30m
+      start_interval: 10s
     depends_on:
       db:
         condition: service_healthy
