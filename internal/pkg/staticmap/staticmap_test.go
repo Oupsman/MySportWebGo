@@ -1,6 +1,7 @@
 package staticmap
 
 import (
+	"MySportWeb/internal/pkg/metrics"
 	"bytes"
 	"context"
 	"image"
@@ -18,6 +19,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 var tileGreen = color.RGBA{0x40, 0xa0, 0x40, 0xff}
@@ -338,5 +341,32 @@ func TestRenderOpenStreetMap(t *testing.T) {
 	}
 	if err := os.WriteFile(out, buf.Bytes(), 0644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// every tile asked is counted once, by where it comes from
+func TestTileMetrics(t *testing.T) {
+	count := func(result string) float64 { return testutil.ToFloat64(metrics.MapTiles.WithLabelValues(result)) }
+	before := map[string]float64{}
+	for _, r := range []string{"cache", "download", "stale", "error"} {
+		before[r] = count(r)
+	}
+	server := newTileServer(t)
+	dir := t.TempDir()
+	tiles := NewTiles(dir, server.url())
+	ctx := context.Background()
+	_, _ = tiles.Tile(ctx, 10, 531, 365) // download
+	_, _ = tiles.Tile(ctx, 10, 531, 365) // cache
+	old := time.Now().Add(-MaxAge - time.Hour)
+	if err := os.Chtimes(filepath.Join(dir, "10", "531", "365.tile"), old, old); err != nil {
+		t.Fatal(err)
+	}
+	server.fail.Store(true)
+	_, _ = tiles.Tile(ctx, 10, 531, 365) // stale
+	_, _ = tiles.Tile(ctx, 10, 531, 366) // error
+	for result, want := range map[string]float64{"download": 1, "cache": 1, "stale": 1, "error": 1} {
+		if got := count(result) - before[result]; got != want {
+			t.Errorf("%s: %v, want %v", result, got, want)
+		}
 	}
 }

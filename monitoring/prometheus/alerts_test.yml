@@ -1,0 +1,88 @@
+# Unit tests of alerts.yml: promtool test rules alerts_test.yml (the CI runs them)
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+tests:
+  # the backend stops answering
+  - interval: 1m
+    input_series:
+      - series: 'up{job="mysportweb", instance="msw:9090"}'
+        values: "1 1 0x10"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: MySportWebDown
+        exp_alerts: []
+      - eval_time: 9m
+        alertname: MySportWebDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: mysportweb, instance: "msw:9090"}
+            exp_annotations:
+              summary: "MySportWeb msw:9090 doesn't answer the scrapes"
+              description: "The backend is stopped, restarting, or its metrics port isn't reachable from Prometheus."
+
+  # backups (time() starts at 0): one at 1h then never again; and never at all
+  - interval: 1m
+    input_series:
+      - series: 'mysportweb_backup_last_success_timestamp_seconds{job="mysportweb", instance="ok:9090"}'
+        values: "3600x1700"
+      - series: 'mysportweb_backup_last_success_timestamp_seconds{job="mysportweb", instance="never:9090"}'
+        values: "0x1700"
+    alert_rule_test:
+      - eval_time: 26h
+        alertname: MySportWebBackupTooOld
+        exp_alerts: []
+      - eval_time: 27h
+        alertname: MySportWebBackupTooOld
+        exp_alerts:
+          - exp_labels: {severity: critical, job: mysportweb, instance: "never:9090"}
+            exp_annotations:
+              summary: "No successful backup of MySportWeb for 1d 3h 0m 0s"
+              description: "The backup service retries every 5 minutes: see its logs (docker logs <stack>-backup-1)."
+      - eval_time: 28h
+        alertname: MySportWebBackupTooOld
+        exp_alerts:
+          - exp_labels: {severity: critical, job: mysportweb, instance: "ok:9090"}
+            exp_annotations:
+              summary: "No successful backup of MySportWeb for 1d 3h 0m 0s"
+              description: "The backup service retries every 5 minutes: see its logs (docker logs <stack>-backup-1)."
+          - exp_labels: {severity: critical, job: mysportweb, instance: "never:9090"}
+            exp_annotations:
+              summary: "No successful backup of MySportWeb for 1d 4h 0m 0s"
+              description: "The backup service retries every 5 minutes: see its logs (docker logs <stack>-backup-1)."
+
+  # 10% of 5xx with traffic fires; the same ratio on 1 request in 10 minutes doesn't
+  - interval: 1m
+    input_series:
+      - series: 'mysportweb_http_requests_total{instance="busy:9090", method="GET", route="/api/v1/user", status="200"}'
+        values: "0+54x30"
+      - series: 'mysportweb_http_requests_total{instance="busy:9090", method="GET", route="/api/v1/user", status="500"}'
+        values: "0+6x30"
+      - series: 'mysportweb_http_requests_total{instance="quiet:9090", method="GET", route="/api/v1/user", status="500"}'
+        values: "0+0.1x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: MySportWebErrors
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: "busy:9090"}
+            exp_annotations:
+              summary: "10% of the requests of MySportWeb fail (5xx)"
+              description: "See the logs of the backend; the dashboard tells which routes."
+
+  # an upload refused
+  - interval: 1m
+    input_series:
+      - series: 'mysportweb_analyses_total{result="busy"}'
+        values: "0 0 0 1 1 1"
+      - series: 'mysportweb_thumbnails_total{result="busy"}'
+        values: "0x5"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: MySportWebBusy
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: MySportWebBusy
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "MySportWeb refused uploads: all its analysis slots were taken for a minute"
+              description: "A burst of uploads, or analyses stuck: the clients were told to try again (503)."

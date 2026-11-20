@@ -2,6 +2,7 @@ package apicontrollers
 
 import (
 	"MySportWeb/internal/pkg/app"
+	"MySportWeb/internal/pkg/metrics"
 	"MySportWeb/internal/pkg/middlewares"
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
@@ -75,6 +76,7 @@ func Login(c *gin.Context) {
 	failuresKey := strings.ToLower(user.Username)
 	if blocked, wait := loginFailures.Blocked(failuresKey); blocked {
 		logger.Warn().Msg("login refused: too many failures for this username")
+		metrics.Logins.WithLabelValues("locked").Inc()
 		middlewares.TooManyRequests(c, wait)
 		return
 	}
@@ -93,6 +95,7 @@ func Login(c *gin.Context) {
 		// as long as a wrong password
 		utils.CheckPasswordOfNobody(user.Password)
 		loginFailures.Add(failuresKey)
+		metrics.Logins.WithLabelValues("failure").Inc()
 		c.JSON(400, gin.H{"error": invalidLogin})
 		return
 	}
@@ -102,6 +105,7 @@ func Login(c *gin.Context) {
 	if err := utils.CheckPassword(user.Password, existingUser.Password); err != nil {
 		logger.Debug().Err(err).Uint("user_id", existingUser.ID).Msg("login refused: password check failed")
 		loginFailures.Add(failuresKey)
+		metrics.Logins.WithLabelValues("failure").Inc()
 		c.JSON(400, gin.H{"error": invalidLogin})
 		return
 	}
@@ -115,6 +119,7 @@ func Login(c *gin.Context) {
 	}
 	// the token goes to the cookie only: the page never sees it
 	middlewares.SetSessionCookie(c, tokenString, session.ExpiresAt)
+	metrics.Logins.WithLabelValues("success").Inc()
 	c.JSON(200, gin.H{"session": newSessionInfo(existingUser, session)})
 }
 

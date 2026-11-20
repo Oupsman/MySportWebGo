@@ -59,6 +59,8 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	httpRouter := gin.Default()
+	// first: the requests the middlewares below refuse are counted too
+	httpRouter.Use(instrument)
 	// the IP of the client (rate limits, logs) comes from X-Forwarded-For only behind these proxies: by
 	// default gin trusts it from anyone, a client could choose its IP
 	if err := httpRouter.SetTrustedProxies(vars.TrustedProxies); err != nil {

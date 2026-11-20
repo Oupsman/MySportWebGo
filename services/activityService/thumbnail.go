@@ -1,6 +1,7 @@
 package activityService
 
 import (
+	"MySportWeb/internal/pkg/metrics"
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/staticmap"
 	"bytes"
@@ -52,9 +53,19 @@ func drawThumbnail(activity models.Activity) (missing int, err error) {
 
 	release, err := thumbnailSlots.acquire(QueueTimeout)
 	if err != nil {
+		metrics.Thumbnails.WithLabelValues("busy").Inc()
 		return 0, err
 	}
 	defer release()
+	start := time.Now()
+	defer func() {
+		result := "ok"
+		if err != nil {
+			result = "error"
+		}
+		metrics.Thumbnails.WithLabelValues(result).Inc()
+		metrics.ThumbnailDuration.Observe(time.Since(start).Seconds())
+	}()
 
 	trace := make([]staticmap.Point, len(activity.PublicGpsPoints))
 	for i, p := range activity.PublicGpsPoints {

@@ -1,11 +1,13 @@
 package app
 
 import (
+	"MySportWeb/internal/pkg/metrics"
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/notifications"
 	"MySportWeb/services/activityService"
 	"context"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,6 +36,7 @@ func NewApp(logger zerolog.Logger, driver string, dsn string) (*App, error) {
 	}
 	if current, latest, err := models.SchemaVersion(DB); err == nil {
 		logger.Info().Int64("version", current).Int64("latest", latest).Msg("database schema up to date")
+		metrics.SchemaVersion.Set(float64(current))
 	}
 	// a model changed without its migration: the queries on the missing columns will fail
 	missing, err := models.SchemaDrift(DB)
@@ -97,7 +100,15 @@ func (app *App) backfill(ctx context.Context) {
 			logger.Info().Msg("backfills stopped by the shutdown, they go on at the next start")
 			return
 		}
-		if err := step.run(ctx, db, logger); err != nil {
+		// the metrics name the step by what it does: "compute the TRIMP of activities"
+		name := strings.TrimPrefix(step.failure, "failed to ")
+		metrics.BackfillRunning.WithLabelValues(name).Set(1)
+		start := time.Now()
+		err := step.run(ctx, db, logger)
+		metrics.BackfillRunning.WithLabelValues(name).Set(0)
+		metrics.BackfillDuration.WithLabelValues(name).Set(time.Since(start).Seconds())
+		if err != nil {
+			metrics.BackfillErrors.WithLabelValues(name).Inc()
 			logger.Error().Err(err).Msg(step.failure)
 		}
 	}

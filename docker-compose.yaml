@@ -45,9 +45,22 @@ services:
       # the map tiles of the thumbnails, kept in MEDIA/tiles: empty downloads them from OpenStreetMap, none
       # only uses the ones put there (the thumbnails are then drawn without map)
       MAP_TILE_URL: ${MSW_MAP_TILE_URL:-}
+      # the metrics for Prometheus, on their own port (never through the frontend), see Monitoring in the
+      # README; METRICS_TOKEN: the bearer token the scrapes must send, empty for none
+      METRICS_PORT: "9090"
+      METRICS_TOKEN: ${MSW_METRICS_TOKEN:-}
+      # the age of the last backup of the backup service, in the metrics
+      BACKUP_DIR: /backups
+    ports:
+      # the metrics: on the docker host only by default; MSW_METRICS_ADDRESS=0.0.0.0:9090 for a Prometheus on
+      # another machine, with MSW_METRICS_TOKEN
+      - "${MSW_METRICS_ADDRESS:-127.0.0.1:9090}:9090"
     volumes:
       # the uploaded FIT files, thumbnails, pictures, elevation and map tiles
       - ${MSW_DATA_DIR:-./data}/media:/app/MEDIA
+      # read only: the backups, for the metrics (readable when MSW_BACKUP_OWNER is the user of the backend,
+      # 1000:1000 by default)
+      - ${MSW_BACKUP_DIR:-./backups}:/backups:ro
     depends_on:
       init:
         condition: service_completed_successfully

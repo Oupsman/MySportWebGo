@@ -1,6 +1,7 @@
 package activityService
 
 import (
+	"MySportWeb/internal/pkg/metrics"
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/utils"
@@ -56,9 +57,27 @@ func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipme
 	opts Analysis) (models.Activity, error) {
 	release, err := analysisSlots.acquire(QueueTimeout)
 	if err != nil {
+		metrics.Analyses.WithLabelValues("busy").Inc()
 		return models.Activity{}, err
 	}
 	defer release()
+	start := time.Now()
+	result := "error"
+	defer func() {
+		// a panic (a file without session) counts as an error, then goes on to analyzeFile
+		metrics.Analyses.WithLabelValues(result).Inc()
+		metrics.AnalysisDuration.Observe(time.Since(start).Seconds())
+	}()
+	activity, err := analyzeTrimmed(filePath, user, equipment, trimEnd, opts)
+	if err == nil {
+		result = "ok"
+	}
+	return activity, err
+}
+
+// analyzeTrimmed is AnalyzeTrimmed, holding an analysis slot
+func analyzeTrimmed(filePath string, user models.Users, equipment models.Equipments, trimEnd float64,
+	opts Analysis) (models.Activity, error) {
 	var activity models.Activity
 	f, err := os.Open(filePath)
 	if err != nil {

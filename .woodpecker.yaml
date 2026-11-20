@@ -38,6 +38,13 @@ steps:
       # database, two of them would create its tables and empty them at the same time
       - go test -p 1 ./cmd/... ./internal/... ./services/...
 
+  # the alert rules for the Prometheus of the admins (monitoring/): valid, and their unit tests pass
+  - name: monitoring
+    image: prom/prometheus:v3.5.0
+    commands:
+      - promtool check rules monitoring/prometheus/alerts.yml
+      - cd monitoring/prometheus && promtool test rules alerts_test.yml
+
   - name: tags
     image: debian:trixie-slim
     commands:

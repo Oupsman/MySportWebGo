@@ -20,6 +20,17 @@ var Version = "dev"
 
 var ListenPort string
 
+// MetricsPort is the port of the metrics listener (Prometheus): METRICS_PORT, 9090 by default, "none" for no
+// metrics. Never served by the frontend: publish it to the Prometheus server only.
+var MetricsPort string
+
+// MetricsToken, when set, is required from the scrapes: "Authorization: Bearer <METRICS_TOKEN>"
+var MetricsToken string
+
+// BackupDir is where the backup service writes (mounted read-only): BACKUP_DIR, "" without; the metrics then
+// tell the age of the last backup
+var BackupDir string
+
 // DemDir is the directory of the elevation tiles of the altitude correction: DEM_DIR, MEDIA/dem by default
 var DemDir string
 
@@ -77,6 +88,12 @@ func Init() {
 	}
 
 	ListenPort = CheckVariable("LISTEN_PORT", true)
+	MetricsPort = CheckVariable("METRICS_PORT", false)
+	if MetricsPort == "" {
+		MetricsPort = "9090"
+	}
+	MetricsToken = CheckVariable("METRICS_TOKEN", false)
+	BackupDir = CheckVariable("BACKUP_DIR", false)
 	SecretKey = CheckVariable("SECRET_KEY", true)
 	if err := CheckSecretKey(SecretKey); err != nil {
 		panic(err.Error())

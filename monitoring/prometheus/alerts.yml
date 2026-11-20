@@ -1,0 +1,101 @@
+# Alert rules of MySportWeb, for Prometheus (rule_files in prometheus.yml), see Monitoring in the README.
+# The scrape job of the backend must be named mysportweb (scrape.yml); the other rules read metrics named
+# mysportweb_* whatever the job.
+groups:
+  - name: mysportweb
+    rules:
+      - alert: MySportWebDown
+        expr: up{job="mysportweb"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MySportWeb {{ $labels.instance }} doesn't answer the scrapes"
+          description: "The backend is stopped, restarting, or its metrics port isn't reachable from Prometheus."
+
+      - alert: MySportWebRestarting
+        expr: changes(process_start_time_seconds{job="mysportweb"}[1h]) > 2
+        labels:
+          severity: warning
+        annotations:
+          summary: "MySportWeb {{ $labels.instance }} restarted {{ $value }} times in an hour"
+          description: "A crash loop, or the container killed (out of memory): see the logs of the backend."
+
+      - alert: MySportWebBackupTooOld
+        # 0 when there was never a backup: fires too
+        expr: time() - mysportweb_backup_last_success_timestamp_seconds > 26 * 3600
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No successful backup of MySportWeb for {{ $value | humanizeDuration }}"
+          description: "The backup service retries every 5 minutes: see its logs (docker logs <stack>-backup-1)."
+
+      - alert: MySportWebBackupUnreadable
+        expr: mysportweb_backup_dir_readable == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The backend can't read the backup directory: the age of the backups is unknown"
+          description: "MSW_BACKUP_OWNER isn't the user of the backend (1000:1000): MySportWebBackupTooOld can't fire."
+
+      - alert: MySportWebErrors
+        # 5% of the requests, with some traffic: one failed request at night isn't an incident
+        expr: |
+          sum by (instance) (rate(mysportweb_http_requests_total{status=~"5.."}[5m]))
+            / sum by (instance) (rate(mysportweb_http_requests_total[5m])) > 0.05
+          and sum by (instance) (rate(mysportweb_http_requests_total[5m])) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of the requests of MySportWeb fail (5xx)"
+          description: "See the logs of the backend; the dashboard tells which routes."
+
+      - alert: MySportWebSlow
+        # the reads only: an upload analyses the file and draws its thumbnail, seconds are normal
+        expr: |
+          histogram_quantile(0.95, sum by (instance, le) (rate(mysportweb_http_request_duration_seconds_bucket{method="GET"}[10m]))) > 2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MySportWeb answers its reads in {{ $value | humanizeDuration }} (95th percentile)"
+          description: "The database (see its connection pool on the dashboard), or the machine is overloaded."
+
+      - alert: MySportWebBusy
+        expr: sum(increase(mysportweb_analyses_total{result="busy"}[15m])) + sum(increase(mysportweb_thumbnails_total{result="busy"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "MySportWeb refused uploads: all its analysis slots were taken for a minute"
+          description: "A burst of uploads, or analyses stuck: the clients were told to try again (503)."
+
+      - alert: MySportWebMapTilesFailing
+        # the thumbnails are drawn with holes, and their redraw at the start is put off
+        expr: sum(rate(mysportweb_map_tiles_total{result="error"}[30m])) > 0 and sum(rate(mysportweb_map_tiles_total{result=~"download|cache"}[30m])) == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MySportWeb can't get map tiles (MAP_TILE_URL)"
+          description: "The tile server is down or refuses the backend: the new thumbnails have no map."
+
+      - alert: MySportWebBackfillFailed
+        expr: increase(mysportweb_backfill_errors_total[1h]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "A backfill of the start of MySportWeb failed: {{ $labels.step }}"
+          description: "It runs again at the next start; the error is in the logs of the backend."
+
+      - alert: MySportWebDatabasePoolExhausted
+        # the requests wait for a connection to the database
+        expr: rate(go_sql_wait_duration_seconds_total{db_name="mysportweb"}[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The requests of MySportWeb wait for a database connection"
+          description: "All the connections of the pool are in use: slow queries, or the database is overloaded."

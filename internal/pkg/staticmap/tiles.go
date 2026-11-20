@@ -3,6 +3,7 @@
 package staticmap
 
 import (
+	"MySportWeb/internal/pkg/metrics"
 	"bytes"
 	"context"
 	"errors"
@@ -72,17 +73,28 @@ func (t *Tiles) Downloads() bool {
 }
 
 // Tile returns the tile of a zoom level and coordinates, from the directory when it is recent enough,
-// downloaded otherwise; a stale one when the download fails
+// downloaded otherwise; a stale one when the download fails. Counted in metrics.MapTiles by result.
 func (t *Tiles) Tile(ctx context.Context, z, x, y int) (image.Image, error) {
+	img, result, err := t.tile(ctx, z, x, y)
+	if err != nil {
+		result = "error"
+	}
+	metrics.MapTiles.WithLabelValues(result).Inc()
+	return img, err
+}
+
+// tile is Tile, telling where the tile comes from: cache, download or stale
+func (t *Tiles) tile(ctx context.Context, z, x, y int) (image.Image, string, error) {
 	key := fmt.Sprintf("%d/%d/%d", z, x, y)
 	path := filepath.Join(t.dir, strconv.Itoa(z), strconv.Itoa(x), strconv.Itoa(y)+".tile")
 	info, statErr := os.Stat(path)
 	stored := statErr == nil
 	if stored && (t.url == "" || time.Since(info.ModTime()) < MaxAge) {
-		return readTile(path)
+		img, err := readTile(path)
+		return img, "cache", err
 	}
 	if t.url == "" {
-		return nil, ErrNoTile
+		return nil, "", ErrNoTile
 	}
 
 	t.mu.Lock()
@@ -97,7 +109,7 @@ func (t *Tiles) Tile(ctx context.Context, z, x, y int) (image.Image, error) {
 			t.mu.Lock()
 			delete(t.failed, key)
 			t.mu.Unlock()
-			return img, nil
+			return img, "download", nil
 		}
 		// stopped by the caller: the tile server isn't at fault
 		if ctx.Err() == nil {
@@ -107,9 +119,10 @@ func (t *Tiles) Tile(ctx context.Context, z, x, y int) (image.Image, error) {
 		}
 	}
 	if stored {
-		return readTile(path)
+		img, err := readTile(path)
+		return img, "stale", err
 	}
-	return nil, err
+	return nil, "", err
 }
 
 func readTile(path string) (image.Image, error) {

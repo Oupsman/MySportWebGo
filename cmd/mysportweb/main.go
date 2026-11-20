@@ -3,6 +3,7 @@ package main
 import (
 	"MySportWeb/internal/pkg/app"
 	"MySportWeb/internal/pkg/elevation"
+	"MySportWeb/internal/pkg/metrics"
 	"MySportWeb/internal/pkg/staticmap"
 	"MySportWeb/internal/pkg/vars"
 	"MySportWeb/internal/pkg/webserver"
@@ -13,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -60,6 +62,16 @@ func main() {
 	g, ctx := errgroup.WithContext(ctx)
 	listenAddr := fmt.Sprintf(":%s", vars.ListenPort)
 	g.Go(func() error { return webserver.RunHttp(ctx, listenAddr, App) })
+	if vars.MetricsPort != "none" {
+		metrics.BuildInfo.WithLabelValues(vars.Version).Set(1)
+		if sqlDB, err := App.DB.DB.DB(); err == nil {
+			// the connection pool of the database: go_sql_* labelled db_name="mysportweb"
+			metrics.Registry.MustRegister(collectors.NewDBStatsCollector(sqlDB, "mysportweb"))
+		}
+		metrics.Registry.MustRegister(metrics.NewDataCollector(App.DB.Counts, vars.BackupDir))
+		metricsAddr := fmt.Sprintf(":%s", vars.MetricsPort)
+		g.Go(func() error { return webserver.RunMetrics(ctx, metricsAddr, vars.MetricsToken, log.Logger) })
+	}
 	g.Go(func() error { return App.Start(ctx) })
 	err = g.Wait()
 	if err != nil {

@@ -1,6 +1,7 @@
 package activityService
 
 import (
+	"MySportWeb/internal/pkg/metrics"
 	"errors"
 	"time"
 )
@@ -23,6 +24,11 @@ var (
 	analysisSlots  = newSlots(MaxConcurrentAnalyses)
 	thumbnailSlots = newSlots(MaxConcurrentThumbnails)
 )
+
+func init() {
+	metrics.SlotsInUse("analysis", func() int { return len(analysisSlots) }, MaxConcurrentAnalyses)
+	metrics.SlotsInUse("thumbnail", func() int { return len(thumbnailSlots) }, MaxConcurrentThumbnails)
+}
 
 // slots lets n jobs run at a time
 type slots chan struct{}

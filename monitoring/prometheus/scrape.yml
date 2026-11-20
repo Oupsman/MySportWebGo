@@ -1,0 +1,12 @@
+# The scrape job of MySportWeb, to add to scrape_configs in prometheus.yml (see Monitoring in the README).
+# The alert rules (alerts.yml) expect the job to be named mysportweb.
+scrape_configs:
+  - job_name: mysportweb
+    scrape_interval: 30s
+    # MSW_METRICS_TOKEN of the stack, when set
+    authorization:
+      credentials_file: /etc/prometheus/mysportweb-token
+    static_configs:
+      # the docker host and MSW_METRICS_ADDRESS; mysportweb-backend-1:9090 for a Prometheus in the network of
+      # the stack
+      - targets: ["sport.example.com:9090"]

@@ -124,6 +124,33 @@ docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_POR
 
 The variables are prefixed `MSW_` because docker compose also reads the `.env` used for development.
 
+## Monitoring
+
+The backend serves metrics for Prometheus on its own port, 9090 in the container, never through the frontend.
+`monitoring/` has what your Prometheus and Grafana need:
+
+* `monitoring/prometheus/scrape.yml`: the scrape job, to add to `scrape_configs`. Keep its name, `mysportweb`.
+* `monitoring/prometheus/alerts.yml`: the alert rules, to add to `rule_files`, with Alertmanager sending them:
+  the backend down or restarting in a loop, **no successful backup for 26 hours**, 5xx errors, slow reads,
+  uploads refused (busy), map tiles failing, a backfill failed, the database connection pool exhausted.
+  `alerts_test.yml` tests them (`promtool test rules alerts_test.yml`, run by the CI).
+* `monitoring/grafana/mysportweb.json`: the dashboard. In Grafana: Dashboards → New → Import, upload the file;
+  choose the Prometheus at the top of the dashboard.
+
+Where Prometheus reaches the metrics:
+
+* **On the docker host**, by default: `127.0.0.1:9090` (`MSW_METRICS_ADDRESS`).
+* **From another machine**: `MSW_METRICS_ADDRESS=0.0.0.0:9090`, and a token so that only Prometheus reads them:
+  `MSW_METRICS_TOKEN=$(openssl rand -base64 32)` in the stack, the same token in the file of
+  `credentials_file` in the scrape job. Restrict the port to the Prometheus server in the firewall too.
+* **A Prometheus container in the network of the stack**: target `mysportweb-backend-1:9090` (`<stack>-backend-1`).
+
+The metrics are named `mysportweb_*` (requests by route and status, analyses, thumbnails, map tiles, logins,
+backfills, users and activities, backups), `go_sql_*` (the connection pool), `go_*` and `process_*`. The age
+of the backups comes from `MSW_BACKUP_DIR`, mounted read-only in the backend: it reads it when
+`MSW_BACKUP_OWNER` is its user, `1000:1000` by default (`mysportweb_backup_dir_readable` is 0 otherwise, and
+the backup alert can't fire). `METRICS_PORT=none` in the environment of the backend turns the metrics off.
+
 ## Releases and upgrades
 
 The backend and the frontend are released together, with the same version: `vX.Y.Z` is a tag in both repositories,

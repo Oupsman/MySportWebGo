@@ -26,7 +26,8 @@ RUN mkdir MEDIA && chown app:app MEDIA
 COPY --from=build /out/mysportweb /out/cleanmedia /usr/local/bin/
 USER app
 ENV LISTEN_PORT=8080
-EXPOSE 8080
+# the API; the metrics (Prometheus), see METRICS_PORT
+EXPOSE 8080 9090
 VOLUME ["/app/MEDIA"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD wget -qO /dev/null "http://localhost:${LISTEN_PORT}/api/v1/healthcheck" || exit 1
