@@ -6,7 +6,7 @@
 # The variables are prefixed MSW_: the .env of the backend for development (DBHOST=127.0.0.1...)
 # is read by docker compose too and must not configure the containers.
 #
-# The data is in MSW_DATA_DIR (./data): media/ (FIT files, thumbnails, pictures, elevation tiles) and
+# The data is in MSW_DATA_DIR (./data): media/ (FIT files, thumbnails, pictures, elevation and map tiles) and
 # postgres/ (the bundled database); the dumps of the database in MSW_BACKUP_DIR (./backups). With Portainer,
 # absolute paths: the relative ones are inside the stack directory of Portainer.
 #
@@ -40,8 +40,11 @@ services:
       # the elevation tiles of the altitude correction, kept in MEDIA/dem: empty downloads the missing ones
       # from AWS Terrain Tiles, none only uses the ones put there
       DEM_URL: ${MSW_DEM_URL:-}
+      # the map tiles of the thumbnails, kept in MEDIA/tiles: empty downloads them from OpenStreetMap, none
+      # only uses the ones put there (the thumbnails are then drawn without map)
+      MAP_TILE_URL: ${MSW_MAP_TILE_URL:-}
     volumes:
-      # the uploaded FIT files, thumbnails, pictures and elevation tiles
+      # the uploaded FIT files, thumbnails, pictures, elevation and map tiles
       - ${MSW_DATA_DIR:-./data}/media:/app/MEDIA
     depends_on:
       init:

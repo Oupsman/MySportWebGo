@@ -55,7 +55,7 @@ func New(serverURL, token string) (*Client, error) {
 	if !strings.HasPrefix(token, TokenPrefix) {
 		return nil, fmt.Errorf("the token must be a device token, starting with %s", TokenPrefix)
 	}
-	// the server draws a thumbnail of each activity with Chromium: an upload takes seconds
+	// the server analyses each activity and draws its thumbnail: an upload takes seconds
 	return &Client{base: base, token: token, http: &http.Client{Timeout: 3 * time.Minute}}, nil
 }
 

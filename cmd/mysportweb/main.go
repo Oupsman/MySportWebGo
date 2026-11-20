@@ -3,6 +3,7 @@ package main
 import (
 	"MySportWeb/internal/pkg/app"
 	"MySportWeb/internal/pkg/elevation"
+	"MySportWeb/internal/pkg/staticmap"
 	"MySportWeb/internal/pkg/vars"
 	"MySportWeb/internal/pkg/webserver"
 	"MySportWeb/services/activityService"
@@ -34,6 +35,14 @@ func main() {
 	terrain := elevation.New(vars.DemDir, demURL)
 	defer terrain.Close()
 	activityService.Terrain = terrain
+	tileURL := vars.MapTileURL
+	switch tileURL {
+	case "":
+		tileURL = staticmap.DefaultURL
+	case "none":
+		tileURL = ""
+	}
+	activityService.MapTiles = staticmap.NewTiles(vars.MapTileDir, tileURL)
 	driver := "postgres"
 	dsn := vars.Dsn
 	App, err := app.NewApp(log.Logger, driver, dsn)

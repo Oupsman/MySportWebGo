@@ -36,9 +36,10 @@ cp compose.env.sample .env   # then set MSW_DOMAIN, MSW_SECRET_KEY and MSW_DBPAS
 docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_PORT)
 ```
 
-* **Data**: in `MSW_DATA_DIR` (`./data` by default): `media/` holds the uploaded FIT files, thumbnails, pictures and
-  elevation tiles, `postgres/` the bundled database. With Portainer, use absolute paths for `MSW_DATA_DIR` and
-  `MSW_BACKUP_DIR`: the relative ones end up inside the stack directory of Portainer.
+* **Data**: in `MSW_DATA_DIR` (`./data` by default): `media/` holds the uploaded FIT files, thumbnails, pictures,
+  elevation and map tiles (`dem/`, `tiles/`: downloaded again when lost), `postgres/` the bundled database. With
+  Portainer, use absolute paths for `MSW_DATA_DIR` and `MSW_BACKUP_DIR`: the relative ones end up inside the stack
+  directory of Portainer.
 * **Bundled database**: `COMPOSE_PROFILES=db` in `.env` starts a Postgres, its data in `MSW_DATA_DIR/postgres`.
 * **External database**: remove `COMPOSE_PROFILES` and set `MSW_DBHOST`, `MSW_DBPORT`, `MSW_DBUSER`, `MSW_DBPASSWORD`,
   `MSW_DBNAME`, and `MSW_DBSSLMODE`. The default, `prefer`, uses TLS when the database offers it without checking

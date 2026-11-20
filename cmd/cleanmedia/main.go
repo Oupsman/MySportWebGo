@@ -26,8 +26,9 @@ import (
 
 const mediaDir = "MEDIA"
 
-// demDir is the directory of MEDIA holding the elevation tiles of the altitude correction (DEM_DIR by default)
-const demDir = "dem"
+// the directories of MEDIA holding the elevation tiles of the altitude correction (DEM_DIR by default) and the
+// map tiles of the thumbnails (MAP_TILE_DIR by default): not users
+var tileDirs = map[string]bool{"dem": true, "tiles": true}
 
 type orphan struct {
 	path string
@@ -97,7 +98,7 @@ func run(remove bool) error {
 			continue
 		}
 		userUUID := dir.Name()
-		if userUUID == demDir {
+		if tileDirs[userUUID] {
 			continue
 		}
 		if !knownUsers[userUUID] {

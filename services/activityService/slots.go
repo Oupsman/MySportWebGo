@@ -6,12 +6,10 @@ import (
 )
 
 // The heavy work runs a few at a time: a burst of uploads queues instead of exhausting the memory (a FIT
-// file is decoded whole) or the processes (a Chromium per thumbnail)
+// file is decoded whole) or the tile server (the thumbnails download map tiles)
 const (
 	MaxConcurrentAnalyses   = 4
 	MaxConcurrentThumbnails = 2
-	// ThumbnailTimeout is the longest a thumbnail is drawn: a stuck Chromium must free its slot
-	ThumbnailTimeout = time.Minute
 )
 
 // QueueTimeout is how long a request waits for its turn before giving up with ErrBusy (a variable for the

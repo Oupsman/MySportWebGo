@@ -1,4 +1,4 @@
-# Backend of MySportWeb: the API, and the thumbnails of the activities drawn by a headless Chromium
+# Backend of MySportWeb: the API, and the thumbnails of the activities (maps drawn in Go)
 FROM golang:1.27-trixie AS build
 # the toolchain of go.mod at least (security fixes of the standard library), downloaded when the image has an
 # older one: a cached image can lag behind its tag. The golang images set GOTOOLCHAIN=local, which ignores it.
@@ -11,20 +11,18 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/mysportweb ./cmd/m
  && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/cleanmedia ./cmd/cleanmedia
 
 FROM debian:trixie-slim
-# chromium: the thumbnails (chromedp finds it on the PATH); tini: reaps the exited Chromium processes,
-# the Go binary as PID 1 would leave them as zombies; wget: the health check
+# ca-certificates: the downloads of map and elevation tiles; tini: forwards the signals and reaps the
+# processes as PID 1; wget: the health check
 RUN apt-get update \
- && apt-get install -y --no-install-recommends chromium tini ca-certificates fonts-liberation wget \
+ && apt-get install -y --no-install-recommends tini ca-certificates wget \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 1000 app
 WORKDIR /app
-# MEDIA: the uploaded files, to keep in a volume; tmp: the pages of the thumbnails
-RUN mkdir MEDIA tmp && chown app:app MEDIA tmp
+# MEDIA: the uploaded files, to keep in a volume
+RUN mkdir MEDIA && chown app:app MEDIA
 COPY --from=build /out/mysportweb /out/cleanmedia /usr/local/bin/
 USER app
 ENV LISTEN_PORT=8080
-# Docker's seccomp profile forbids the sandbox of Chromium: the non root container isolates it instead
-ENV CHROMIUM_NO_SANDBOX=true
 EXPOSE 8080
 VOLUME ["/app/MEDIA"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \

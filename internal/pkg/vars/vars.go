@@ -22,6 +22,14 @@ var DemDir string
 // DemURL is where the missing elevation tiles are downloaded from: DEM_URL, elevation.DefaultURL by
 // default, "none" for no download (the tiles are then only the ones put in DemDir)
 var DemURL string
+
+// MapTileDir is the directory of the map tiles of the thumbnails: MAP_TILE_DIR, MEDIA/tiles by default
+var MapTileDir string
+
+// MapTileURL is where the map tiles of the thumbnails are downloaded from: MAP_TILE_URL,
+// staticmap.DefaultURL (OpenStreetMap) by default, "none" for no download (the tiles are then only the ones
+// already in MapTileDir)
+var MapTileURL string
 var Dsn string
 var SecretKey string
 var Domain string
@@ -75,6 +83,11 @@ func Init() {
 		DemDir = "MEDIA/dem"
 	}
 	DemURL = CheckVariable("DEM_URL", false)
+	MapTileDir = CheckVariable("MAP_TILE_DIR", false)
+	if MapTileDir == "" {
+		MapTileDir = "MEDIA/tiles"
+	}
+	MapTileURL = CheckVariable("MAP_TILE_URL", false)
 	TrustedProxies = DefaultTrustedProxies
 	if proxies := CheckVariable("TRUSTED_PROXIES", false); proxies != "" {
 		TrustedProxies = nil
