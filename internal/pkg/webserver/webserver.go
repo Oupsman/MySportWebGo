@@ -64,9 +64,6 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	if err := httpRouter.SetTrustedProxies(vars.TrustedProxies); err != nil {
 		return err
 	}
-	// only the thumbnails and the equipment pictures, never the FIT files nor a directory listing
-	httpRouter.GET("/MEDIA/*path", apicontrollers.ServeMedia)
-	httpRouter.HEAD("/MEDIA/*path", apicontrollers.ServeMedia)
 	httpRouter.Use(AppHandler(App))
 	// the multipart files above this are written to temporary files instead of memory
 	httpRouter.MaxMultipartMemory = 8 << 20
@@ -101,6 +98,11 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	httpRouter.GET("/", apicontrollers.HealthCheck)
 	// httpRouter.GET("/login", controllers.Login)
 	// httpRouter.GET("/signup", controllers.SignUp)
+
+	// only the thumbnails and the equipment pictures, never the FIT files nor a directory listing; to whom
+	// may see them, from the session cookie
+	httpRouter.GET("/MEDIA/*path", middlewares.OptionalUser(), apicontrollers.ServeMedia)
+	httpRouter.HEAD("/MEDIA/*path", middlewares.OptionalUser(), apicontrollers.ServeMedia)
 
 	apiv1 := httpRouter.Group("/api/v1")
 	{

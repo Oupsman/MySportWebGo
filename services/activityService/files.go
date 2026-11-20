@@ -20,6 +20,11 @@ func ThumbnailPath(userUUID, activityID uuid.UUID) string {
 	return filepath.Join(MediaDir, userUUID.String(), "thumbnails", activityID.String()+".png")
 }
 
+// ThumbnailURL returns the URL of the thumbnail of an activity, served by the backend under /MEDIA
+func ThumbnailURL(userUUID, activityID uuid.UUID) string {
+	return "/" + filepath.ToSlash(ThumbnailPath(userUUID, activityID))
+}
+
 // removeUserFile removes a file of a user, refusing any path outside of the user's media directory
 func removeUserFile(userUUID uuid.UUID, path string) error {
 	userDir := filepath.Join(MediaDir, userUUID.String()) + string(filepath.Separator)

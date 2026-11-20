@@ -300,7 +300,8 @@ func newBackfillProgress(logger zerolog.Logger, total int, msg string) *backfill
 	return &backfillProgress{logger: logger, total: total, started: now, logged: now}
 }
 
-// done logs the progress after done activities, when the last log is old enough
+// done logs the progress after done activities, when the last log is old enough, with the fields added
+// by fields (nil: none)
 func (p *backfillProgress) done(done int, fields func(*zerolog.Event) *zerolog.Event) {
 	now := time.Now()
 	if done >= p.total || now.Sub(p.logged) < BackfillProgressInterval {
@@ -312,7 +313,10 @@ func (p *backfillProgress) done(done int, fields func(*zerolog.Event) *zerolog.E
 	event := p.logger.Info().Int("done", done).Int("total", p.total).
 		Str("percent", strconv.FormatFloat(float64(done)*100/float64(p.total), 'f', 1, 64)).
 		Str("elapsed", elapsed.Round(time.Second).String()).Str("left", left.String())
-	fields(event).Msg("backfill in progress")
+	if fields != nil {
+		event = fields(event)
+	}
+	event.Msg("backfill in progress")
 }
 
 // BackfillBestEfforts computes the best efforts of the activities analysed before they existed: their FIT

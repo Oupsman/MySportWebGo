@@ -73,51 +73,36 @@ func TestSchemaMatchesModels(t *testing.T) {
 	}
 }
 
-// TestMigrateLegacyDatabase adopts a database created by AutoMigrate before the migrations, even an older
-// one: its data is kept, it gets the schema of a new database
-func TestMigrateLegacyDatabase(t *testing.T) {
+// a database of before the versioned migrations (AutoMigrate, no versions table) is refused once there are
+// migrations after the baseline, untouched: the baseline adopts it as the schema of its time, the later
+// migrations would fail on it. The previous release, with only the baseline, adopts it first.
+func TestLegacyDatabaseRefused(t *testing.T) {
 	db := resetSchema(t)
-	if err := db.Exec(baselineSQL).Error; err != nil {
-		t.Fatal(err)
-	}
-	baseline := columns(t, db)
-
-	db = resetSchema(t)
+	// leaves the database usable by the next tests
+	// (not resetSchema: it migrates first, which the legacy database refuses)
+	defer func() {
+		if err := db.Exec("DROP SCHEMA public CASCADE; CREATE SCHEMA public").Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := CreateOrMigrate(db); err != nil {
+			t.Fatal(err)
+		}
+	}()
 	if err := legacyAutoMigrate(db); err != nil {
 		t.Fatal(err)
 	}
-	if legacy := columns(t, db); fmt.Sprint(legacy) != fmt.Sprint(baseline) {
-		for c := range baseline {
-			if !legacy[c] {
-				t.Errorf("baseline.sql has %s, AutoMigrate hasn't", c)
-			}
-		}
-		for c := range legacy {
-			if !baseline[c] {
-				t.Errorf("AutoMigrate has %s, baseline.sql hasn't", c)
-			}
-		}
-	}
-	// an older database: a column added since, one dropped since, data
-	for _, statement := range []string{
-		"ALTER TABLE activities DROP COLUMN best_efforts",
-		"ALTER TABLE activities ADD COLUMN stances bytea",
-		"INSERT INTO users (username, email) VALUES ('legacy', 'legacy@test.local')",
-	} {
-		if err := db.Exec(statement).Error; err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := CreateOrMigrate(db); err != nil {
+	if err := db.Exec("INSERT INTO users (username, email) VALUES ('legacy', 'legacy@test.local')").Error; err != nil {
 		t.Fatal(err)
 	}
-	checkVersion(t, db, 1)
-	if migrated := columns(t, db); fmt.Sprint(migrated) != fmt.Sprint(baseline) {
-		t.Errorf("the adopted database differs from a new one:\n%v\nwant\n%v", migrated, baseline)
+	if err := CreateOrMigrate(db); !errors.Is(err, ErrLegacyTooOld) {
+		t.Fatalf("a legacy database: %v, want ErrLegacyTooOld", err)
 	}
 	var count int64
 	if err := db.Table("users").Where("username = 'legacy'").Count(&count).Error; err != nil || count != 1 {
 		t.Errorf("the user of the legacy database: %d (%v)", count, err)
+	}
+	if db.Migrator().HasTable("goose_db_version") {
+		t.Error("the legacy database got a versions table: it would pass for adopted")
 	}
 }
 

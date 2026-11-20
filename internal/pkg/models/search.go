@@ -92,7 +92,7 @@ func (db *DB) SearchActivities(userID uint, filter ActivityFilter, sort string, 
 		Select("activities.id, activities.title, activities.date, activities.sport, activities.distance, " +
 			"activities.duration, activities.avg_speed, activities.positive_elevation AS elevation, " +
 			"activities.is_commute, activities.equipment_id, equipments.name AS equipment_name, " +
-			"COALESCE(activities.device_name, '') AS device_name").
+			"COALESCE(activities.device_name, '') AS device_name, " + HasMapColumn).
 		Joins("LEFT JOIN equipments ON equipments.id = activities.equipment_id").
 		// the date, then the id, keep the order stable between pages
 		Order(order).Order("activities.date DESC").Order("activities.id").

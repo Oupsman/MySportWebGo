@@ -41,15 +41,15 @@ func analyzeFileWhenFree(ctx context.Context, filePath string, user models.Users
 	}
 }
 
-// generateThumbnailWhenFree runs GenerateThumbnail, waiting for a drawing slot as long as the server is busy
-func generateThumbnailWhenFree(ctx context.Context, activity models.Activity) error {
+// drawThumbnailWhenFree runs drawThumbnail, waiting for a drawing slot as long as the server is busy
+func drawThumbnailWhenFree(ctx context.Context, activity models.Activity) (missing int, err error) {
 	for {
-		err := GenerateThumbnail(activity)
+		missing, err := drawThumbnail(activity)
 		if !errors.Is(err, ErrBusy) {
-			return err
+			return missing, err
 		}
 		if err := waitRetry(ctx); err != nil {
-			return err
+			return 0, err
 		}
 	}
 }
@@ -115,7 +115,7 @@ func BackfillTimeStamps(ctx context.Context, db *models.DB, logger zerolog.Logge
 		}
 		if user.UUID != uuid.Nil && !slices.Equal(public, stored.PublicGpsPoints) {
 			redrawn := models.Activity{ID: id, User: user, PublicGpsPoints: public}
-			if err := generateThumbnailWhenFree(ctx, redrawn); err != nil {
+			if _, err := drawThumbnailWhenFree(ctx, redrawn); err != nil {
 				logger.Warn().Err(err).Str("activity", id.String()).Msg("thumbnail not drawn again with the new public trace")
 			}
 		}

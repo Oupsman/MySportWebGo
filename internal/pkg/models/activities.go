@@ -50,6 +50,9 @@ type Activity struct {
 	DeviceID         *uuid.UUID        `json:"device_id" gorm:"type:uuid;index"` // nil when the file doesn't name the device
 	UserAge          uint8             `json:"user_age"`                         // age of the user at the time of the initial import of activity
 	Thumbnail        string            `json:"thumbnail"`
+	// the version of the drawing of its thumbnail (activityService.ThumbnailVersion): an older one is drawn
+	// again at the start
+	ThumbnailVersion int `json:"-" gorm:"not null;default:0"`
 	// precalculated FIT analysis results
 	Speeds              types.FloatArray    `json:"speeds"`
 	Hearts              types.Uint16Array   `json:"hearts"`
@@ -440,4 +443,55 @@ func (db *DB) FindDuplicateActivity(userID uint, sport string, date time.Time) (
 		return nil, err
 	}
 	return &ids[0], nil
+}
+
+// HasMapColumn is true for an activity whose public trace has two points at least: its thumbnail shows a
+// map, the others are blank. The trace is JSON in a bytea.
+const HasMapColumn = "(activities.public_gps_points IS NOT NULL AND " +
+	"jsonb_path_exists(convert_from(activities.public_gps_points, 'UTF8')::jsonb, '$[1]')) AS has_map"
+
+// ThumbnailToDraw is what drawing the thumbnail of an activity needs
+type ThumbnailToDraw struct {
+	ID              uuid.UUID
+	UserUUID        uuid.UUID
+	PublicGpsPoints types.GpsPointArray
+}
+
+// GetThumbnailsBelowVersion returns the ids of the activities whose thumbnail was drawn by an older version
+// than version, most recent first: the ones the lists show first
+func (db *DB) GetThumbnailsBelowVersion(version int) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := db.Model(&Activity{}).Where("thumbnail_version < ?", version).Order("date DESC").Pluck("id", &ids).Error
+	return ids, err
+}
+
+// GetThumbnailToDraw returns what drawing the thumbnail of an activity needs; a nil UserUUID for an
+// activity without user
+func (db *DB) GetThumbnailToDraw(id uuid.UUID) (ThumbnailToDraw, error) {
+	var thumbnail ThumbnailToDraw
+	err := db.Table("activities").
+		Select("activities.id, users.uuid AS user_uuid, activities.public_gps_points").
+		Joins("LEFT JOIN users ON users.id = activities.user_id").
+		Where("activities.id = ?", id).Take(&thumbnail).Error
+	return thumbnail, err
+}
+
+// SetThumbnailVersion records the version of the drawing of the thumbnail of an activity
+func (db *DB) SetThumbnailVersion(id uuid.UUID, version int) error {
+	return db.Model(&Activity{}).Where("id = ?", id).UpdateColumn("thumbnail_version", version).Error
+}
+
+// MediaAccess is who may see the thumbnail of an activity: its owner, and the others by its visibility
+type MediaAccess struct {
+	OwnerUUID  uuid.UUID
+	Visibility int
+}
+
+// GetMediaAccess returns the owner and the visibility of an activity
+func (db *DB) GetMediaAccess(id uuid.UUID) (MediaAccess, error) {
+	var access MediaAccess
+	err := db.Table("activities").Select("users.uuid AS owner_uuid, activities.visibility").
+		Joins("JOIN users ON users.id = activities.user_id").
+		Where("activities.id = ?", id).Take(&access).Error
+	return access, err
 }

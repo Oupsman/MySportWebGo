@@ -157,8 +157,8 @@ func (db *DB) GetDashboard(userID uint, now time.Time) (types.Dashboard, error) 
 
 	dashboard.Recent = []types.RecentActivity{}
 	err = db.Table("activities").
-		Select("id, title, date, sport, distance, duration, avg_speed, positive_elevation AS elevation").
-		Where("user_id = ?", userID).Order("date DESC").Limit(10).Scan(&dashboard.Recent).Error
+		Select("id, title, date, sport, distance, duration, avg_speed, positive_elevation AS elevation, "+HasMapColumn).
+		Where("activities.user_id = ?", userID).Order("date DESC").Limit(10).Scan(&dashboard.Recent).Error
 	if err != nil {
 		return dashboard, err
 	}

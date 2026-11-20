@@ -412,6 +412,11 @@ func Dashboard(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
+	for i, activity := range dashboard.Recent {
+		if activity.HasMap {
+			dashboard.Recent[i].Thumbnail = activityService.ThumbnailURL(user.UUID, activity.ID)
+		}
+	}
 	c.JSON(200, dashboard)
 }
 

@@ -106,6 +106,7 @@ func UploadActivity(c *gin.Context) {
 		}
 		return
 	}
+	activity.ThumbnailVersion = activityService.ThumbnailVersion
 
 	// the FIT file keeps its name, prefixed by the activity id when another file has it
 	store := func(activity *models.Activity) error {
@@ -229,12 +230,7 @@ func GetActivity(c *gin.Context) {
 
 	// user is empty (ID 0) for an anonymous request
 	user, authenticated := middlewares.LookupUser(c)
-	if authenticated {
-		if activity.Visibility == 0 && activity.User.ID != user.ID {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You can't access this activity"})
-			return
-		}
-	} else if activity.Visibility != 2 {
+	if !mayView(activity.Visibility, authenticated && activity.User.ID == user.ID, authenticated) {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You can't access this activity"})
 		return
 	}
@@ -439,6 +435,11 @@ func SearchActivities(c *gin.Context) {
 	if err != nil {
 		internalError(c, err)
 		return
+	}
+	for i, activity := range search.Activities {
+		if activity.HasMap {
+			search.Activities[i].Thumbnail = activityService.ThumbnailURL(user.UUID, activity.ID)
+		}
 	}
 	c.JSON(http.StatusOK, search)
 }

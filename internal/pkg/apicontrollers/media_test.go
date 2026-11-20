@@ -1,6 +1,7 @@
 package apicontrollers
 
 import (
+	"MySportWeb/internal/pkg/models"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -8,8 +9,10 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
+// the paths served to the owner of the files: the thumbnails and the pictures, never the FIT files
 func TestServeMedia(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Chdir(t.TempDir())
@@ -35,7 +38,11 @@ func TestServeMedia(t *testing.T) {
 		}
 	}
 	router := gin.New()
-	router.GET("/MEDIA/*path", ServeMedia)
+	// the owner of the files: no lookup of the visibility of the activities
+	router.GET("/MEDIA/*path", func(c *gin.Context) {
+		c.Set("User", models.Users{UUID: uuid.MustParse(user)})
+		c.Next()
+	}, ServeMedia)
 
 	for _, tt := range []struct {
 		path string

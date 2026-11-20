@@ -21,6 +21,10 @@ var MapTiles *staticmap.Tiles
 const (
 	ThumbnailWidth  = 300
 	ThumbnailHeight = 200
+	// ThumbnailVersion is the version of their drawing, recorded for each activity: the thumbnails of an
+	// older one are drawn again at the start (BackfillThumbnails). 1: drawn in Go, with the attribution of
+	// the map data (0: by Chromium, without).
+	ThumbnailVersion = 1
 	// TilesTimeout is how long the drawing waits for the map tiles: past it, the trace is drawn without the
 	// ones still missing (the tile server is slow or can't be reached)
 	TilesTimeout = 15 * time.Second
@@ -31,17 +35,24 @@ const (
 // trace (indoor, or a short loop inside its privacy zones) gets a blank thumbnail: no map, it would show
 // where the hidden trace is.
 func GenerateThumbnail(activity models.Activity) error {
+	_, err := drawThumbnail(activity)
+	return err
+}
+
+// drawThumbnail draws the thumbnail of an activity, see GenerateThumbnail; missing is the number of map tiles
+// that couldn't be obtained (left blank)
+func drawThumbnail(activity models.Activity) (missing int, err error) {
 	path := ThumbnailPath(activity.User.UUID, activity.ID)
 	if err := os.MkdirAll(filepath.Dir(path), 0770); err != nil {
-		return err
+		return 0, err
 	}
 	if len(activity.PublicGpsPoints) < 2 {
-		return writeBlankThumbnail(path)
+		return 0, writeBlankThumbnail(path)
 	}
 
 	release, err := thumbnailSlots.acquire(QueueTimeout)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer release()
 
@@ -51,8 +62,8 @@ func GenerateThumbnail(activity models.Activity) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), TilesTimeout)
 	defer cancel()
-	img, _ := staticmap.Render(ctx, MapTiles, trace, ThumbnailWidth, ThumbnailHeight)
-	return writePNG(path, img)
+	img, missing := staticmap.Render(ctx, MapTiles, trace, ThumbnailWidth, ThumbnailHeight)
+	return missing, writePNG(path, img)
 }
 
 // writeBlankThumbnail writes a thumbnail without map, the color of an empty one

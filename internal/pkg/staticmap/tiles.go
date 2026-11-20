@@ -66,6 +66,11 @@ func NewTiles(dir, url string) *Tiles {
 		downloads: make(chan struct{}, MaxDownloads), failed: map[string]time.Time{}}
 }
 
+// Downloads tells whether missing tiles are downloaded (false: only the ones of the directory)
+func (t *Tiles) Downloads() bool {
+	return t.url != ""
+}
+
 // Tile returns the tile of a zoom level and coordinates, from the directory when it is recent enough,
 // downloaded otherwise; a stale one when the download fails
 func (t *Tiles) Tile(ctx context.Context, z, x, y int) (image.Image, error) {

@@ -204,6 +204,9 @@ type RecentActivity struct {
 	Duration  uint32    `json:"duration"`
 	AvgSpeed  float64   `json:"avg_speed"`
 	Elevation float64   `json:"elevation"`
+	HasMap    bool      `json:"-"`
+	// the URL of its thumbnail, "" without map (indoor, or a short loop inside the privacy zones)
+	Thumbnail string `json:"thumbnail"`
 }
 
 // ActivityRow is an activity of the activities table
@@ -220,6 +223,9 @@ type ActivityRow struct {
 	EquipmentID   *uuid.UUID `json:"equipment_id"`
 	EquipmentName *string    `json:"equipment_name"`
 	DeviceName    string     `json:"device_name"`
+	HasMap        bool       `json:"-"`
+	// the URL of its thumbnail, "" without map (indoor, or a short loop inside the privacy zones)
+	Thumbnail string `json:"thumbnail"`
 }
 
 // RecomputeStatus is the progress of the analysis of the activities of a device again
