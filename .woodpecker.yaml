@@ -11,6 +11,7 @@ when:
 services:
   # the database tests: they skip without MYSPORTWEB_TEST_DSN, and refuse a database not named *test*
   postgres:
+    # the image of the bundled database (docker-compose.yaml)
     image: postgres:16-bookworm
     environment:
       POSTGRES_PASSWORD: ci
@@ -18,7 +19,7 @@ services:
 
 steps:
   - name: test
-    image: golang:1.26-bookworm
+    image: golang:1.27-trixie
     # the latest image of the tag, not the copy cached by the agent
     pull: true
     environment:
@@ -38,7 +39,7 @@ steps:
       - go test -p 1 ./cmd/... ./internal/... ./services/...
 
   - name: tags
-    image: debian:bookworm-slim
+    image: debian:trixie-slim
     commands:
       - sh ci/image-tags.sh
 

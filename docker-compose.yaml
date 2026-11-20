@@ -84,7 +84,7 @@ services:
   # docker compose run --rm backup now. The restore: see the README.
   backup:
     # pg_dump can't dump a server more recent than itself: the major version of the database
-    image: ${MSW_BACKUP_IMAGE:-postgres:16-bookworm}
+    image: ${MSW_BACKUP_IMAGE:-postgres:16-trixie}
     restart: unless-stopped
     environment:
       PGHOST: ${MSW_DBHOST:-db}
@@ -176,6 +176,8 @@ services:
         required: false
 
   db:
+    # bookworm, not trixie like the others: another glibc sorts the text differently, the indexes of an existing
+    # database would need a REINDEX. Moving to trixie: through a dump and its restore (see the README).
     image: postgres:16-bookworm
     profiles: [db]
     restart: unless-stopped

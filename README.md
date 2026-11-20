@@ -95,7 +95,7 @@ docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_POR
   docker compose run --rm backup now
   docker compose stop
   # the media into the new directory (docker volume ls: <project>_media, mysportweb_media by default)
-  docker run --rm -v mysportweb_media:/from:ro -v /srv/mysportweb/data/media:/to debian:bookworm-slim \
+  docker run --rm -v mysportweb_media:/from:ro -v /srv/mysportweb/data/media:/to debian:trixie-slim \
     cp -a /from/. /to/
   # with the new docker-compose.yaml and MSW_DATA_DIR=/srv/mysportweb/data: the database from the dump, as on a
   # new server above (Portainer starts everything on an update: stop backend and backup before pg_restore)

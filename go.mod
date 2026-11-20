@@ -2,7 +2,7 @@ module MySportWeb
 
 go 1.26.0
 
-toolchain go1.26.11
+toolchain go1.27.4
 
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.0

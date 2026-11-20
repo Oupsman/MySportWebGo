@@ -1,5 +1,5 @@
 # Backend of MySportWeb: the API, and the thumbnails of the activities drawn by a headless Chromium
-FROM golang:1.26-bookworm AS build
+FROM golang:1.27-trixie AS build
 # the toolchain of go.mod at least (security fixes of the standard library), downloaded when the image has an
 # older one: a cached image can lag behind its tag. The golang images set GOTOOLCHAIN=local, which ignores it.
 ENV GOTOOLCHAIN=auto
@@ -10,7 +10,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/mysportweb ./cmd/mysportweb \
  && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/cleanmedia ./cmd/cleanmedia
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 # chromium: the thumbnails (chromedp finds it on the PATH); tini: reaps the exited Chromium processes,
 # the Go binary as PID 1 would leave them as zombies; wget: the health check
 RUN apt-get update \
