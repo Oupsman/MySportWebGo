@@ -4,6 +4,7 @@ import (
 	"MySportWeb/internal/pkg/metrics"
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/notifications"
+	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/services/activityService"
 	"context"
 	"net/http"
@@ -19,6 +20,9 @@ type App struct {
 	Client        *http.Client
 	Logger        zerolog.Logger
 	Notifications *notifications.Notifs
+	// SetupCode registers the first admin, whatever REGISTRATION says: drawn at the start while the instance
+	// has no admin, printed in the logs only, "" once there is one at the start
+	SetupCode string
 
 	// the context of Start, and the work running in the background (Go)
 	ctx        context.Context
@@ -51,7 +55,25 @@ func NewApp(logger zerolog.Logger, driver string, dsn string) (*App, error) {
 
 	var notif = notifications.New()
 
-	return &App{DB: *DB, Client: httpClient, Logger: logger, Notifications: notif}, nil
+	App := &App{DB: *DB, Client: httpClient, Logger: logger, Notifications: notif}
+	if err := App.prepareSetup(); err != nil {
+		return nil, err
+	}
+	return App, nil
+}
+
+// prepareSetup draws the setup code of an instance without admin, and tells it in the logs: whoever reads
+// the logs runs the instance, the first visitor of a new one doesn't become its admin
+func (app *App) prepareSetup() error {
+	hasAdmin, err := app.DB.HasAdmin()
+	if err != nil || hasAdmin {
+		return err
+	}
+	app.SetupCode = utils.NewCode()
+	app.Logger.Warn().Str("setup_code", app.SetupCode).
+		Msg("this instance has no admin yet: create it on the registration page of the web application with " +
+			"this setup code (a new code at each start, until the admin exists)")
+	return nil
 }
 
 // Start runs the backfills and the notifications in the background until ctx is done, see Go

@@ -49,6 +49,33 @@ var Dsn string
 var SecretKey string
 var Domain string
 
+// Registration says who may create an account: REGISTRATION, closed by default
+var Registration RegistrationMode
+
+// RegistrationMode is who may create an account
+type RegistrationMode string
+
+const (
+	// RegistrationClosed: nobody, except the admin of a new instance with the setup code of the logs
+	RegistrationClosed RegistrationMode = "closed"
+	// RegistrationInvite: the holders of an invitation created by an admin
+	RegistrationInvite RegistrationMode = "invite"
+	// RegistrationOpen: anyone reaching the instance
+	RegistrationOpen RegistrationMode = "open"
+)
+
+// ParseRegistration reads REGISTRATION: closed when empty, an error for an unknown value (a typo must not
+// open the registrations nor close them silently)
+func ParseRegistration(value string) (RegistrationMode, error) {
+	switch mode := RegistrationMode(strings.ToLower(strings.TrimSpace(value))); mode {
+	case "":
+		return RegistrationClosed, nil
+	case RegistrationClosed, RegistrationInvite, RegistrationOpen:
+		return mode, nil
+	}
+	return "", fmt.Errorf("REGISTRATION must be closed, invite or open, it is %q", value)
+}
+
 // TrustedProxies are the addresses whose X-Forwarded-For gives the IP of the client (the rate limits
 // count per IP): TRUSTED_PROXIES, comma separated IPs or CIDRs, by default the loopback and the private
 // networks, where the nginx of the frontend runs
@@ -99,6 +126,10 @@ func Init() {
 		panic(err.Error())
 	}
 	Domain = CheckVariable("DOMAIN", true)
+	Registration, err = ParseRegistration(CheckVariable("REGISTRATION", false))
+	if err != nil {
+		panic(err.Error())
+	}
 	DemDir = CheckVariable("DEM_DIR", false)
 	if DemDir == "" {
 		DemDir = "MEDIA/dem"

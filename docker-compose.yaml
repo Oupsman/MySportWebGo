@@ -39,6 +39,9 @@ services:
       # the public URL of the app: the API refuses the requests of any other origin
       DOMAIN: ${MSW_DOMAIN:?set MSW_DOMAIN, the URL users open, e.g. https://sport.example.com}
       LISTEN_PORT: "8080"
+      # who may create an account: closed (default: nobody but the first admin, with the setup code of the
+      # logs), invite (with an invitation of an admin) or open (anyone)
+      REGISTRATION: ${MSW_REGISTRATION:-closed}
       # the elevation tiles of the altitude correction, kept in MEDIA/dem: empty downloads the missing ones
       # from AWS Terrain Tiles, none only uses the ones put there
       DEM_URL: ${MSW_DEM_URL:-}

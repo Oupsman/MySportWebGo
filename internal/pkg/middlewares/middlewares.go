@@ -177,29 +177,23 @@ func IsAuthorized(permissions ...models.Permission) gin.HandlerFunc {
 	}
 }
 
-// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
 // IsAdmin requires a session token of an admin, device tokens are refused
-// func IsAdmin() gin.HandlerFunc {
-//
-// 	return func(c *gin.Context) {
-// 		user, authErr := authenticate(c, 0)
-// 		if authErr != nil {
-// 			abort(c, authErr)
-// 			return
-// 		}
-//
-// 		// the role of the database, not the one of the token: a demoted admin loses access immediately
-// 		if user.Role != "Admin" {
-// 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-// 				"message": "forbidden",
-// 			})
-// 			return
-// 		}
-//
-// 		c.Set(userKey, user)
-// 		c.Next()
-// 	}
-// }
+func IsAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, authErr := authenticate(c, 0)
+		if authErr != nil {
+			abort(c, authErr)
+			return
+		}
+		// the role of the database, not the one of the token: a demoted admin loses access immediately
+		if user.Role != models.RoleAdmin {
+			abort(c, refuse(http.StatusForbidden, "this route is for the admins"))
+			return
+		}
+		c.Set(userKey, user)
+		c.Next()
+	}
+}
 
 // OptionalUser sets the user of the request when there is an Authorization header or a session cookie, for
 // routes also open to anonymous users. An invalid token of the header is refused rather than treated as

@@ -70,6 +70,14 @@ var (
 		Help: "Login attempts, by result: success, failure, locked.",
 	}, []string{"result"})
 
+	// Registrations counts the registrations, by result: user, admin (the setup of the first admin), closed
+	// (REGISTRATION=closed, or invite without invitation), invitation (refused), setup_code (refused),
+	// conflict (username or email taken)
+	Registrations = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace, Name: "registrations_total",
+		Help: "Registrations, by result: user, admin, closed, invitation, setup_code, conflict.",
+	}, []string{"result"})
+
 	// BackfillRunning is 1 while a step of the backfills of the start runs
 	BackfillRunning = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace, Name: "backfill_running",
@@ -107,7 +115,7 @@ func init() {
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		HTTPRequests, HTTPDuration,
 		Analyses, AnalysisDuration, Thumbnails, ThumbnailDuration, MapTiles,
-		Logins,
+		Logins, Registrations,
 		BackfillRunning, BackfillDuration, BackfillErrors,
 		BuildInfo, SchemaVersion,
 	)

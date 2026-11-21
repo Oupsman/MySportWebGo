@@ -5,6 +5,7 @@ import (
 	"MySportWeb/internal/pkg/vars"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -21,8 +22,11 @@ type Number interface {
 	constraints.Float | constraints.Integer
 }
 
+// PasswordCost is the bcrypt cost of the passwords, about a second of CPU; lowered by the tests only
+var PasswordCost = 14
+
 func GenerateHashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), PasswordCost)
 	return string(bytes), err
 }
 
@@ -93,6 +97,19 @@ func NewDeviceToken() (token string, hash string) {
 func HashDeviceToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+// NewCode returns a random code of 128 bits, typed or pasted by people (invitations, setup of the admin):
+// lowercase base32, 26 characters
+func NewCode() string {
+	b := make([]byte, 16)
+	rand.Read(b) // never fails since Go 1.24
+	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b))
+}
+
+// HashCode returns the stored form of a code of NewCode, the spaces around it and its case ignored
+func HashCode(code string) string {
+	return HashDeviceToken(strings.ToLower(strings.TrimSpace(code)))
 }
 
 // DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).

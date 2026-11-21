@@ -7,8 +7,10 @@ import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/internal/pkg/utils"
+	"MySportWeb/internal/pkg/vars"
 	"MySportWeb/services/activityService"
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -147,6 +149,8 @@ func GetSession(c *gin.Context) {
 	c.JSON(200, gin.H{"session": newSessionInfo(middlewares.CurrentUser(c), session)})
 }
 
+// Register creates an account: the first admin with the setup code of the logs, otherwise as REGISTRATION
+// says (closed: nobody, invite: with an invitation, open: anyone)
 func Register(c *gin.Context) {
 
 	var body types.RegisterBody
@@ -157,6 +161,30 @@ func Register(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+	// before hashing the password: a refused registration costs no CPU
+	var grant models.Grant
+	switch {
+	case body.SetupCode != "":
+		if App.SetupCode == "" || subtle.ConstantTimeCompare([]byte(strings.TrimSpace(strings.ToLower(body.SetupCode))),
+			[]byte(App.SetupCode)) != 1 {
+			metrics.Registrations.WithLabelValues("setup_code").Inc()
+			c.JSON(403, gin.H{"error": "invalid setup code"})
+			return
+		}
+		grant.Admin = true
+	case vars.Registration == vars.RegistrationOpen:
+	case vars.Registration == vars.RegistrationInvite && strings.TrimSpace(body.Invitation) != "":
+		grant.InvitationHash = utils.HashCode(body.Invitation)
+	case vars.Registration == vars.RegistrationInvite:
+		metrics.Registrations.WithLabelValues("closed").Inc()
+		c.JSON(403, gin.H{"error": "an invitation is required to register"})
+		return
+	default:
+		metrics.Registrations.WithLabelValues("closed").Inc()
+		c.JSON(403, gin.H{"error": "the registrations are closed"})
+		return
+	}
+
 	user := models.Users{Username: strings.TrimSpace(body.Username), Email: strings.TrimSpace(body.Email)}
 
 	if user.Username == "" || body.Password == "" || user.Email == "" {
@@ -180,18 +208,49 @@ func Register(c *gin.Context) {
 	}
 	user.Password = hash
 
-	err = db.RegisterUser(&user)
-	if errors.Is(err, models.ErrUsernameTaken) || errors.Is(err, models.ErrEmailTaken) {
+	err = db.RegisterUser(&user, grant)
+	switch {
+	case errors.Is(err, models.ErrUsernameTaken) || errors.Is(err, models.ErrEmailTaken):
+		metrics.Registrations.WithLabelValues("conflict").Inc()
 		c.JSON(409, gin.H{"error": err.Error()})
 		return
-	}
-	if err != nil {
+	case errors.Is(err, models.ErrInvalidInvitation):
+		metrics.Registrations.WithLabelValues("invitation").Inc()
+		c.JSON(403, gin.H{"error": err.Error()})
+		return
+	case errors.Is(err, models.ErrAdminExists):
+		metrics.Registrations.WithLabelValues("setup_code").Inc()
+		c.JSON(403, gin.H{"error": "invalid setup code"})
+		return
+	case err != nil:
 		App.Logger.Error().Err(err).Str("username", user.Username).Msg("registration failed")
 		c.JSON(500, gin.H{"error": "could not register the user"})
 		return
 	}
 
-	c.JSON(201, gin.H{"success": "user registered"})
+	if grant.Admin {
+		App.Logger.Info().Str("username", user.Username).Msg("the admin of the instance is registered, the setup code is used")
+		metrics.Registrations.WithLabelValues("admin").Inc()
+	} else {
+		metrics.Registrations.WithLabelValues("user").Inc()
+	}
+	c.JSON(201, gin.H{"success": "user registered", "role": user.Role})
+}
+
+// Instance tells the web application how to register: the mode of the registrations, and whether the
+// instance waits for its admin (the setup code of the logs). Public: shown before any login.
+func Instance(c *gin.Context) {
+	App := c.MustGet("App").(*app.App)
+	setupRequired := false
+	if App.SetupCode != "" {
+		hasAdmin, err := App.DB.HasAdmin()
+		if err != nil {
+			c.JSON(500, gin.H{"error": "could not read the instance"})
+			return
+		}
+		setupRequired = !hasAdmin
+	}
+	c.JSON(200, gin.H{"registration": vars.Registration, "setup_required": setupRequired})
 }
 
 // Logout revokes the session token of the request (cookie or header): it is refused from now on, even if

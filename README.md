@@ -34,7 +34,21 @@ with an optional Postgres:
 ```sh
 cp compose.env.sample .env   # then set MSW_TAG, MSW_DOMAIN, MSW_SECRET_KEY and MSW_DBPASSWORD
 docker compose up -d         # the app is on http://localhost:8080 (MSW_HTTP_PORT)
+docker compose logs backend | grep setup_code   # the code that creates the admin, see Accounts below
 ```
+
+* **Accounts**: the first visitor of a new instance doesn't become its admin. While the instance has no admin, the
+  backend logs a setup code at each start (`this instance has no admin yet ... setup_code=...`): the sign up page
+  asks for it and creates the admin, then the code stops working. `MSW_REGISTRATION` says who may register after:
+  * `closed` (default): nobody, the admin can't create accounts yet either;
+  * `invite`: whoever an admin invites, in **Admin** in the menu: an invitation registers one account, within 1
+    to 90 days (7 by default), optionally only for one email. Its link, shown once, opens the sign up page with
+    the code filled in. A used invitation stays in the list (who invited whom), an unused one can be revoked;
+  * `open`: anyone reaching the app.
+
+  The roles from the command line, when no admin can do it in the app (lost password, left):
+  `docker compose exec backend mysportweb admin promote <username>` (or `demote`). Demoting the last admin brings
+  the setup code back at the next start.
 
 * **Data**: in `MSW_DATA_DIR` (`./data` by default): `media/` holds the uploaded FIT files, thumbnails, pictures,
   elevation and map tiles (`dem/`, `tiles/`: downloaded again when lost), `postgres/` the bundled database. With
@@ -146,6 +160,7 @@ Where Prometheus reaches the metrics:
 * **A Prometheus container in the network of the stack**: target `mysportweb-backend-1:9090` (`<stack>-backend-1`).
 
 The metrics are named `mysportweb_*` (requests by route and status, analyses, thumbnails, map tiles, logins,
+registrations,
 backfills, users and activities, backups), `go_sql_*` (the connection pool), `go_*` and `process_*`. The age
 of the backups comes from `MSW_BACKUP_DIR`, mounted read-only in the backend: it reads it when
 `MSW_BACKUP_OWNER` is its user, `1000:1000` by default (`mysportweb_backup_dir_readable` is 0 otherwise, and
@@ -181,6 +196,11 @@ docker compose exec frontend curl -s localhost/api/v1/healthcheck   # {"status":
 than this version of the backend`, the new version migrated the database: restore the dump taken before the upgrade
 (see **Restore** in [Deploy with Docker Compose](#deploy-with-docker-compose)). The changes made since the upgrade
 are lost.
+
+**Upgrade notes**:
+
+* The version with `MSW_REGISTRATION` closes the registrations by default (they were open to anyone, the first
+  user becoming the admin): set `MSW_REGISTRATION=open` to keep them open, or `invite`. The existing admin stays.
 
 Pin `X.Y.Z`: `1.4` or `1` follow the next releases at each redeploy, migrations included.
 

@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"strings"
 	"time"
 )
 
@@ -87,17 +88,62 @@ func (db *DB) GetUserByUUID(uuid uuid.UUID) (Users, error) {
 var (
 	ErrUsernameTaken = errors.New("this username is already used")
 	ErrEmailTaken    = errors.New("this email is already used")
+	// ErrAdminExists refuses the setup registration of an instance which has its admin
+	ErrAdminExists = errors.New("this instance already has an admin")
+	// ErrInvalidInvitation is an invitation unknown, revoked, used, expired, or for another email: the
+	// same answer for all, it doesn't tell which codes exist
+	ErrInvalidInvitation = errors.New("invalid or expired invitation")
+)
+
+// The roles of the users
+const (
+	RoleAdmin = "Admin"
+	RoleUser  = "User"
 )
 
 const advisoryLockRegistration = 2
 
-// RegisterUser saves a new user, whose password is already hashed. The first user of the instance is its
-// admin, the next ones are users: the registrations are serialized, two can't both be the first. A deleted
-// user keeps its username and email (they stay in the table), and the instance never gets a new first user.
-func (db *DB) RegisterUser(user *Users) error {
+// Grant is what allows a registration, besides open registrations: the setup of the first admin, or an
+// invitation (the hash of its code)
+type Grant struct {
+	Admin          bool
+	InvitationHash string
+}
+
+// RegisterUser saves a new user, whose password is already hashed: an admin with grant.Admin while the
+// instance has none, a user otherwise, using up the invitation of grant.InvitationHash when set. The
+// registrations are serialized: two can't both become the first admin nor use the same invitation. A deleted
+// user keeps its username and email (they stay in the table).
+func (db *DB) RegisterUser(user *Users, grant Grant) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec("SELECT pg_advisory_xact_lock(?::int, 0)", advisoryLockRegistration).Error; err != nil {
 			return err
+		}
+		user.Role = RoleUser
+		if grant.Admin {
+			hasAdmin, err := hasAdmin(tx)
+			if err != nil {
+				return err
+			}
+			if hasAdmin {
+				return ErrAdminExists
+			}
+			user.Role = RoleAdmin
+		}
+		var invitation Invitations
+		if grant.InvitationHash != "" {
+			err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				Where("hash = ? AND used_at IS NULL AND expires_at > ?", grant.InvitationHash, time.Now()).
+				First(&invitation).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrInvalidInvitation
+			}
+			if err != nil {
+				return err
+			}
+			if invitation.Email != "" && !strings.EqualFold(invitation.Email, user.Email) {
+				return ErrInvalidInvitation
+			}
 		}
 		var taken int64
 		if err := tx.Unscoped().Model(&Users{}).Where("username = ?", user.Username).Count(&taken).Error; err != nil {
@@ -112,16 +158,33 @@ func (db *DB) RegisterUser(user *Users) error {
 		if taken > 0 {
 			return ErrEmailTaken
 		}
-		var users int64
-		if err := tx.Unscoped().Model(&Users{}).Count(&users).Error; err != nil {
+		if err := tx.Create(user).Error; err != nil {
 			return err
 		}
-		user.Role = "User"
-		if users == 0 {
-			user.Role = "Admin"
+		if grant.InvitationHash != "" {
+			return tx.Model(&Invitations{}).Where("id = ?", invitation.ID).
+				Updates(map[string]interface{}{"used_at": time.Now(), "used_by_id": user.ID}).Error
 		}
-		return tx.Create(user).Error
+		return nil
 	})
+}
+
+func hasAdmin(tx *gorm.DB) (bool, error) {
+	var admins int64
+	err := tx.Model(&Users{}).Where("role = ?", RoleAdmin).Count(&admins).Error
+	return admins > 0, err
+}
+
+// HasAdmin tells whether the instance has an admin (a deleted one doesn't count): without, the setup code
+// creates one
+func (db *DB) HasAdmin() (bool, error) {
+	return hasAdmin(&db.DB)
+}
+
+// SetRole changes the role of a user, by username: false when there is no such user
+func (db *DB) SetRole(username, role string) (bool, error) {
+	result := db.Model(&Users{}).Where("username = ?", username).Update("role", role)
+	return result.RowsAffected > 0, result.Error
 }
 
 // UpdateUserFields changes some columns of a user, the others are kept: a field the client didn't send isn't

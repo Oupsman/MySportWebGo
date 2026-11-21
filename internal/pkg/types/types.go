@@ -72,6 +72,10 @@ type RegisterBody struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Email    string `json:"email"`
+	// Invitation is the code of an invitation, required when REGISTRATION=invite
+	Invitation string `json:"invitation"`
+	// SetupCode is the code of the logs that registers the first admin
+	SetupCode string `json:"setup_code"`
 }
 
 // Device is the device that recorded an activity, as its FIT file tells

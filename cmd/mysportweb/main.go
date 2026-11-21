@@ -24,6 +24,9 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "admin" {
+		os.Exit(adminCommand(os.Args[2:], os.Stdout, os.Stderr))
+	}
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	vars.Init()
 	log.Info().Str("version", vars.Version).Msg("starting MySportWeb")

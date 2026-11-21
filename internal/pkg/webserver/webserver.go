@@ -112,6 +112,12 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	}
 
 	apiv1.GET("/healthcheck", apicontrollers.HealthCheck)
+	// how to register (REGISTRATION, the setup of the admin): before any login
+	apiv1.GET("/instance", apicontrollers.Instance)
+	// Admins: sessions of the admins only
+	apiv1.GET("/admin/invitations", middlewares.IsAdmin(), apicontrollers.GetInvitations)
+	apiv1.POST("/admin/invitations", middlewares.IsAdmin(), apicontrollers.CreateInvitation)
+	apiv1.DELETE("/admin/invitations/:id", middlewares.IsAdmin(), apicontrollers.RevokeInvitation)
 	// Users
 	// per IP; the logins are also limited per username, see apicontrollers.Login
 	apiv1.POST("/user/login", middlewares.RateLimit(middlewares.NewRateLimiter(LoginsPerMinute, time.Minute)),
