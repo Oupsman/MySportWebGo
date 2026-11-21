@@ -127,6 +127,11 @@ func UploadActivity(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
+	// its passes on the segments of the user: the activity is saved, a failure only misses them
+	if err := activityService.MatchActivitySegments(&db, activity.ID); err != nil {
+		c.MustGet("App").(*app.App).Logger.Error().Err(err).Str("activity", activity.ID.String()).
+			Msg("passes on the segments not found")
+	}
 
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
 }

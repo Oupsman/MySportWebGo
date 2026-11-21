@@ -34,7 +34,8 @@ var ErrLegacyTooOld = errors.New("the database predates the versioned migrations
 // models are the tables of the application: the schema must have their columns (SchemaDrift)
 func models() []interface{} {
 	return []interface{}{&Users{}, &Equipments{}, &Devices{}, &Services{}, &Activity{}, &Route{}, &HealthData{},
-		&Validations{}, &Keys{}, &Notifications{}, &DeviceTokens{}, &RevokedSessions{}, &Invitations{}}
+		&Validations{}, &Keys{}, &Notifications{}, &DeviceTokens{}, &RevokedSessions{}, &Invitations{},
+		&Segment{}, &SegmentEffort{}}
 }
 
 // CreateOrMigrate brings the schema of the database to the version of the backend, applying the pending
