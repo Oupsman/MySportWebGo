@@ -27,6 +27,10 @@ type Equipments struct {
 	IsDefault           bool       `json:"is_default"`
 	IsCommute           bool       `json:"is_commute"` // given to the commute rides, one per user
 	Picture             string     `json:"picture"`    // URL path of its picture under /MEDIA, empty without
+	// the service cycle whose "service due" notification was sent (see ServiceAlertsDue): true and the date of
+	// the latest service then, nil before the first one
+	ServiceAlerted    bool       `json:"-" gorm:"not null;default:false"`
+	ServiceAlertedFor *time.Time `json:"-"`
 }
 
 // CommuteSport is the sport of the activities getting the commute equipment
@@ -212,4 +216,52 @@ func (db *DB) GetActivityWeights() ([]ActivityWeightRow, error) {
 // SetActivityTotalWeight saves the weight an activity was analysed with, without analysing it again
 func (db *DB) SetActivityTotalWeight(id uuid.UUID, weight uint16) error {
 	return db.Model(&Activity{}).Where("id = ?", id).Update("total_weight", weight).Error
+}
+
+// ServiceDue is an equipment past its maintenance interval whose cycle wasn't notified yet
+type ServiceDue struct {
+	ID             uuid.UUID
+	UserID         uint
+	Name           string
+	Interval       int        // km between two services
+	KmSinceService int        // km since the latest service, or since the first activity without one
+	LastService    *time.Time // the cycle: nil before the first service
+}
+
+// ServiceAlertsDue returns the equipments past their maintenance interval whose service cycle (the date of
+// their latest service) wasn't notified yet, of the users with a push subscription: the others are
+// notified once they subscribe
+func (db *DB) ServiceAlertsDue() ([]ServiceDue, error) {
+	stats, err := db.equipmentsStats("e.maintenance_interval > 0 AND e.user_id IN "+
+		"(SELECT user_id FROM channels WHERE channel_provider = ? AND deleted_at IS NULL)", PushProvider)
+	if err != nil {
+		return nil, err
+	}
+	var due []ServiceDue
+	for _, e := range stats {
+		if e.KmSinceService < e.MaintenanceInterval {
+			continue
+		}
+		notified := e.ServiceAlerted && sameCycle(e.ServiceAlertedFor, e.LastService)
+		if notified {
+			continue
+		}
+		due = append(due, ServiceDue{ID: e.ID, UserID: uint(e.UserID), Name: e.Name, Interval: e.MaintenanceInterval,
+			KmSinceService: e.KmSinceService, LastService: e.LastService})
+	}
+	return due, nil
+}
+
+// sameCycle tells whether two service cycles (dates of the latest service, nil before the first) are one
+func sameCycle(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return a.Equal(*b)
+}
+
+// SetServiceAlerted records that the service cycle lastService of an equipment was notified
+func (db *DB) SetServiceAlerted(id uuid.UUID, lastService *time.Time) error {
+	return db.Model(&Equipments{}).Where("id = ?", id).
+		Updates(map[string]interface{}{"service_alerted": true, "service_alerted_for": lastService}).Error
 }

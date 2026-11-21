@@ -138,6 +138,18 @@ docker compose logs backend | grep setup_code   # the code that creates the admi
 
 The variables are prefixed `MSW_` because docker compose also reads the `.env` used for development.
 
+## Notifications
+
+The app notifies the browsers of a user when an equipment is past its service interval (set on its page), once
+per service. Each user turns them on in **Your profile → Notifications**, on each browser, with a test button.
+
+* They are web push notifications: the app must be served over **HTTPS** (`MSW_DOMAIN`), and the backend must
+  reach the push services of the browsers (Google for Chrome and the Chromium ones, Mozilla, Apple, Microsoft).
+  It sends to those only.
+* On iPhone and iPad, Safari only notifies an app added to the home screen (Share → Add to Home Screen).
+* The VAPID keys signing them are generated at the first start and kept in the database: a restored database
+  keeps them, and the subscriptions keep working.
+
 ## Monitoring
 
 The backend serves metrics for Prometheus on its own port, 9090 in the container, never through the frontend.

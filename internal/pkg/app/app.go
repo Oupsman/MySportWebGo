@@ -5,6 +5,7 @@ import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/notifications"
 	"MySportWeb/internal/pkg/utils"
+	"MySportWeb/internal/pkg/vars"
 	"MySportWeb/services/activityService"
 	"context"
 	"net/http"
@@ -82,7 +83,9 @@ func (app *App) Start(ctx context.Context) error {
 	if err := app.Notifications.Start(app.Logger, app.Client, app.DB); err != nil {
 		return err
 	}
+	app.Notifications.Subject = vars.Domain
 	app.Go(func(ctx context.Context) { app.Notifications.Run(ctx, app.Logger, app.Client, app.DB) })
+	app.Go(func(ctx context.Context) { notifications.RunServiceAlerts(ctx, app.Logger, app.DB) })
 	app.Go(app.backfill)
 	return nil
 }

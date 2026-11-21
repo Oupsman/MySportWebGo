@@ -139,6 +139,12 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.GET("/user", middlewares.IsAuthorized(), apicontrollers.GetUser)
 	apiv1.POST("/user", middlewares.IsAuthorized(), apicontrollers.UpdateUser)
 
+	// browser notifications (web push), from a session only
+	apiv1.GET("/notifications/push", middlewares.IsAuthorized(), apicontrollers.GetPush)
+	apiv1.POST("/notifications/push", middlewares.IsAuthorized(), apicontrollers.Subscribe)
+	apiv1.DELETE("/notifications/push/:id", middlewares.IsAuthorized(), apicontrollers.Unsubscribe)
+	apiv1.POST("/notifications/push/test", middlewares.IsAuthorized(), apicontrollers.TestPush)
+
 	// device tokens, managed from a session only: a device token can't create nor extend tokens
 	apiv1.GET("/user/tokens", middlewares.IsAuthorized(), apicontrollers.GetDeviceTokens)
 	apiv1.POST("/user/tokens", middlewares.IsAuthorized(), apicontrollers.CreateDeviceToken)
