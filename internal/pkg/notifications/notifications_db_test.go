@@ -147,71 +147,138 @@ func TestSend(t *testing.T) {
 	}
 }
 
-// a service due is notified once per service cycle: again after a new service, never without subscription
-func TestServiceAlerts(t *testing.T) {
+// the reminders due are notified once per cycle, grouped per equipment, the time ones from 08:00 in the
+// user's timezone and, only when used, after an activity; never without subscription
+func TestMaintenanceReminders(t *testing.T) {
 	db := testDB(t)
-	user := models.Users{Username: "gear", Email: "gear@test.local"}
+	paris, _ := time.LoadLocation("Europe/Paris")
+	at := func(month time.Month, day, hour, minute int) time.Time {
+		return time.Date(2026, month, day, hour, minute, 0, 0, paris)
+	}
+	user := models.Users{Username: "gear", Email: "gear@test.local", Timezone: "Europe/Paris"}
 	if err := db.Create(&user).Error; err != nil {
 		t.Fatal(err)
 	}
-	bike := models.Equipments{Name: "Gravel", UserID: int(user.ID), MaintenanceInterval: 100}
-	if err := db.Omit("User").Create(&bike).Error; err != nil {
-		t.Fatal(err)
+	equipment := func(name string) models.Equipments {
+		e := models.Equipments{Name: name, UserID: int(user.ID)}
+		if err := db.Omit("User").Create(&e).Error; err != nil {
+			t.Fatal(err)
+		}
+		return e
 	}
+	bike, road := equipment("Gravel"), equipment("Road")
+	reminder := func(e models.Equipments, r models.MaintenanceReminder) models.MaintenanceReminder {
+		r.EquipmentID = e.ID
+		r.OnlyWhenUsed = true
+		if r.StartsAt.IsZero() {
+			r.StartsAt = at(time.January, 31, 10, 0)
+		}
+		if err := db.CreateReminder(&r); err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	service := reminder(bike, models.MaintenanceReminder{Name: "Service", EveryKm: 100, StartsAt: time.Unix(0, 0)})
+	reminder(bike, models.MaintenanceReminder{Name: "Clean the transmission", EveryCount: 1, EveryUnit: models.UnitMonth})
+	pressure := reminder(bike, models.MaintenanceReminder{Name: "Check the tire pressure", EveryCount: 1, EveryUnit: models.UnitWeek})
+	reminder(road, models.MaintenanceReminder{Name: "Check the tire pressure", EveryCount: 1, EveryUnit: models.UnitWeek})
 	ride := func(km float64, date time.Time) {
-		a := models.Activity{ID: uuid.New(), UserID: user.ID, EquipmentID: &bike.ID, Distance: km * 1000, Date: date, Sport: "cycling"}
+		a := models.Activity{ID: uuid.New(), UserID: user.ID, EquipmentID: &bike.ID, Distance: km * 1000, Duration: 3600,
+			Date: date, Sport: "cycling"}
 		if err := db.Omit("User", "Equipment").Create(&a).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	queued := func() []string {
-		var messages []string
-		db.Model(&models.Notifications{}).Order("id").Pluck("message", &messages)
-		return messages
-	}
-	check := func() {
-		t.Helper()
-		if err := CheckServices(*db, zerolog.Nop()); err != nil {
+	done := func(date time.Time, reminders ...uuid.UUID) {
+		if err := db.CreateService(&models.Services{EquipmentID: bike.ID, Date: date, ReminderIDs: reminders}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	start := time.Now().Add(-30 * 24 * time.Hour)
-	ride(120, start)
+	queued := func() []PushMessage {
+		var raw []string
+		db.Model(&models.Notifications{}).Order("id").Pluck("message", &raw)
+		messages := make([]PushMessage, len(raw))
+		for i, m := range raw {
+			if err := json.Unmarshal([]byte(m), &messages[i]); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return messages
+	}
+	check := func(now time.Time) {
+		t.Helper()
+		if err := CheckServices(*db, zerolog.Nop(), now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ride(120, at(time.February, 1, 9, 0))
 
-	// past its interval, but nobody to tell: nothing recorded, told once subscribed
-	check()
+	// past its km, but nobody to tell: nothing recorded, told once subscribed
+	check(at(time.February, 1, 12, 0))
 	if len(queued()) != 0 {
 		t.Fatal("a notification without subscription")
 	}
 	if _, err := db.SavePushChannel(user.ID, "https://fcm.googleapis.com/fcm/send/x", subscriptionConfig(t, "https://fcm.googleapis.com/fcm/send/x"), "phone"); err != nil {
 		t.Fatal(err)
 	}
-	check()
-	check()
+	check(at(time.February, 1, 12, 0))
+	check(at(time.February, 1, 12, 15))
 	messages := queued()
-	if len(messages) != 1 {
-		t.Fatalf("%d notifications, want 1 per cycle", len(messages))
-	}
-	var message PushMessage
-	if err := json.Unmarshal([]byte(messages[0]), &message); err != nil || message.Title != "Service due: Gravel" ||
-		message.URL != "/#/equipment/"+bike.ID.String()+"/edit#services" || !strings.Contains(message.Body, "120 km since its first ride") {
-		t.Errorf("message %+v (%v)", message, err)
+	if len(messages) != 1 || messages[0].Title != "Service: Gravel" ||
+		messages[0].URL != "/#/equipment/"+bike.ID.String()+"/edit#reminders" ||
+		messages[0].Body != "Service: 120 km so far (every 100 km)." {
+		t.Fatalf("km reminder: %+v", messages)
 	}
 
-	// serviced: a new cycle, notified again once past its interval
-	if err := db.CreateService(&models.Services{EquipmentID: bike.ID, Date: start.Add(24 * time.Hour), Mileage: 120}); err != nil {
-		t.Fatal(err)
-	}
-	ride(60, start.Add(48*time.Hour))
-	check()
+	// the weekly one is due on February 7, notified from 08:00 in Paris
+	check(at(time.February, 7, 7, 45))
 	if len(queued()) != 1 {
-		t.Fatal("notified before the interval of the new cycle")
+		t.Fatal("a time reminder notified before 08:00")
 	}
-	ride(50, start.Add(72*time.Hour))
-	check()
-	check()
-	if messages := queued(); len(messages) != 2 || !strings.Contains(messages[1], "110 km since its last service") {
-		t.Errorf("after the service: %v", messages)
+	check(at(time.February, 7, 8, 0))
+	if messages = queued(); len(messages) != 2 || messages[1].Title != "Check the tire pressure: Gravel" ||
+		messages[1].Body != "Check the tire pressure: due since February 7 (every week)." {
+		t.Fatalf("weekly reminder: %+v", messages[1:])
+	}
+
+	// the pressure checked on the 21st, the bike ridden: due again on the 28th, with the monthly cleaning
+	// (January 31 + 1 month): one notification for both
+	done(at(time.February, 21, 10, 0), pressure.ID)
+	ride(20, at(time.February, 22, 10, 0))
+	check(at(time.February, 27, 20, 0))
+	if len(queued()) != 2 {
+		t.Fatal("notified before the due day")
+	}
+	check(at(time.February, 28, 9, 0))
+	if messages = queued(); len(messages) != 3 || messages[2].Title != "Maintenance due: Gravel" ||
+		!strings.Contains(messages[2].Body, "Clean the transmission: due since February 28 (every month).") ||
+		!strings.Contains(messages[2].Body, "Check the tire pressure: due since February 28 (every week).") {
+		t.Fatalf("grouped: %+v", messages[2:])
+	}
+
+	// serviced: a new cycle, notified again once past its km
+	done(at(time.March, 1, 10, 0), service.ID)
+	ride(60, at(time.March, 2, 10, 0))
+	check(at(time.March, 2, 12, 0))
+	if len(queued()) != 3 {
+		t.Fatal("notified before the km of the new cycle")
+	}
+	ride(50, at(time.March, 3, 10, 0))
+	check(at(time.March, 3, 12, 0))
+	check(at(time.March, 3, 12, 15))
+	if messages = queued(); len(messages) != 4 || messages[3].Body != "Service: 110 km since it was last done (every 100 km)." {
+		t.Fatalf("after the service: %+v", messages[3:])
+	}
+
+	// the road bike never ridden: its weekly reminder waits for a ride
+	for _, m := range queued() {
+		if strings.Contains(m.Title, "Road") {
+			t.Errorf("an unused equipment notified: %+v", m)
+		}
+	}
+	reminders, err := db.GetEquipmentReminders(road.ID)
+	if err != nil || len(reminders) != 1 || !reminders[0].WaitingUse || reminders[0].State != models.ReminderOK {
+		t.Errorf("unused: %+v (%v)", reminders, err)
 	}
 }
 

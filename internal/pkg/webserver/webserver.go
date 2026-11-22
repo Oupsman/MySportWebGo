@@ -238,6 +238,13 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.GET("/equipment/:id/services/:service", middlewares.IsAuthorized(models.EquipmentsRead), apicontrollers.GetService)
 	apiv1.POST("/equipment/:id/services/:service", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.UpdateService)
 	apiv1.DELETE("/equipment/:id/services/:service", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.DeleteService)
+	// maintenance reminders of an equipment, and of all of them
+	apiv1.GET("/equipment/:id/reminders", middlewares.IsAuthorized(models.EquipmentsRead), apicontrollers.GetReminders)
+	apiv1.POST("/equipment/:id/reminders", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.CreateReminder)
+	apiv1.POST("/equipment/:id/reminders/:reminder", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.UpdateReminder)
+	apiv1.DELETE("/equipment/:id/reminders/:reminder", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.DeleteReminder)
+	apiv1.POST("/equipment/:id/reminders/:reminder/done", middlewares.IsAuthorized(models.EquipmentsWrite), apicontrollers.ReminderDone)
+	apiv1.GET("/user/maintenance", middlewares.IsAuthorized(models.EquipmentsRead), apicontrollers.UserMaintenance)
 
 	// healthdatas
 	apiv1.POST("/healthdatas", middlewares.IsAuthorized(models.HealthDatasCreate), apicontrollers.CreateHealthData)

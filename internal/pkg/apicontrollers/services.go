@@ -18,6 +18,8 @@ type serviceInput struct {
 	Date        string `json:"date"`
 	Mileage     int    `json:"mileage" binding:"min=0"`
 	Description string `json:"description"`
+	// ReminderIDs are the reminders of the equipment it did, not sent: kept on an update
+	ReminderIDs *[]uuid.UUID `json:"reminder_ids"`
 }
 
 // apply copies the input to service, the date defaults to now
@@ -29,6 +31,9 @@ func (in serviceInput) apply(service *models.Services) error {
 	service.Date = date
 	service.Mileage = in.Mileage
 	service.Description = in.Description
+	if in.ReminderIDs != nil {
+		service.ReminderIDs = *in.ReminderIDs
+	}
 	return nil
 }
 
@@ -88,7 +93,7 @@ func CreateService(c *gin.Context) {
 	}
 
 	if err := db.CreateService(&service); err != nil {
-		internalError(c, err)
+		serviceError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, service)
@@ -134,7 +139,7 @@ func UpdateService(c *gin.Context) {
 	}
 
 	if err := db.UpdateService(&service); err != nil {
-		internalError(c, err)
+		serviceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, service)
@@ -151,4 +156,13 @@ func DeleteService(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": "service deleted"})
+}
+
+// serviceError answers the failure of a save of a service: 400 for a reminder of another equipment
+func serviceError(c *gin.Context, err error) {
+	if errors.Is(err, models.ErrUnknownReminder) {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	internalError(c, err)
 }

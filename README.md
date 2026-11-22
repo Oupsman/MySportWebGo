@@ -23,6 +23,11 @@ For now the app can :
 * your heatmap (**Heatmap** in the menu): every trace of your activities on one map, brighter where you go
   often, by period and sport, a click listing the activities passing there; the starts and ends can be hidden
   (your privacy distance) for screenshots
+* maintenance reminders, several per equipment: every so many km, hours of activities, or days, weeks,
+  months or years (calendar ones), whichever comes first, e.g. change the chain every 3000 km, clean the
+  transmission every month, check the tire pressure every week. A time one waits for a ride since it was
+  last done, unless told otherwise. Marking one done logs a service; a service can do several. Notified once
+  per cycle, grouped per equipment, the time ones from 08:00 in your timezone
 * the power-duration curve: your best power over each duration from 1 s to 5 h, of a period or compared with
   another (`GET /api/v1/user/powercurve?from=&to=`), in W or W/kg (the weight at the date of each ride), with
   the critical power fitted on its 3 to 20 minutes
@@ -201,8 +206,8 @@ the documentation of your service: they change seldom, but they do.
 
 ## Notifications
 
-The app notifies the browsers of a user when an equipment is past its service interval (set on its page), once
-per service. Each user turns them on in **Your profile → Notifications**, on each browser, with a test button;
+The app notifies the browsers of a user when maintenance reminders of an equipment are due (set on its page),
+once per cycle. Each user turns them on in **Your profile → Notifications**, on each browser, with a test button;
 and by email too, with the emails on and their address confirmed (see [Emails](#emails)).
 
 * They are web push notifications: the app must be served over **HTTPS** (`MSW_DOMAIN`), and the backend must

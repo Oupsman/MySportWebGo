@@ -12,26 +12,21 @@ import (
 // /MEDIA/user uuid/equipments/equipment uuid/pic filename.pic extension
 
 type Equipments struct {
-	ID                  uuid.UUID  `gorm:"type:uuid;default:gen_random_uuid()" json:"id"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
-	DeletedAt           *time.Time `sql:"index" json:"-"`
-	Name                string     `json:"name"`
-	Brand               string     `json:"brand"`
-	EquipmentModel      string     `json:"model"`
-	DateOfPurchase      time.Time  `json:"date_of_purchase"`
-	InitialMileage      int        `json:"initial_mileage"`
-	Mileage             int        `json:"mileage"`
-	Weight              int        `json:"weight"`
-	User                Users      `json:"-"`
-	UserID              int        `json:"user_id"`
-	MaintenanceInterval int        `json:"maintenance_interval"`
-	IsCommute           bool       `json:"is_commute"` // given to the commute rides, one per user
-	Picture             string     `json:"picture"`    // URL path of its picture under /MEDIA, empty without
-	// the service cycle whose "service due" notification was sent (see ServiceAlertsDue): true and the date of
-	// the latest service then, nil before the first one
-	ServiceAlerted    bool       `json:"-" gorm:"not null;default:false"`
-	ServiceAlertedFor *time.Time `json:"-"`
+	ID             uuid.UUID  `gorm:"type:uuid;default:gen_random_uuid()" json:"id"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	DeletedAt      *time.Time `sql:"index" json:"-"`
+	Name           string     `json:"name"`
+	Brand          string     `json:"brand"`
+	EquipmentModel string     `json:"model"`
+	DateOfPurchase time.Time  `json:"date_of_purchase"`
+	InitialMileage int        `json:"initial_mileage"`
+	Mileage        int        `json:"mileage"`
+	Weight         int        `json:"weight"`
+	User           Users      `json:"-"`
+	UserID         int        `json:"user_id"`
+	IsCommute      bool       `json:"is_commute"` // given to the commute rides, one per user
+	Picture        string     `json:"picture"`    // URL path of its picture under /MEDIA, empty without
 	// DefaultSports are the sports it is the default equipment of (equipment_defaults), sorted. Nil in a
 	// request keeps them, empty removes them.
 	DefaultSports []string `json:"default_sports" gorm:"-"`
@@ -224,12 +219,32 @@ type EquipmentStats struct {
 	// KmSinceService is the distance of the activities after the latest service, or of all of them without one
 	KmSinceService       int     `json:"km_since_service"`
 	DistanceSinceService float64 `json:"-"` // meters
+	// Reminders are its maintenance reminders, the most urgent first
+	Reminders []ReminderStatus `json:"reminders" gorm:"-"`
 }
 
 // GetEquipmentsStats returns the equipments of a user with their totals, the default ones first.
 // The mileage is computed: the initial one plus the distance of the activities, in km.
 func (db *DB) GetEquipmentsStats(userID uint) ([]EquipmentStats, error) {
-	return db.equipmentsStats("e.user_id = ?", userID)
+	stats, err := db.equipmentsStats("e.user_id = ?", userID)
+	if err != nil {
+		return stats, err
+	}
+	reminders, err := db.GetUserReminders(userID)
+	if err != nil {
+		return stats, err
+	}
+	byEquipment := map[uuid.UUID][]ReminderStatus{}
+	for _, r := range reminders {
+		byEquipment[r.EquipmentID] = append(byEquipment[r.EquipmentID], r)
+	}
+	for i := range stats {
+		stats[i].Reminders = byEquipment[stats[i].ID]
+		if stats[i].Reminders == nil {
+			stats[i].Reminders = []ReminderStatus{}
+		}
+	}
+	return stats, nil
 }
 
 func (db *DB) GetEquipmentStats(userID uint, id uuid.UUID) (EquipmentStats, error) {
@@ -240,7 +255,8 @@ func (db *DB) GetEquipmentStats(userID uint, id uuid.UUID) (EquipmentStats, erro
 	if len(stats) == 0 {
 		return EquipmentStats{}, gorm.ErrRecordNotFound
 	}
-	return stats[0], nil
+	stats[0].Reminders, err = db.GetEquipmentReminders(id)
+	return stats[0], err
 }
 
 func (db *DB) equipmentsStats(where string, args ...interface{}) ([]EquipmentStats, error) {
@@ -324,50 +340,10 @@ func (db *DB) SetActivityTotalWeight(id uuid.UUID, weight uint16) error {
 	return db.Model(&Activity{}).Where("id = ?", id).Update("total_weight", weight).Error
 }
 
-// ServiceDue is an equipment past its maintenance interval whose cycle wasn't notified yet
-type ServiceDue struct {
-	ID             uuid.UUID
-	UserID         uint
-	Name           string
-	Interval       int        // km between two services
-	KmSinceService int        // km since the latest service, or since the first activity without one
-	LastService    *time.Time // the cycle: nil before the first service
-}
-
-// ServiceAlertsDue returns the equipments past their maintenance interval whose service cycle (the date of
-// their latest service) wasn't notified yet, of the users with a push subscription or the notifications by
-// email: the others are notified once they have one
-func (db *DB) ServiceAlertsDue() ([]ServiceDue, error) {
-	stats, err := db.equipmentsStats("e.maintenance_interval > 0 AND e.user_id IN "+
-		"(SELECT user_id FROM channels WHERE channel_provider IN ? AND deleted_at IS NULL)", notifyingProviders)
-	if err != nil {
-		return nil, err
-	}
-	var due []ServiceDue
-	for _, e := range stats {
-		if e.KmSinceService < e.MaintenanceInterval {
-			continue
-		}
-		notified := e.ServiceAlerted && sameCycle(e.ServiceAlertedFor, e.LastService)
-		if notified {
-			continue
-		}
-		due = append(due, ServiceDue{ID: e.ID, UserID: uint(e.UserID), Name: e.Name, Interval: e.MaintenanceInterval,
-			KmSinceService: e.KmSinceService, LastService: e.LastService})
-	}
-	return due, nil
-}
-
-// sameCycle tells whether two service cycles (dates of the latest service, nil before the first) are one
+// sameCycle tells whether two cycles (dates it was last done, nil before the first time) are one
 func sameCycle(a, b *time.Time) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}
 	return a.Equal(*b)
-}
-
-// SetServiceAlerted records that the service cycle lastService of an equipment was notified
-func (db *DB) SetServiceAlerted(id uuid.UUID, lastService *time.Time) error {
-	return db.Model(&Equipments{}).Where("id = ?", id).
-		Updates(map[string]interface{}{"service_alerted": true, "service_alerted_for": lastService}).Error
 }

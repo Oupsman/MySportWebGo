@@ -103,7 +103,6 @@ func UpdateEquipment(c *gin.Context) {
 	equipment.DateOfPurchase = update.DateOfPurchase
 	equipment.InitialMileage = update.InitialMileage
 	equipment.Weight = update.Weight
-	equipment.MaintenanceInterval = update.MaintenanceInterval
 	if update.DefaultSports != nil { // not sent: kept
 		equipment.DefaultSports = update.DefaultSports
 	}

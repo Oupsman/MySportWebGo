@@ -28,7 +28,7 @@ activities/*.json       each activity with everything the analysis computed: eve
                         the zones, the best efforts, the power curve...
 files/                  the files you uploaded: FIT, and the GPX and TCX files the FIT files were converted from
 health.json             your weights, resting heart rates, blood pressures...
-equipments.json         your equipment, with their services and the sports they are the default of
+equipments.json         your equipment, with their services, maintenance reminders and the sports they are the default of
 devices.json            the devices your activities were recorded with
 routes.json             the routes your activities follow
 segments.json           your segments, with the passes of your activities on them
