@@ -118,6 +118,7 @@ func (app *App) backfill(ctx context.Context) {
 		{"failed to compute the best efforts of activities", activityService.BackfillBestEfforts},
 		// after BackfillBestEfforts: the FTP is estimated from the best 20 minutes
 		{"failed to compute the power metrics of activities", activityService.BackfillPowerMetrics},
+		{"failed to compute the power curves of activities", activityService.BackfillPowerCurves},
 		{"failed to rename activities", activityService.BackfillTitles},
 		// last: it downloads map tiles, the longest on a first start
 		{"failed to draw the thumbnails of activities again", activityService.BackfillThumbnails},

@@ -184,6 +184,7 @@ func decodeFit(fit *proto.FIT, user models.Users, trimEnd float64,
 	}
 	// the best 20 minutes count in the FTP of the power metrics, which give the TSS of the training score
 	activity.BestEfforts = BestEfforts(fitActivity)
+	setPowerCurve(&activity)
 	if err := setPowerMetrics(&activity, opts.FTP); err != nil {
 		return models.Activity{}, err
 	}

@@ -585,6 +585,37 @@ func (BestEffortArray) GormDataType() string {
 	return "jsonb"
 }
 
+// PowerCurvePoint is the best power of a ride over a duration (s), and the second it starts at
+type PowerCurvePoint struct {
+	Duration    float64 `json:"duration"`
+	Watts       float64 `json:"watts"`
+	StartOffset float64 `json:"start_offset"` // seconds since the start of the activity
+}
+
+// PowerCurve is the power-duration curve of a ride, by increasing duration: empty without measured power,
+// nil until computed (stored as JSON null)
+type PowerCurve []PowerCurvePoint
+
+func (c *PowerCurve) Scan(src interface{}) error {
+	*c = nil
+	switch v := src.(type) {
+	case []byte:
+		return json.Unmarshal(v, c)
+	case string:
+		return json.Unmarshal([]byte(v), c)
+	}
+	return nil
+}
+
+func (c PowerCurve) Value() (driver.Value, error) {
+	return json.Marshal(c)
+}
+
+// GormDataType stores the curve as jsonb, so that SQL can take the best of each duration
+func (PowerCurve) GormDataType() string {
+	return "jsonb"
+}
+
 // EffortRecord is a best effort ranked among the ones of the user, with its activity
 type EffortRecord struct {
 	BestEffort

@@ -122,6 +122,9 @@ type Activity struct {
 	TSS             *float64 `json:"tss" gorm:"column:tss"`
 	// where Trimp comes from: ScoreDevice, ScorePower, ScoreHR; empty for the activities scored before
 	ScoreSource string `json:"score_source" gorm:"not null;default:''"`
+	// the best power of a ride with a power meter over activityService.PowerCurveDurations, empty without,
+	// nil until computed
+	PowerCurve types.PowerCurve `json:"power_curve"`
 }
 
 // The sources of the training score of an activity
@@ -413,6 +416,7 @@ func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, privacy
 		updates["best_efforts"] = analysed.BestEfforts
 		// the power stream changed: BackfillPowerMetrics computes its metrics again
 		updates["power_zones"] = nil
+		updates["power_curve"] = analysed.PowerCurve
 		for column, value := range elevationUpdates(analysed) {
 			updates[column] = value
 		}

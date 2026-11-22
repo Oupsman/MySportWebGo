@@ -551,6 +551,55 @@ func FTP(c *gin.Context) {
 		"zone_limits": activityService.PowerZoneLimits})
 }
 
+// PowerCurve returns the best power of the rides of the user over each duration of a period,
+// ?from=YYYY-MM-DD&to=YYYY-MM-DD in their timezone, both included and optional (all the rides before, or
+// since), with the critical power fitted on it and the current FTP
+func PowerCurve(c *gin.Context) {
+	db := c.MustGet("App").(*app.App).DB
+	user, location := currentUserLocation(c)
+	day := func(name string) (*time.Time, bool) {
+		value := c.Query(name)
+		if value == "" {
+			return nil, true
+		}
+		d, err := time.ParseInLocation("2006-01-02", value, location)
+		if err != nil {
+			c.JSON(400, gin.H{"error": name + " must be YYYY-MM-DD"})
+			return nil, false
+		}
+		return &d, true
+	}
+	from, ok := day("from")
+	if !ok {
+		return
+	}
+	to, ok := day("to")
+	if !ok {
+		return
+	}
+	if to != nil {
+		// the last day included: until the next midnight (AddDate keeps it across daylight saving changes)
+		next := to.AddDate(0, 0, 1)
+		to = &next
+	}
+	if from != nil && to != nil && !from.Before(*to) {
+		c.JSON(400, gin.H{"error": "from must not be after to"})
+		return
+	}
+	curve, cp, err := activityService.UserPowerCurve(&db, user, from, to)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	ftp, err := activityService.UserFTP(&db, user.ID)(time.Now(), 0)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(200, gin.H{"points": curve, "critical_power": cp, "ftp": ftp,
+		"durations": activityService.PowerCurveDurations})
+}
+
 // PowerZones returns the seconds in each power zone of the last weeks, ?weeks=, as HrZones
 func PowerZones(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB

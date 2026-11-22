@@ -134,6 +134,7 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.GET("/user/hrzones", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.HrZones)
 	apiv1.GET("/user/powerzones", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.PowerZones)
 	apiv1.GET("/user/ftp", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.FTP)
+	apiv1.GET("/user/powercurve", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.PowerCurve)
 	// the readiness reads the resting heart rates of the health data too
 	apiv1.GET("/user/readiness", middlewares.IsAuthorized(models.ActivitiesRead, models.HealthDatasRead), apicontrollers.GetReadiness)
 	apiv1.GET("/user/calendar", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.Calendar)
