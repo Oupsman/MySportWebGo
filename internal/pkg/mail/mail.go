@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 // The encryptions of the connection to the SMTP server
@@ -29,8 +31,13 @@ const (
 	TLSNone     = "none"     // never encrypted: only towards the local host (a relay on the same machine)
 )
 
-// sendTimeout bounds the sending of a message, from the connection to the end
-const sendTimeout = 30 * time.Second
+const (
+	// sendTimeout bounds the sending of a message, from the connection to the end: under the 60 s the web
+	// application waits for the test email, so that it gets the error
+	sendTimeout = 40 * time.Second
+	// dialTimeout bounds the connection: a blocked port doesn't answer, it times out
+	dialTimeout = 15 * time.Second
+)
 
 // Config is the SMTP server the emails go through. Empty Host: no email.
 type Config struct {
@@ -137,6 +144,8 @@ type Mailer interface {
 // SMTP sends the emails through the SMTP server of its configuration
 type SMTP struct {
 	Config Config
+	// Logger logs each email: its steps (debug), and its success or failure with the step and a hint
+	Logger zerolog.Logger
 	// TLSConfig is the one of the encrypted connections, nil for the defaults (the tests trust their server)
 	TLSConfig *tls.Config
 }
@@ -148,7 +157,8 @@ func (s *SMTP) tlsConfig() *tls.Config {
 	return &tls.Config{ServerName: s.Config.Host, MinVersion: tls.VersionTLS12}
 }
 
-// Send sends a message
+// Send sends a message. Each step is logged with its duration, a failure with the step and a hint: the
+// errors of SMTP servers are often terse.
 func (s *SMTP) Send(ctx context.Context, m Message) error {
 	body, err := Compose(s.Config.From, m, time.Now())
 	if err != nil {
@@ -157,7 +167,24 @@ func (s *SMTP) Send(ctx context.Context, m Message) error {
 	ctx, cancel := context.WithTimeout(ctx, sendTimeout)
 	defer cancel()
 	addr := net.JoinHostPort(s.Config.Host, strconv.Itoa(s.Config.Port))
-	dialer := &net.Dialer{}
+	started := time.Now()
+	log := s.Logger.With().Str("smtp", addr).Str("tls", s.Config.TLS).Str("to", m.To.Address).Logger()
+	stage := "connect"
+	step := func(next string) {
+		log.Debug().Str("step", stage).Dur("elapsed", time.Since(started)).Msg("smtp: step done")
+		stage = next
+	}
+	fail := func(err error) error {
+		err = fmt.Errorf("%s (%s, after %s): %w", stageText[stage], addr, time.Since(started).Round(time.Millisecond), err)
+		if hint := Hint(err); hint != "" {
+			err = fmt.Errorf("%w. %s", err, hint)
+		}
+		log.Error().Err(err).Str("step", stage).Dur("elapsed", time.Since(started)).Msg("smtp: email not sent")
+		return err
+	}
+	log.Info().Msg("smtp: sending an email")
+
+	dialer := &net.Dialer{Timeout: dialTimeout}
 	var conn net.Conn
 	if s.Config.TLS == TLSImplicit {
 		conn, err = (&tls.Dialer{NetDialer: dialer, Config: s.tlsConfig()}).DialContext(ctx, "tcp", addr)
@@ -165,47 +192,97 @@ func (s *SMTP) Send(ctx context.Context, m Message) error {
 		conn, err = dialer.DialContext(ctx, "tcp", addr)
 	}
 	if err != nil {
-		return fmt.Errorf("connecting to %s: %w", addr, err)
+		return fail(err)
 	}
 	if deadline, ok := ctx.Deadline(); ok {
 		conn.SetDeadline(deadline)
 	}
+	step("greeting")
 	client, err := smtp.NewClient(conn, s.Config.Host)
 	if err != nil {
 		conn.Close()
-		return fmt.Errorf("SMTP server %s: %w", addr, err)
+		return fail(err)
 	}
 	defer client.Close()
 	if s.Config.TLS == TLSStartTLS {
+		step("starttls")
 		if ok, _ := client.Extension("STARTTLS"); !ok {
-			return fmt.Errorf("SMTP server %s doesn't offer STARTTLS: set SMTP_TLS=%s with its port 465, or check the port", addr, TLSImplicit)
+			return fail(fmt.Errorf("the server doesn't offer STARTTLS: set SMTP_TLS=%s with its port 465, or check the port", TLSImplicit))
 		}
 		if err := client.StartTLS(s.tlsConfig()); err != nil {
-			return fmt.Errorf("STARTTLS with %s: %w", addr, err)
+			return fail(err)
 		}
 	}
 	if s.Config.Username != "" {
+		step("auth")
 		if err := client.Auth(smtp.PlainAuth("", s.Config.Username, s.Config.Password, s.Config.Host)); err != nil {
-			return fmt.Errorf("authentication at %s refused (check SMTP_USERNAME and SMTP_PASSWORD): %w", addr, err)
+			return fail(err)
 		}
 	}
+	step("sender")
 	if err := client.Mail(s.Config.From.Address); err != nil {
-		return fmt.Errorf("sender %s refused (is its domain verified at the service?): %w", s.Config.From.Address, err)
+		return fail(err)
 	}
+	step("recipient")
 	if err := client.Rcpt(m.To.Address); err != nil {
-		return fmt.Errorf("recipient refused: %w", err)
+		return fail(err)
 	}
+	step("data")
 	w, err := client.Data()
 	if err != nil {
-		return err
+		return fail(err)
 	}
 	if _, err := w.Write(body); err != nil {
-		return err
+		return fail(err)
 	}
 	if err := w.Close(); err != nil {
-		return fmt.Errorf("message refused: %w", err)
+		return fail(err)
 	}
-	return client.Quit()
+	step("quit")
+	// accepted: a failing QUIT doesn't unsend it
+	if err := client.Quit(); err != nil {
+		log.Debug().Err(err).Msg("smtp: QUIT failed after the message was accepted")
+	}
+	log.Info().Dur("elapsed", time.Since(started)).Msg("smtp: email accepted by the server")
+	return nil
+}
+
+// stageText says what failed, by step of Send
+var stageText = map[string]string{
+	"connect":   "connecting to the SMTP server",
+	"greeting":  "reading the greeting of the SMTP server",
+	"starttls":  "starting TLS (STARTTLS)",
+	"auth":      "authenticating (SMTP_USERNAME, SMTP_PASSWORD)",
+	"sender":    "sending the sender (MAIL_FROM)",
+	"recipient": "sending the recipient",
+	"data":      "sending the message",
+	"quit":      "ending the session",
+}
+
+// Hint explains the common failures of a connection to an SMTP server, "" for the others
+func Hint(err error) string {
+	var dnsErr *net.DNSError
+	var certErr *tls.CertificateVerificationError
+	var netErr net.Error
+	text := err.Error()
+	switch {
+	case errors.As(err, &dnsErr):
+		return "Hint: SMTP_HOST isn't a known host name, check its spelling and the DNS of the server"
+	case strings.Contains(text, "connection refused"):
+		return "Hint: nothing listens on this port of the host, check SMTP_PORT (587 with starttls, 465 with tls)"
+	case errors.As(err, &certErr), strings.Contains(text, "x509:"), strings.Contains(text, "tls: "):
+		return "Hint: the TLS connection failed, check SMTP_TLS against the port (starttls with 587, tls with 465)"
+	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &netErr) && netErr.Timeout():
+		return "Hint: no answer in time. Many hosting providers and firewalls block the outgoing SMTP ports " +
+			"(25, 465, 587): check that the server can reach the host on this port, e.g. with " +
+			"nc -vz <host> <port> from the docker host"
+	case strings.Contains(text, "535") || strings.Contains(text, "authentication"):
+		return "Hint: the credentials are refused, check SMTP_USERNAME and SMTP_PASSWORD (for SendGrid, the " +
+			"username is the word apikey)"
+	case strings.Contains(text, "550") || strings.Contains(text, "553") || strings.Contains(text, "554"):
+		return "Hint: the server refuses the sender or the message: verify the domain of MAIL_FROM at your sending service"
+	}
+	return ""
 }
 
 // Compose returns the message as sent: its headers, then its text and HTML versions (multipart/alternative)

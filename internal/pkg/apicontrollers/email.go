@@ -77,6 +77,7 @@ func VerifyEmail(c *gin.Context) {
 	user, err := App.DB.UseEmailVerification(utils.HashCode(body.Code))
 	switch {
 	case errors.Is(err, models.ErrInvalidVerification):
+		App.Logger.Info().Str("client_ip", c.ClientIP()).Msg("email confirmation refused: unknown, used or expired link")
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, models.ErrEmailTaken):
 		c.JSON(http.StatusConflict, gin.H{"error": "another account uses this address now"})
@@ -106,7 +107,9 @@ func EmailStatus(c *gin.Context) {
 func ResendVerification(c *gin.Context) {
 	App := c.MustGet("App").(*app.App)
 	user := middlewares.CurrentUser(c)
+	log := App.Logger.With().Uint("user_id", user.ID).Logger()
 	if !App.MailEnabled() {
+		log.Warn().Msg("confirmation email asked, but the emails are off: no SMTP_HOST in the environment of the backend")
 		c.JSON(http.StatusConflict, gin.H{"error": app.ErrMailOff.Error()})
 		return
 	}
@@ -118,26 +121,32 @@ func ResendVerification(c *gin.Context) {
 	email := pending
 	if email == "" {
 		if user.EmailVerifiedAt != nil {
+			log.Info().Msg("confirmation email asked for an address already confirmed: not sent")
 			c.JSON(http.StatusConflict, gin.H{"error": "your address is already confirmed"})
 			return
 		}
 		email = user.Email
 	}
+	log = log.With().Str("to", email).Logger()
 	last, err := App.DB.LastEmailVerification(user.ID)
 	if err != nil {
 		internalError(c, err)
 		return
 	}
 	if wait := resendInterval - time.Since(last); wait > 0 {
+		log.Info().Dur("wait", wait).Msg("confirmation email asked too soon after the previous one: not sent")
 		middlewares.TooManyRequests(c, wait)
 		return
 	}
+	log.Info().Msg("confirmation email asked")
 	ctx, cancel := context.WithTimeout(c.Request.Context(), emailTimeout)
 	defer cancel()
 	if err := sendVerification(ctx, App, user, email); err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "the email could not be sent, try again later"})
+		log.Error().Err(err).Msg("confirmation email failed")
+		c.JSON(http.StatusBadGateway, gin.H{"error": "the email could not be sent, try again later (the reason is in the logs of the server)"})
 		return
 	}
+	log.Info().Msg("confirmation email sent")
 	c.JSON(http.StatusOK, gin.H{"sent_to": email})
 }
 
@@ -165,9 +174,21 @@ func ForgotPassword(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
+	// the answer is the same for all: the logs tell the admins why no email went
+	log := App.Logger.With().Str("login", body.Login).Str("client_ip", c.ClientIP()).Logger()
+	switch {
+	case user == nil:
+		log.Info().Msg("password reset asked: no account with this username or email, nothing sent")
+	case user.EmailVerifiedAt == nil:
+		log.Info().Uint("user_id", user.ID).Msg("password reset asked: the address isn't confirmed, nothing sent")
+	case user.DisabledAt != nil:
+		log.Info().Uint("user_id", user.ID).Msg("password reset asked: the account is disabled, nothing sent")
+	}
 	if user != nil && user.EmailVerifiedAt != nil && user.DisabledAt == nil {
 		key := "forgot:" + user.UUID.String()
-		if blocked, _ := forgotten.Blocked(key); !blocked {
+		if blocked, _ := forgotten.Blocked(key); blocked {
+			log.Info().Uint("user_id", user.ID).Msg("password reset asked: too many in the last hour, nothing sent")
+		} else {
 			forgotten.Add(key)
 			target := *user
 			App.Go(func(ctx context.Context) {
@@ -191,10 +212,13 @@ func ForgotPassword(c *gin.Context) {
 func SendTestEmail(c *gin.Context) {
 	App := c.MustGet("App").(*app.App)
 	user := middlewares.CurrentUser(c)
+	log := App.Logger.With().Uint("user_id", user.ID).Str("to", user.Email).Logger()
 	if !App.MailEnabled() {
+		log.Warn().Msg("test email asked, but the emails are off: no SMTP_HOST in the environment of the backend")
 		c.JSON(http.StatusConflict, gin.H{"error": app.ErrMailOff.Error()})
 		return
 	}
+	log.Info().Msg("test email asked by an admin")
 	host := "the SMTP server"
 	if s, ok := App.Mailer.(*mail.SMTP); ok {
 		host = s.Config.Host
@@ -202,9 +226,11 @@ func SendTestEmail(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), emailTimeout)
 	defer cancel()
 	if err := App.SendMail(ctx, "test", mail.Test(user.Username, user.Email, host)); err != nil {
+		log.Error().Err(err).Msg("test email failed")
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	log.Info().Msg("test email sent")
 	c.JSON(http.StatusOK, gin.H{"sent_to": user.Email})
 }
 

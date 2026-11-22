@@ -188,6 +188,7 @@ func (app *App) MailEnabled() bool {
 // SendMail sends an email of a kind (the label of its metric), counted and logged; ErrMailOff when off
 func (app *App) SendMail(ctx context.Context, kind string, m mail.Message) error {
 	if app.Mailer == nil {
+		app.Logger.Warn().Str("kind", kind).Msg("email not sent: the emails are off (no SMTP_HOST)")
 		return ErrMailOff
 	}
 	if err := app.Mailer.Send(ctx, m); err != nil {

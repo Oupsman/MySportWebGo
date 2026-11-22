@@ -1,7 +1,10 @@
 package mail
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -11,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 func env(values map[string]string) func(string) string {
@@ -158,5 +163,48 @@ func TestComposeRefusesHeaderInjection(t *testing.T) {
 	if body, err := Compose(netmail.Address{Address: "a@example.com"}, m, time.Now()); err == nil &&
 		strings.Contains(string(body), "\r\nBcc:") {
 		t.Error("a header injected through the subject")
+	}
+}
+
+func TestHints(t *testing.T) {
+	for name, test := range map[string]struct {
+		err  error
+		says string
+	}{
+		"timeout": {fmt.Errorf("dial: %w", context.DeadlineExceeded), "block the outgoing SMTP ports"},
+		"dns":     {&net.DNSError{Err: "no such host", Name: "smtp.sendgrid.nett"}, "isn't a known host name"},
+		"refused": {errors.New("dial tcp 1.2.3.4:587: connect: connection refused"), "nothing listens"},
+		"tls":     {errors.New("tls: first record does not look like a TLS handshake"), "check SMTP_TLS against the port"},
+		"auth":    {errors.New("535 5.7.8 Authentication failed"), "check SMTP_USERNAME and SMTP_PASSWORD"},
+		"sender":  {errors.New("550 The from address does not match a verified Sender Identity"), "verify the domain"},
+		"unknown": {errors.New("something else"), ""},
+	} {
+		if got := Hint(test.err); test.says == "" && got != "" || !strings.Contains(got, test.says) {
+			t.Errorf("%s: %q, want it to say %q", name, got, test.says)
+		}
+	}
+}
+
+// TestSendLogs: a failure is logged with its step and a hint, a success with its duration
+func TestSendLogs(t *testing.T) {
+	f := startFakeSMTP(t, false, "apikey", "secret")
+	var logs bytes.Buffer
+	s := smtpFor(t, f, TLSStartTLS, "apikey", "wrong")
+	s.Logger = zerolog.New(&logs)
+	err := s.Send(context.Background(), message())
+	if err == nil || !strings.Contains(err.Error(), "authenticating") {
+		t.Fatalf("error %v", err)
+	}
+	if out := logs.String(); !strings.Contains(out, `"step":"auth"`) || !strings.Contains(out, "smtp: email not sent") ||
+		!strings.Contains(out, "Hint:") || strings.Contains(out, "wrong") {
+		t.Errorf("logs: %s", out)
+	}
+	logs.Reset()
+	s.Config.Password = "secret"
+	if err := s.Send(context.Background(), message()); err != nil {
+		t.Fatal(err)
+	}
+	if out := logs.String(); !strings.Contains(out, "smtp: email accepted by the server") || !strings.Contains(out, `"step":"starttls"`) {
+		t.Errorf("logs: %s", out)
 	}
 }

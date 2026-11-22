@@ -65,7 +65,7 @@ func main() {
 		log.Fatal().Err(err).Msg("cannot connect to the database")
 	}
 	if mailConfig.Enabled() {
-		App.Mailer = &mail.SMTP{Config: mailConfig}
+		App.Mailer = &mail.SMTP{Config: mailConfig, Logger: log.Logger}
 		App.Notifications.Email = App.EmailNotification
 		log.Info().Str("smtp", mailConfig.Host+":"+strconv.Itoa(mailConfig.Port)).Str("tls", mailConfig.TLS).
 			Str("from", mailConfig.From.Address).Msg("emails on")
