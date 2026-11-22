@@ -17,7 +17,9 @@ For now the app can :
 * Estimate your power level (cycling only for now)
 * find your best efforts: the fastest 400 m to marathon of the runs, 10 to 100 km of the rides, and the best
   powers over 5 s to 1 h of any activity with a power meter (`GET /api/v1/user/records`)
-* handle multiple equipments, but having a default equipment for each sport is still to be implemented
+* handle multiple equipments, with a default equipment for each sport (`default_sports` of an equipment, the
+  choices from `GET /api/v1/user/sports`): an imported activity gets the one of its sport, a commute ride the
+  commute bike. The activities imported before keep theirs
 
 # For now, this app IS NOT PRODUCTION READY, AND VERY FAR FROM IT !
 

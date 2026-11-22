@@ -18,7 +18,7 @@ func TestRefuseDuplicates(t *testing.T) {
 	if err := db.Create(&user).Error; err != nil {
 		t.Fatal(err)
 	}
-	equipment := models.Equipments{Name: "bike", UserID: int(user.ID), IsDefault: true}
+	equipment := models.Equipments{Name: "bike", UserID: int(user.ID)}
 	if err := db.Create(&equipment).Error; err != nil {
 		t.Fatal(err)
 	}

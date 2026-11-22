@@ -13,7 +13,7 @@ func TestRouteCommute(t *testing.T) {
 	if err := db.Create(&user).Error; err != nil {
 		t.Fatal(err)
 	}
-	equipment := models.Equipments{Name: "bike", UserID: int(user.ID), IsDefault: true}
+	equipment := models.Equipments{Name: "bike", UserID: int(user.ID)}
 	if err := db.Create(&equipment).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestCommuteEquipment(t *testing.T) {
 	if err := db.Create(&user).Error; err != nil {
 		t.Fatal(err)
 	}
-	road := models.Equipments{Name: "road bike", UserID: int(user.ID), IsDefault: true}
+	road := models.Equipments{Name: "road bike", UserID: int(user.ID), DefaultSports: []string{"cycling"}}
 	if err := db.CreateEquipment(&road); err != nil {
 		t.Fatal(err)
 	}
@@ -139,8 +139,8 @@ func TestCommuteEquipment(t *testing.T) {
 	if err := db.First(&old, "id = ?", old.ID).Error; err != nil || old.IsCommute {
 		t.Fatalf("the previous commute bike is still flagged: %v", err)
 	}
-	if err := db.First(&road, "id = ?", road.ID).Error; err != nil || !road.IsDefault {
-		t.Fatalf("the commute flag changed the default equipment: %v", err)
+	if def, err := db.DefaultEquipment(user.ID, "cycling"); err != nil || def == nil || def.ID != road.ID {
+		t.Fatalf("the commute flag changed the default equipment: %v %v", def, err)
 	}
 
 	// marking a route as commute gives its rides the commute bike

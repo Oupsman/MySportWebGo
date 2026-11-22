@@ -24,7 +24,7 @@ func analyzeFile(filePath string, user models.Users, trimEnd float64, opts Analy
 			err = fmt.Errorf("panic while analysing: %v", r)
 		}
 	}()
-	return AnalyzeTrimmed(filePath, user, models.Equipments{}, trimEnd, opts)
+	return AnalyzeTrimmed(filePath, user, trimEnd, opts)
 }
 
 // analyzeFileWhenFree runs analyzeFile, waiting for an analysis slot as long as the server is busy: a

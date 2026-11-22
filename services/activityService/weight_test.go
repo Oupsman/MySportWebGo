@@ -56,7 +56,7 @@ func TestAnalysisWeight(t *testing.T) {
 	analyse := func(kg float64) models.Activity {
 		t.Helper()
 		weight := func(time.Time, string) (float64, error) { return kg, nil }
-		a, err := AnalyzeTrimmed(path, models.Users{}, models.Equipments{}, 0, Analysis{Weight: weight})
+		a, err := AnalyzeTrimmed(path, models.Users{}, 0, Analysis{Weight: weight})
 		if err != nil {
 			t.Skip("FIT file missing in prototypes/:", err)
 		}
@@ -73,7 +73,7 @@ func TestAnalysisWeight(t *testing.T) {
 		t.Errorf("average power %d W at 120 kg, not above %d W at 60 kg", heavy.AvgPower, light.AvgPower)
 	}
 	// without weight: the defaults, not the old 110 kg
-	none, err := AnalyzeTrimmed(path, models.Users{}, models.Equipments{}, 0, Analysis{})
+	none, err := AnalyzeTrimmed(path, models.Users{}, 0, Analysis{})
 	if err != nil {
 		t.Fatal(err)
 	}

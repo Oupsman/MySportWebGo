@@ -101,8 +101,7 @@ func (db *DB) SearchActivities(userID uint, filter ActivityFilter, sort string, 
 		return search, err
 	}
 
-	err = db.Table("activities").Where("user_id = ?", userID).Distinct("sport").Order("sport").
-		Pluck("sport", &search.Sports).Error
+	search.Sports, err = db.ActivitySports(userID)
 	if err != nil {
 		return search, err
 	}

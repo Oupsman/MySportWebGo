@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"net/http"
+	"strconv"
 )
 
 // equipmentOwner returns the user of the request, and the equipment of the :id parameter when it belongs to them.
@@ -45,6 +46,9 @@ func CreateEquipment(c *gin.Context) {
 	equipment.ID = uuid.UUID{}
 	equipment.UserID = int(user.ID)
 	equipment.Picture = ""
+	if !validSports(c, equipment.DefaultSports) {
+		return
+	}
 
 	err = db.CreateEquipment(&equipment)
 	if err != nil {
@@ -55,17 +59,29 @@ func CreateEquipment(c *gin.Context) {
 	c.JSON(http.StatusCreated, equipment)
 }
 
-// DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).
-// func GetDefaultEquipment(c *gin.Context) {
-//
-// 	db := c.MustGet("App").(*app.App).DB
-// 	user := middlewares.CurrentUser(c)
-//
-// 	equipment := db.GetDefaultEquipment(user.ID)
-//
-// 	c.JSON(http.StatusOK, equipment)
-//
-// }
+// UserSports answers the sports to choose the default equipment of: those of the user's activities and
+// default equipments ("sports"), and every sport an activity can have ("all")
+func UserSports(c *gin.Context) {
+	db := c.MustGet("App").(*app.App).DB
+	user := middlewares.CurrentUser(c)
+	sports, err := db.UserSports(user.ID)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"sports": sports, "all": activityService.SportNames()})
+}
+
+// validSports refuses default sports that aren't FIT sport names (the names of the activities' sports)
+func validSports(c *gin.Context, sports []string) bool {
+	for _, sport := range sports {
+		if !activityService.IsSportName(sport) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "unknown sport " + strconv.Quote(sport)})
+			return false
+		}
+	}
+	return true
+}
 
 func UpdateEquipment(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
@@ -88,8 +104,13 @@ func UpdateEquipment(c *gin.Context) {
 	equipment.InitialMileage = update.InitialMileage
 	equipment.Weight = update.Weight
 	equipment.MaintenanceInterval = update.MaintenanceInterval
-	equipment.IsDefault = update.IsDefault
+	if update.DefaultSports != nil { // not sent: kept
+		equipment.DefaultSports = update.DefaultSports
+	}
 	equipment.IsCommute = update.IsCommute
+	if !validSports(c, equipment.DefaultSports) {
+		return
+	}
 
 	err = db.UpdateEquipment(&equipment)
 	if err != nil {

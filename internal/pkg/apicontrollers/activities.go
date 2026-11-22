@@ -27,7 +27,6 @@ func UploadActivity(c *gin.Context) {
 
 	db := c.MustGet("App").(*app.App).DB
 	user := middlewares.CurrentUser(c)
-	equipment := db.GetDefaultEquipment(user.ID)
 
 	// single file
 	// file, _ := c.FormFile("file")
@@ -66,13 +65,18 @@ func UploadActivity(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
-	activity, err := activityService.AnalyzeTrimmed(tmpPath, user, equipment, 0, activityService.Analysis{
+	activity, err := activityService.AnalyzeTrimmed(tmpPath, user, 0, activityService.Analysis{
 		RestHR:     activityService.UserRestHR(&db, user.ID),
 		Correction: activityService.DeviceCorrection(&db, user.ID),
-		Weight:     activityService.UserWeight(&db, user.ID, equipment.Weight),
+		Weight:     activityService.ImportWeight(&db, user.ID),
 	})
 	if err != nil {
 		analysisError(c, err)
+		return
+	}
+	activity.UserID = user.ID
+	if err := activityService.AssignDefaultEquipment(&db, &activity); err != nil {
+		internalError(c, err)
 		return
 	}
 	activity.ID = uuid.New()

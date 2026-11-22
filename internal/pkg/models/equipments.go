@@ -1,10 +1,12 @@
 package models
 
 import (
+	"math"
+	"slices"
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"math"
-	"time"
 )
 
 // /MEDIA/user uuid/equipments/equipment uuid/pic filename.pic extension
@@ -24,19 +26,29 @@ type Equipments struct {
 	User                Users      `json:"-"`
 	UserID              int        `json:"user_id"`
 	MaintenanceInterval int        `json:"maintenance_interval"`
-	IsDefault           bool       `json:"is_default"`
 	IsCommute           bool       `json:"is_commute"` // given to the commute rides, one per user
 	Picture             string     `json:"picture"`    // URL path of its picture under /MEDIA, empty without
 	// the service cycle whose "service due" notification was sent (see ServiceAlertsDue): true and the date of
 	// the latest service then, nil before the first one
 	ServiceAlerted    bool       `json:"-" gorm:"not null;default:false"`
 	ServiceAlertedFor *time.Time `json:"-"`
+	// DefaultSports are the sports it is the default equipment of (equipment_defaults), sorted. Nil in a
+	// request keeps them, empty removes them.
+	DefaultSports []string `json:"default_sports" gorm:"-"`
+}
+
+// EquipmentDefault is the default equipment of a sport of a user, given to the activities of that sport at
+// their import
+type EquipmentDefault struct {
+	UserID      uint      `gorm:"primaryKey;autoIncrement:false"`
+	Sport       string    `gorm:"primaryKey"`
+	EquipmentID uuid.UUID `gorm:"type:uuid"`
 }
 
 // CommuteSport is the sport of the activities getting the commute equipment
 const CommuteSport = "cycling"
 
-// keepOnlyFlag clears flag (is_default, is_commute) on the other equipments of the user of equipment
+// keepOnlyFlag clears flag (is_commute) on the other equipments of the user of equipment
 func keepOnlyFlag(tx *gorm.DB, equipment *Equipments, flag string) error {
 	query := tx.Model(&Equipments{}).Where("user_id = ?", equipment.UserID)
 	if equipment.ID != uuid.Nil {
@@ -45,25 +57,82 @@ func keepOnlyFlag(tx *gorm.DB, equipment *Equipments, flag string) error {
 	return query.Update(flag, false).Error
 }
 
-// CreateEquipment saves a new equipment, it becomes the only default one of the user when IsDefault is set,
-// and the only commute one when IsCommute is set
+// CreateEquipment saves a new equipment, the default one of its DefaultSports (taken from the other
+// equipments of the user), and the only commute one when IsCommute is set
 func (db *DB) CreateEquipment(equipment *Equipments) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		if err := keepOnlyFlags(tx, equipment); err != nil {
+		if err := keepOnlyCommute(tx, equipment); err != nil {
 			return err
 		}
-		return tx.Omit("User").Create(equipment).Error
+		if err := tx.Omit("User").Create(equipment).Error; err != nil {
+			return err
+		}
+		return setDefaultSports(tx, equipment)
 	})
 }
 
-func keepOnlyFlags(tx *gorm.DB, equipment *Equipments) error {
-	if equipment.IsDefault {
-		if err := keepOnlyFlag(tx, equipment, "is_default"); err != nil {
+func keepOnlyCommute(tx *gorm.DB, equipment *Equipments) error {
+	if equipment.IsCommute {
+		return keepOnlyFlag(tx, equipment, "is_commute")
+	}
+	return nil
+}
+
+// setDefaultSports makes an equipment the default one of its DefaultSports, and of those only: they stop
+// being the default of the other equipments of the user. Nil DefaultSports changes nothing.
+func setDefaultSports(tx *gorm.DB, equipment *Equipments) error {
+	if equipment.DefaultSports == nil {
+		return nil
+	}
+	sports := uniqueSorted(equipment.DefaultSports)
+	if err := tx.Where("equipment_id = ?", equipment.ID).Delete(&EquipmentDefault{}).Error; err != nil {
+		return err
+	}
+	if len(sports) > 0 {
+		err := tx.Where("user_id = ? AND sport IN ?", equipment.UserID, sports).Delete(&EquipmentDefault{}).Error
+		if err != nil {
+			return err
+		}
+		rows := make([]EquipmentDefault, len(sports))
+		for i, sport := range sports {
+			rows[i] = EquipmentDefault{UserID: uint(equipment.UserID), Sport: sport, EquipmentID: equipment.ID}
+		}
+		if err := tx.Create(&rows).Error; err != nil {
 			return err
 		}
 	}
-	if equipment.IsCommute {
-		return keepOnlyFlag(tx, equipment, "is_commute")
+	equipment.DefaultSports = sports
+	return nil
+}
+
+func uniqueSorted(values []string) []string {
+	sorted := slices.Clone(values)
+	slices.Sort(sorted)
+	return slices.Compact(sorted)
+}
+
+// defaultSports returns the default sports of the equipments of a user, sorted, by equipment
+func (db *DB) defaultSports(userID uint) (map[uuid.UUID][]string, error) {
+	var rows []EquipmentDefault
+	if err := db.Where("user_id = ?", userID).Order("sport").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	sports := make(map[uuid.UUID][]string)
+	for _, row := range rows {
+		sports[row.EquipmentID] = append(sports[row.EquipmentID], row.Sport)
+	}
+	return sports, nil
+}
+
+// withDefaultSports sets the DefaultSports of an equipment, empty without
+func (db *DB) withDefaultSports(equipment *Equipments) error {
+	sports, err := db.defaultSports(uint(equipment.UserID))
+	if err != nil {
+		return err
+	}
+	equipment.DefaultSports = sports[equipment.ID]
+	if equipment.DefaultSports == nil {
+		equipment.DefaultSports = []string{}
 	}
 	return nil
 }
@@ -87,23 +156,45 @@ func (db *DB) AssignCommuteEquipment(userID uint, equipmentID uuid.UUID) (int64,
 	return result.RowsAffected, result.Error
 }
 
-func (db *DB) GetDefaultEquipment(userID uint) Equipments {
-	var equipment Equipments
-	result := db.Where("user_id = ? AND is_default = ?", userID, true).First(&equipment)
-	if result.Error != nil {
-		return Equipments{}
-	}
-	return equipment
+// ActivitySports returns the sports of the activities of a user, sorted
+func (db *DB) ActivitySports(userID uint) ([]string, error) {
+	sports := []string{}
+	err := db.Table("activities").Where("user_id = ?", userID).Distinct("sport").Order("sport").
+		Pluck("sport", &sports).Error
+	return sports, err
 }
 
-// UpdateEquipment saves an equipment, it becomes the only default one of the user when IsDefault is set,
-// and the only commute one when IsCommute is set
+// UserSports returns the sports of the activities of a user and of their default equipments, sorted
+func (db *DB) UserSports(userID uint) ([]string, error) {
+	sports := []string{}
+	err := db.Raw("SELECT sport FROM activities WHERE user_id = ? UNION "+
+		"SELECT sport FROM equipment_defaults WHERE user_id = ? ORDER BY sport", userID, userID).
+		Pluck("sport", &sports).Error
+	return sports, err
+}
+
+// DefaultEquipment returns the default equipment of a sport of a user, nil when there is none
+func (db *DB) DefaultEquipment(userID uint, sport string) (*Equipments, error) {
+	var equipments []Equipments
+	err := db.Where("id = (SELECT equipment_id FROM equipment_defaults WHERE user_id = ? AND sport = ?)",
+		userID, sport).Limit(1).Find(&equipments).Error
+	if err != nil || len(equipments) == 0 {
+		return nil, err
+	}
+	return &equipments[0], nil
+}
+
+// UpdateEquipment saves an equipment, the default one of its DefaultSports (taken from the other
+// equipments of the user, nil keeps them), and the only commute one when IsCommute is set
 func (db *DB) UpdateEquipment(equipment *Equipments) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		if err := keepOnlyFlags(tx, equipment); err != nil {
+		if err := keepOnlyCommute(tx, equipment); err != nil {
 			return err
 		}
-		return tx.Omit("User").Save(equipment).Error
+		if err := tx.Omit("User").Save(equipment).Error; err != nil {
+			return err
+		}
+		return setDefaultSports(tx, equipment)
 	})
 }
 
@@ -118,8 +209,7 @@ func (db *DB) GetEquipment(uuid uuid.UUID) (Equipments, error) {
 	if err != nil {
 		return equipment, err
 	}
-	return equipment, nil
-
+	return equipment, db.withDefaultSports(&equipment)
 }
 
 // EquipmentStats is an equipment with the totals of its activities
@@ -136,7 +226,7 @@ type EquipmentStats struct {
 	DistanceSinceService float64 `json:"-"` // meters
 }
 
-// GetEquipmentsStats returns the equipments of a user with their totals, the default one first.
+// GetEquipmentsStats returns the equipments of a user with their totals, the default ones first.
 // The mileage is computed: the initial one plus the distance of the activities, in km.
 func (db *DB) GetEquipmentsStats(userID uint) ([]EquipmentStats, error) {
 	return db.equipmentsStats("e.user_id = ?", userID)
@@ -162,8 +252,24 @@ func (db *DB) equipmentsStats(where string, args ...interface{}) ([]EquipmentSta
 		"FROM equipments e LEFT JOIN activities a ON a.equipment_id = e.id "+
 		"LEFT JOIN (SELECT equipment_id, MAX(date) AS last_service FROM services GROUP BY equipment_id) s "+
 		"ON s.equipment_id = e.id "+
-		"WHERE "+where+" GROUP BY e.id ORDER BY e.is_default DESC, e.name", args...).Scan(&stats).Error
+		"WHERE "+where+" GROUP BY e.id ORDER BY "+
+		"EXISTS (SELECT 1 FROM equipment_defaults d WHERE d.equipment_id = e.id) DESC, e.name", args...).
+		Scan(&stats).Error
+	if err != nil {
+		return stats, err
+	}
+	sports := map[uint]map[uuid.UUID][]string{}
 	for i := range stats {
+		userID := uint(stats[i].UserID)
+		if _, ok := sports[userID]; !ok {
+			if sports[userID], err = db.defaultSports(userID); err != nil {
+				return stats, err
+			}
+		}
+		stats[i].DefaultSports = sports[userID][stats[i].ID]
+		if stats[i].DefaultSports == nil {
+			stats[i].DefaultSports = []string{}
+		}
 		stats[i].Mileage = stats[i].InitialMileage + int(math.Round(stats[i].Distance/1000))
 		stats[i].KmSinceService = int(math.Round(stats[i].DistanceSinceService / 1000))
 	}

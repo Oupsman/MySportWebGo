@@ -39,7 +39,7 @@ func TestErrorAnswers(t *testing.T) {
 	if err := os.WriteFile(notFit, []byte("these are not the records of a ride"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	_, invalidFit := activityService.AnalyzeTrimmed(notFit, models.Users{}, models.Equipments{}, 0, activityService.Analysis{})
+	_, invalidFit := activityService.AnalyzeTrimmed(notFit, models.Users{}, 0, activityService.Analysis{})
 	var invalid *activityService.InvalidFitError
 	if !errors.As(invalidFit, &invalid) {
 		t.Fatalf("a text file analysed: %v, want an InvalidFitError", invalidFit)

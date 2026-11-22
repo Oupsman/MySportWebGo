@@ -74,7 +74,7 @@ func TestBackfillWeights(t *testing.T) {
 		t.Fatal(err)
 	}
 	// as analysed before: 110 kg
-	old, err := AnalyzeTrimmed("../../prototypes/"+sameRouteFiles[0]+".fit", user, models.Equipments{}, 0,
+	old, err := AnalyzeTrimmed("../../prototypes/"+sameRouteFiles[0]+".fit", user, 0,
 		Analysis{Weight: func(time.Time, string) (float64, error) { return 110, nil }})
 	if err != nil {
 		t.Fatal(err)

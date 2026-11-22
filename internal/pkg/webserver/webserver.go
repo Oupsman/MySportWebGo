@@ -136,6 +136,7 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.GET("/user/readiness", middlewares.IsAuthorized(models.ActivitiesRead, models.HealthDatasRead), apicontrollers.GetReadiness)
 	apiv1.GET("/user/calendar", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.Calendar)
 	apiv1.GET("/user/records", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.Records)
+	apiv1.GET("/user/sports", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.UserSports)
 	apiv1.GET("/user", middlewares.IsAuthorized(), apicontrollers.GetUser)
 	apiv1.POST("/user", middlewares.IsAuthorized(), apicontrollers.UpdateUser)
 

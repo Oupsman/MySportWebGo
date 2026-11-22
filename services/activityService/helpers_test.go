@@ -14,7 +14,9 @@ import (
 // SumAnalyze analyses a whole FIT file, its training score computed with DefaultRestHR when the device
 // didn't record one: see AnalyzeTrimmed for the user's resting heart rate
 func SumAnalyze(filePath string, user models.Users, equipment models.Equipments) (models.Activity, error) {
-	return AnalyzeTrimmed(filePath, user, equipment, 0, Analysis{})
+	activity, err := AnalyzeTrimmed(filePath, user, 0, Analysis{})
+	activity.Equipment = equipment
+	return activity, err
 }
 
 // TracesSimilar tells if two simplified traces follow the same route

@@ -16,7 +16,7 @@ func TestEquipmentsStats(t *testing.T) {
 		}
 	}
 	bike := models.Equipments{Name: "Bike", UserID: int(user.ID), InitialMileage: 1000}
-	shoes := models.Equipments{Name: "Shoes", UserID: int(user.ID), IsDefault: true}
+	shoes := models.Equipments{Name: "Shoes", UserID: int(user.ID), DefaultSports: []string{"running"}}
 	unused := models.Equipments{Name: "Unused", UserID: int(user.ID)}
 	theirs := models.Equipments{Name: "Theirs", UserID: int(other.ID)}
 	for _, e := range []*models.Equipments{&bike, &shoes, &unused, &theirs} {

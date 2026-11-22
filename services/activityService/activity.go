@@ -51,9 +51,9 @@ type Analysis struct {
 }
 
 // AnalyzeTrimmed analyses a FIT file, ignoring what was recorded after trimEnd seconds since the start
-// (0 for the whole recording), see TrimActivity.
+// (0 for the whole recording), see TrimActivity. The activity has no equipment: see AssignDefaultEquipment.
 // At most MaxConcurrentAnalyses files are analysed at a time, ErrBusy after waiting QueueTimeout.
-func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipments, trimEnd float64,
+func AnalyzeTrimmed(filePath string, user models.Users, trimEnd float64,
 	opts Analysis) (models.Activity, error) {
 	release, err := analysisSlots.acquire(QueueTimeout)
 	if err != nil {
@@ -68,7 +68,7 @@ func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipme
 		metrics.Analyses.WithLabelValues(result).Inc()
 		metrics.AnalysisDuration.Observe(time.Since(start).Seconds())
 	}()
-	activity, err := analyzeTrimmed(filePath, user, equipment, trimEnd, opts)
+	activity, err := analyzeTrimmed(filePath, user, trimEnd, opts)
 	if err == nil {
 		result = "ok"
 	}
@@ -76,7 +76,7 @@ func AnalyzeTrimmed(filePath string, user models.Users, equipment models.Equipme
 }
 
 // analyzeTrimmed is AnalyzeTrimmed, holding an analysis slot
-func analyzeTrimmed(filePath string, user models.Users, equipment models.Equipments, trimEnd float64,
+func analyzeTrimmed(filePath string, user models.Users, trimEnd float64,
 	opts Analysis) (models.Activity, error) {
 	var activity models.Activity
 	f, err := os.Open(filePath)
@@ -95,7 +95,7 @@ func analyzeTrimmed(filePath string, user models.Users, equipment models.Equipme
 		if err != nil {
 			return models.Activity{}, &InvalidFitError{err}
 		}
-		activity, err = decodeFit(fit, user, equipment, trimEnd, opts)
+		activity, err = decodeFit(fit, user, trimEnd, opts)
 		if err != nil {
 			return models.Activity{}, err
 		}
@@ -114,7 +114,7 @@ func analyzeTrimmed(filePath string, user models.Users, equipment models.Equipme
 // 	return decodeFit(fit, user, equipment, 0, nil)
 // }
 
-func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, trimEnd float64,
+func decodeFit(fit *proto.FIT, user models.Users, trimEnd float64,
 	opts Analysis) (models.Activity, error) {
 	restHR, correction := opts.RestHR, opts.Correction
 	var activity models.Activity
@@ -144,7 +144,6 @@ func decodeFit(fit *proto.FIT, user models.Users, equipment models.Equipments, t
 		}
 	}
 	activity.User = user
-	activity.Equipment = equipment
 	activity.Lastimport = true
 	if len(fitActivity.Sessions) == 1 {
 		summarizeSession(&activity, fitActivity.Sessions[0])
