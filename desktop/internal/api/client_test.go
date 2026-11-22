@@ -74,17 +74,17 @@ func TestUpload(t *testing.T) {
 		{"bad.fit", Rejected, ""},
 	}
 	for _, tt := range tests {
-		result, err := client.Upload(ctx, tt.name, []byte("FIT"), 2, 5)
+		result, err := client.Upload(ctx, tt.name, []byte("FIT"), 2, 5, "")
 		if err != nil || result.Status != tt.status || result.ActivityID != tt.id {
 			t.Errorf("%s: %+v, %v", tt.name, result, err)
 		}
 	}
-	if _, err := client.Upload(ctx, "proxy.fit", []byte("FIT"), 2, 5); err == nil || errors.Is(err, ErrAuth) {
+	if _, err := client.Upload(ctx, "proxy.fit", []byte("FIT"), 2, 5, ""); err == nil || errors.Is(err, ErrAuth) {
 		t.Errorf("a failing proxy: %v, want an error to try again", err)
 	}
 
 	other, _ := New(server.URL, "msw_revoked")
-	if _, err := other.Upload(ctx, "new.fit", []byte("FIT"), 2, 5); !errors.Is(err, ErrAuth) {
+	if _, err := other.Upload(ctx, "new.fit", []byte("FIT"), 2, 5, ""); !errors.Is(err, ErrAuth) {
 		t.Errorf("a revoked token: %v, want ErrAuth", err)
 	}
 }

@@ -139,9 +139,10 @@ func (c *Client) Ping(ctx context.Context) error {
 	return nil
 }
 
-// Upload sends a FIT file. item and count number the files of a synchronization: the server resets
-// the "last import" mark of the activities at the first one.
-func (c *Client) Upload(ctx context.Context, name string, content []byte, item, count int) (UploadResult, error) {
+// Upload sends a FIT, GPX or TCX file (gzipped or not, the server converts them). item and count number the
+// files of a synchronization: the server resets the "last import" mark of the activities at the first one.
+// sport is the sport of a GPX or TCX file that doesn't name it, a FIT sport name, empty for none.
+func (c *Client) Upload(ctx context.Context, name string, content []byte, item, count int, sport string) (UploadResult, error) {
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
 	part, err := form.CreateFormFile("file", name)
@@ -151,6 +152,9 @@ func (c *Client) Upload(ctx context.Context, name string, content []byte, item, 
 	part.Write(content)
 	form.WriteField("item", strconv.Itoa(item))
 	form.WriteField("count", strconv.Itoa(count))
+	if sport != "" {
+		form.WriteField("sport", sport)
+	}
 	if err := form.Close(); err != nil {
 		return UploadResult{}, err
 	}

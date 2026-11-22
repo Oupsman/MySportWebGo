@@ -62,11 +62,13 @@ func run(remove bool) error {
 		return err
 	}
 	var activities []struct {
-		ID       string
-		UserUUID string
-		FilePath string
+		ID             string
+		UserUUID       string
+		FilePath       string
+		SourceFilePath string
 	}
-	err = db.Table("activities").Select("activities.id, users.uuid AS user_uuid, activities.file_path").
+	err = db.Table("activities").Select("activities.id, users.uuid AS user_uuid, activities.file_path, " +
+		"activities.source_file_path").
 		Joins("JOIN users ON users.id = activities.user_id").Scan(&activities).Error
 	if err != nil {
 		return err
@@ -85,6 +87,10 @@ func run(remove bool) error {
 		thumbnails[a.UserUUID+"/"+a.ID] = true
 		if a.FilePath != "" {
 			fitFiles[filepath.Clean(a.FilePath)] = true
+		}
+		// the GPX or TCX file a FIT file was converted from
+		if a.SourceFilePath != "" {
+			fitFiles[filepath.Clean(a.SourceFilePath)] = true
 		}
 	}
 

@@ -23,6 +23,7 @@ type Activity struct {
 	Date             time.Time         `json:"date"`
 	Filename         string            `json:"filename"`
 	FilePath         string            `json:"file_path"`
+	SourceFilePath   string            `json:"-" gorm:"not null;default:''"` // the GPX or TCX file FilePath was converted from, never served
 	Sport            string            `json:"sport"`
 	IsCommute        bool              `json:"is_commute"`
 	Co2              float32           `json:"co2"`
@@ -126,6 +127,7 @@ func (a *Activity) HidePrivate() {
 
 	a.Filename = ""
 	a.FilePath = ""
+	a.SourceFilePath = ""
 	a.Thumbnail = ""
 	a.User = Users{}
 	a.UserID = 0

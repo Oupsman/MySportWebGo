@@ -67,6 +67,16 @@ func UploadActivity(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
+	if uploadParams.Sport != "" && !activityService.IsSportName(uploadParams.Sport) {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "unknown sport " + strconv.Quote(uploadParams.Sport)})
+		return
+	}
+	// a GPX or TCX file becomes a FIT file, a gzipped one is decompressed
+	prepared, err := activityService.PrepareUpload(tmpPath, file.Filename, uploadParams.Sport)
+	if err != nil {
+		analysisError(c, err)
+		return
+	}
 	activity, err := activityService.AnalyzeTrimmed(tmpPath, user, 0, activityService.Analysis{
 		RestHR:     activityService.UserRestHR(&db, user.ID),
 		Correction: activityService.DeviceCorrection(&db, user.ID),
@@ -114,13 +124,29 @@ func UploadActivity(c *gin.Context) {
 	}
 	activity.ThumbnailVersion = activityService.ThumbnailVersion
 
-	// the FIT file keeps its name, prefixed by the activity id when another file has it
+	// the FIT file keeps its name, prefixed by the activity id when another file has it; the GPX or TCX
+	// file it was converted from is kept beside it, never served
 	store := func(activity *models.Activity) error {
-		activity.FilePath = filepath.Join(baseDir, activity.Filename)
-		if _, err := os.Stat(activity.FilePath); err == nil {
-			activity.FilePath = filepath.Join(baseDir, activity.ID.String()+"_"+activity.Filename)
+		prefix := ""
+		for _, name := range []string{prepared.FITName, prepared.SourceName} {
+			if _, err := os.Stat(filepath.Join(baseDir, name)); name != "" && err == nil {
+				prefix = activity.ID.String() + "_"
+			}
 		}
-		return os.Rename(tmpPath, activity.FilePath)
+		activity.FilePath = filepath.Join(baseDir, prefix+prepared.FITName)
+		if prepared.Source != nil {
+			activity.SourceFilePath = filepath.Join(baseDir, prefix+prepared.SourceName)
+			if err := os.WriteFile(activity.SourceFilePath, prepared.Source, 0o660); err != nil {
+				return err
+			}
+		}
+		if err := os.Rename(tmpPath, activity.FilePath); err != nil {
+			if activity.SourceFilePath != "" {
+				os.Remove(activity.SourceFilePath)
+			}
+			return err
+		}
+		return nil
 	}
 	err = activityService.CreateActivity(&db, &activity, store)
 	if err != nil {

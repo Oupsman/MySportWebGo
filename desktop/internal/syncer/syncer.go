@@ -356,7 +356,8 @@ func (m *Manager) importArchive(ctx context.Context, c *cancellable) {
 		case <-ctx.Done():
 		}
 	}()
-	m.syncDevice(ctx, m.Config(), c.Device, false)
+	// asked by the user: the files the server refused are sent again (a server updated since)
+	m.syncDevice(ctx, m.Config(), c.Device, true)
 	m.mu.Lock()
 	cancel := m.cancels[c.ID()]
 	delete(m.cancels, c.ID())
@@ -408,7 +409,7 @@ func (m *Manager) syncDevice(ctx context.Context, cfg config.Config, d device.De
 type counts struct {
 	uploaded, duplicates, rejected int
 	titled                         int    // titles set from the archive
-	skipped                        int    // files of an archive the server can't read (GPX, TCX)
+	skipped                        int    // zips inside an archive that can't be read
 	titlesOff                      string // why the titles stopped being set, empty when they weren't
 }
 
@@ -426,7 +427,7 @@ func (c counts) String() string {
 		text += ", titles not set: " + c.titlesOff
 	}
 	if c.skipped > 0 {
-		text += fmt.Sprintf(", %d GPX/TCX files skipped (the server reads FIT files only)", c.skipped)
+		text += fmt.Sprintf(", %d zips inside the archive couldn't be read", c.skipped)
 	}
 	return text
 }
@@ -446,6 +447,7 @@ func (m *Manager) upload(ctx context.Context, cfg config.Config, d device.Device
 		c.skipped = s.Skipped()
 	}
 	titled, _ := d.(device.Titled)
+	sporting, _ := d.(device.Sporting)
 
 	// the maximum age is the one of the devices: importing an archive is importing the past
 	var cutoff time.Time
@@ -496,7 +498,11 @@ func (m *Manager) upload(ctx context.Context, cfg config.Config, d device.Device
 				return c, fmt.Errorf("saving the state: %w", err)
 			}
 		} else {
-			result, err := m.send(ctx, client, d.Name(), f, buf.Bytes(), sent, len(pending))
+			sport := ""
+			if sporting != nil {
+				sport = sporting.Sport(f)
+			}
+			result, err := m.send(ctx, client, d.Name(), f, buf.Bytes(), sent, len(pending), sport)
 			if err != nil {
 				if errors.Is(err, api.ErrAuth) {
 					return c, fmt.Errorf("%w, check the token in the settings", err)
@@ -542,9 +548,9 @@ func (m *Manager) upload(ctx context.Context, cfg config.Config, d device.Device
 
 // send uploads a file, waiting for a busy server and sending it again
 func (m *Manager) send(ctx context.Context, client *api.Client, source string, f device.File, content []byte,
-	item, count int) (api.UploadResult, error) {
+	item, count int, sport string) (api.UploadResult, error) {
 	for attempt := 0; ; attempt++ {
-		result, err := client.Upload(ctx, f.UploadName(), content, item, count)
+		result, err := client.Upload(ctx, f.UploadName(), content, item, count, sport)
 		var busy *api.BusyError
 		if !errors.As(err, &busy) || attempt == maxBusyRetries {
 			return result, err

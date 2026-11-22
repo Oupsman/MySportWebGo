@@ -37,7 +37,8 @@ func removeUserFile(userUUID uuid.UUID, path string) error {
 	return nil
 }
 
-// DeleteActivity deletes an activity, then its thumbnail and its FIT file. The FIT file is kept while
+// DeleteActivity deletes an activity, then its thumbnail, its FIT file and the GPX or TCX file it was
+// converted from. The FIT file is kept while
 // other activities use it: uploading a file again creates a new activity with the same path.
 // Files that can't be removed are logged: the activity is gone, they only waste space.
 func DeleteActivity(db *models.DB, activity *models.Activity, logger zerolog.Logger) error {
@@ -59,6 +60,11 @@ func DeleteActivity(db *models.DB, activity *models.Activity, logger zerolog.Log
 	if others == 0 {
 		if err := removeUserFile(userUUID, activity.FilePath); err != nil {
 			logger.Warn().Err(err).Str("activity", activity.ID.String()).Msg("FIT file not removed")
+		}
+		if activity.SourceFilePath != "" {
+			if err := removeUserFile(userUUID, activity.SourceFilePath); err != nil {
+				logger.Warn().Err(err).Str("activity", activity.ID.String()).Msg("GPX/TCX file not removed")
+			}
 		}
 	}
 	return nil

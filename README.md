@@ -10,7 +10,9 @@ This repository hosts the backend of the application. Frontend is available here
 
 For now the app can :
 
-* import and parse FIT files coming from various devices
+* import and parse FIT files coming from various devices, and GPX and TCX files (gzipped or not): they are
+  converted to FIT files, the sport of a GPX file that doesn't name it chosen at the upload. The GPX or TCX file
+  is kept beside the FIT file, never served
 * handle multiple users BUT the social side of the app is yet to be implemented
 * handle multiple sports (running, biking, hiking, swimming)
 * provide a ton of datas about the sessions (speed, distance, elevation, etc)

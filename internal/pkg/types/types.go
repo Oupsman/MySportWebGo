@@ -294,6 +294,8 @@ type ActivityUpload struct {
 	Path  string                `form:"path"`
 	Item  uint16                `form:"item"`
 	Count uint16                `form:"count"`
+	// Sport is the sport of a GPX or TCX file that doesn't name it (a FIT sport name), ignored for a FIT file
+	Sport string `form:"sport"`
 }
 
 // DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).

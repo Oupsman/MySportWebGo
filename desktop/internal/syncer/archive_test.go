@@ -24,8 +24,9 @@ func writeStravaExport(t *testing.T) string {
 	var buf bytes.Buffer
 	z := zip.NewWriter(&buf)
 	for name, content := range map[string][]byte{
-		"activities.csv": []byte("Activity ID,Activity Name,Filename\n" +
-			"1,Col du Galibier,activities/1.fit.gz\n2,Recovery jog,activities/2.fit\n3,Walk,activities/3.gpx\n"),
+		"activities.csv": []byte("Activity ID,Activity Name,Activity Type,Filename\n" +
+			"1,Col du Galibier,Ride,activities/1.fit.gz\n2,Recovery jog,Run,activities/2.fit\n" +
+			"3,Lunch walk,Walk,activities/3.gpx\n"),
 		"activities/1.fit.gz": gz.Bytes(),
 		"activities/2.fit":    []byte("run"),
 		"activities/3.gpx":    []byte("<gpx/>"),
@@ -68,18 +69,23 @@ func TestArchiveTitlesAndBusy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.uploaded != 2 || c.titled != 2 || c.skipped != 1 || c.rejected != 0 {
+	if c.uploaded != 3 || c.titled != 3 || c.skipped != 0 || c.rejected != 0 {
 		t.Errorf("counts %+v", c)
 	}
-	// sent decompressed, without .gz
-	if server.titles["1.fit"] != "Col du Galibier" || server.titles["2.fit"] != "Recovery jog" {
+	// a FIT file sent decompressed, without .gz; a GPX file gzipped
+	if server.titles["1.fit"] != "Col du Galibier" || server.titles["2.fit"] != "Recovery jog" ||
+		server.titles["3.gpx.gz"] != "Lunch walk" {
 		t.Errorf("titles %v", server.titles)
+	}
+	// the sports of Strava, for the files that don't name theirs
+	if server.sports["3.gpx.gz"] != "walking" || server.sports["1.fit"] != "cycling" {
+		t.Errorf("sports %v", server.sports)
 	}
 	// the server's Retry-After, twice
 	if len(*waits) != 2 || (*waits)[0] != 7*time.Second {
 		t.Errorf("waits %v", *waits)
 	}
-	if !strings.Contains(c.String(), "2 titles set") || !strings.Contains(c.String(), "1 GPX/TCX files skipped") {
+	if !strings.Contains(c.String(), "3 titles set") {
 		t.Errorf("summary %q", c.String())
 	}
 
@@ -103,7 +109,7 @@ func TestArchiveWithoutTitlePermission(t *testing.T) {
 		t.Fatal(err)
 	}
 	// the activities are imported, the titles stop at the first refusal
-	if c.uploaded != 2 || c.titled != 0 || !strings.Contains(c.String(), "activities:write") {
+	if c.uploaded != 3 || c.titled != 0 || !strings.Contains(c.String(), "activities:write") {
 		t.Errorf("counts %+v: %s", c, c.String())
 	}
 	if len(server.titles) != 0 {
@@ -185,5 +191,24 @@ func TestImportArchiveCancel(t *testing.T) {
 	if err := m.ImportArchive(path); err != nil {
 		t.Fatal(err)
 	}
-	waitEvent(t, m, "imported: 2 uploaded")
+	waitEvent(t, m, "imported: 3 uploaded")
+}
+
+func TestArchiveRetriesRefused(t *testing.T) {
+	m, server, _ := setup(t)
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	go m.worker(ctx)
+	path := writeStravaExport(t)
+	// a server refusing the GPX files, as one older than their conversion
+	server.refuseGPX = true
+	if err := m.ImportArchive(path); err != nil {
+		t.Fatal(err)
+	}
+	waitEvent(t, m, "imported: 2 uploaded, 0 already on the server, 1 refused")
+	server.refuseGPX = false
+	if err := m.ImportArchive(path); err != nil {
+		t.Fatal(err)
+	}
+	waitEvent(t, m, "imported: 1 uploaded, 0 already on the server, 0 refused")
 }

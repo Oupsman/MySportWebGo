@@ -300,6 +300,7 @@ func TrimActivity(db *models.DB, activity *models.Activity, trimEnd float64, log
 	trimmed.Title = activity.Title
 	trimmed.Filename = activity.Filename
 	trimmed.FilePath = activity.FilePath
+	trimmed.SourceFilePath = activity.SourceFilePath
 	trimmed.IsCommute = activity.IsCommute
 	trimmed.Timezone = activity.Timezone
 	trimmed.Masked = activity.Masked

@@ -56,6 +56,9 @@ type fakeServer struct {
 	titles   map[string]string // the titles set, by the name of the file of the activity
 	names    map[string]string // the activity ids answered, to the name of their file
 	canTitle bool              // the token holds activities:write
+	sports   map[string]string // the sport field of the uploads, by file name
+	// refuseGPX refuses the GPX files, as a server older than their conversion
+	refuseGPX bool
 }
 
 func (s *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -89,6 +92,12 @@ func (s *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	content, _ := io.ReadAll(file)
 	s.uploads++
+	if sport := r.FormValue("sport"); sport != "" {
+		if s.sports == nil {
+			s.sports = map[string]string{}
+		}
+		s.sports[header.Filename] = sport
+	}
 	if s.busy > 0 {
 		s.busy--
 		w.Header().Set("Retry-After", "7")
@@ -97,6 +106,9 @@ func (s *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
+	case s.refuseGPX && strings.Contains(header.Filename, ".gpx"):
+		w.WriteHeader(http.StatusBadRequest)
+		io.WriteString(w, `{"error":"invalid FIT"}`)
 	case strings.Contains(string(content), "bad"):
 		w.WriteHeader(http.StatusBadRequest)
 		io.WriteString(w, `{"error":"invalid FIT"}`)

@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -100,16 +101,17 @@ func TestArchive(t *testing.T) {
 	}
 	slices.Sort(paths)
 	want := []string{
-		"activities/1.fit.gz", "activities/2.fit", "activities/4.fit.gz", "activities/broken.fit.gz",
-		"activities/huge.fit.gz",
-		"export/UploadedFiles_Part1.zip!/a.fit", "export/UploadedFiles_Part1.zip!/sub/b.FIT",
+		"activities/1.fit.gz", "activities/2.fit", "activities/3.gpx", "activities/4.fit.gz",
+		"activities/broken.fit.gz", "activities/huge.fit.gz",
+		"export/UploadedFiles_Part1.zip!/a.fit", "export/UploadedFiles_Part1.zip!/c.tcx.gz",
+		"export/UploadedFiles_Part1.zip!/sub/b.FIT",
 	}
 	if !slices.Equal(paths, want) {
 		t.Errorf("files\n%v\nwant\n%v", paths, want)
 	}
-	// the GPX, the TCX of the zip inside, and the broken zip
-	if a.Skipped() != 3 {
-		t.Errorf("%d skipped, want 3", a.Skipped())
+	// the broken zip
+	if a.Skipped() != 1 {
+		t.Errorf("%d skipped, want 1", a.Skipped())
 	}
 
 	byPath := map[string]File{}
@@ -130,6 +132,38 @@ func TestArchive(t *testing.T) {
 			t.Errorf("%s: %q, want %q", p, buf.String(), want)
 		}
 	}
+	// the GPX and TCX files are sent gzipped: compressed here, as they are when already gzipped
+	for p, want := range map[string]string{
+		"activities/3.gpx":                         "<gpx/>",
+		"export/UploadedFiles_Part1.zip!/c.tcx.gz": "tcx",
+	} {
+		var buf bytes.Buffer
+		if err := a.Copy(ctx, byPath[p], &buf); err != nil {
+			t.Fatalf("%s: %v", p, err)
+		}
+		r, err := gzip.NewReader(&buf)
+		if err != nil {
+			t.Fatalf("%s isn't sent gzipped: %v", p, err)
+		}
+		content, _ := io.ReadAll(r)
+		if string(content) != want {
+			t.Errorf("%s: %q, want %q", p, content, want)
+		}
+	}
+	if got := byPath["activities/3.gpx"].UploadName(); got != "3.gpx.gz" {
+		t.Errorf("GPX upload name %q", got)
+	}
+	if got := byPath["export/UploadedFiles_Part1.zip!/c.tcx.gz"].UploadName(); got != "c.tcx.gz" {
+		t.Errorf("TCX upload name %q", got)
+	}
+	for p, want := range map[string]string{
+		"activities/1.fit.gz": "cycling", "activities/2.fit": "running", "activities/3.gpx": "walking",
+		"export/UploadedFiles_Part1.zip!/a.fit": "",
+	} {
+		if got := a.Sport(byPath[p]); got != want {
+			t.Errorf("sport of %s: %q, want %q", p, got, want)
+		}
+	}
 	for _, p := range []string{"activities/broken.fit.gz", "activities/huge.fit.gz"} {
 		var unreadable *UnreadableError
 		if err := a.Copy(ctx, byPath[p], &bytes.Buffer{}); !errors.As(err, &unreadable) {
@@ -140,6 +174,7 @@ func TestArchive(t *testing.T) {
 	for p, want := range map[string]string{
 		"activities/1.fit.gz":                   "Col du Galibier",
 		"activities/2.fit":                      "Recovery jog",
+		"activities/3.gpx":                      "Phone walk",
 		"activities/4.fit.gz":                   "", // no name in the export
 		"export/UploadedFiles_Part1.zip!/a.fit": "",
 	} {

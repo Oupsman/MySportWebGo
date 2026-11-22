@@ -22,7 +22,7 @@ func TestUploadBusy(t *testing.T) {
 			w.Write([]byte(`{"error":"busy"}`))
 		}))
 		client, _ := New(server.URL, "msw_x")
-		_, err := client.Upload(context.Background(), "a.fit", []byte("x"), 0, 1)
+		_, err := client.Upload(context.Background(), "a.fit", []byte("x"), 0, 1, "")
 		var busy *BusyError
 		if !errors.As(err, &busy) || busy.RetryAfter != want {
 			t.Errorf("Retry-After %q: %v, want a wait of %s", header, err, want)

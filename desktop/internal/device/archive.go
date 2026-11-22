@@ -2,6 +2,7 @@ package device
 
 import (
 	"archive/zip"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/csv"
@@ -16,14 +17,15 @@ import (
 	"sync"
 )
 
-// Archive is the export of an account elsewhere (Strava, Garmin Connect…): a zip holding FIT files,
-// gzipped or not, at any depth, or inside the zips it holds (one level). It is read where it is: a FIT
-// file is decompressed when it is sent, a zip inside to a temporary file while its files are read.
+// Archive is the export of an account elsewhere (Strava, Garmin Connect…): a zip holding FIT, GPX and TCX
+// files, gzipped or not, at any depth, or inside the zips it holds (one level). It is read where it is: a
+// FIT file is decompressed when it is sent, a GPX or TCX file sent gzipped (the server converts them), a zip
+// inside decompressed to a temporary file while its files are read.
 const Archive Kind = "archive"
 
 const (
-	// MaxFITSize is the largest FIT file read from an archive, decompressed: the server refuses larger
-	// uploads (25 MB), and a decompression bomb stops there
+	// MaxFITSize is the largest file sent from an archive (a FIT file decompressed, a GPX or TCX file
+	// gzipped): the server refuses larger uploads (25 MB), and a decompression bomb stops there
 	MaxFITSize = 25 << 20
 	// maxNestedSize is the largest zip inside the archive, decompressed to a temporary file
 	maxNestedSize = 8 << 30
@@ -45,9 +47,15 @@ type Titled interface {
 	Title(f File) string
 }
 
-// Skipping is a device holding activity files the server can't read (GPX, TCX), not sent
+// Skipping is a device holding files that can't be read, not sent: the broken zips inside an archive
 type Skipping interface {
 	Skipped() int
+}
+
+// Sporting is a device knowing the sports of its activities, from elsewhere: the sport of a GPX file
+// that doesn't name it, from the activities.csv of a Strava export
+type Sporting interface {
+	Sport(f File) string
 }
 
 // ZipArchive is an Archive device
@@ -59,6 +67,7 @@ type ZipArchive struct {
 	zip     *zip.ReadCloser
 	entries map[string]archiveEntry // by File.Path
 	titles  map[string]string       // by File.Path
+	sports  map[string]string       // FIT sport names, by File.Path
 	skipped int
 	nested  *nestedZip // the zip inside being read
 }
@@ -67,6 +76,7 @@ type archiveEntry struct {
 	container string // the path of the zip holding it in the archive, empty for the archive itself
 	name      string // its path in its zip
 	gzipped   bool
+	track     bool // a GPX or TCX file, sent gzipped
 }
 
 type nestedZip struct {
@@ -100,7 +110,15 @@ func (a *ZipArchive) Title(f File) string {
 	return a.titles[f.Path]
 }
 
-// Skipped returns the number of GPX and TCX files found by Files, not sent: the server reads FIT files
+// Sport returns the sport of an activity in the activities.csv of a Strava export (a FIT sport name), empty
+// without or for a sport MySportWeb doesn't know
+func (a *ZipArchive) Sport(f File) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.sports[f.Path]
+}
+
+// Skipped returns the number of zips inside the archive that couldn't be read
 func (a *ZipArchive) Skipped() int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -137,18 +155,18 @@ func (a *ZipArchive) open() (*zip.Reader, error) {
 	return &a.zip.Reader, nil
 }
 
-// fileKind tells what a file of an archive is
-func fileKind(name string) (fit, gzipped, skipped, nested bool) {
+// fileKind tells what a file of an archive is: an activity (FIT, or a GPX or TCX track), gzipped or not, or
+// a zip holding more
+func fileKind(name string) (activity, gzipped, track, nested bool) {
 	lower := strings.ToLower(name)
+	gzipped = strings.HasSuffix(lower, ".gz")
+	lower = strings.TrimSuffix(lower, ".gz")
 	switch {
 	case strings.HasSuffix(lower, ".fit"):
-		return true, false, false, false
-	case strings.HasSuffix(lower, ".fit.gz"):
-		return true, true, false, false
-	case strings.HasSuffix(lower, ".gpx"), strings.HasSuffix(lower, ".gpx.gz"),
-		strings.HasSuffix(lower, ".tcx"), strings.HasSuffix(lower, ".tcx.gz"):
-		return false, false, true, false
-	case strings.HasSuffix(lower, ".zip"):
+		return true, gzipped, false, false
+	case strings.HasSuffix(lower, ".gpx"), strings.HasSuffix(lower, ".tcx"):
+		return true, gzipped, true, false
+	case strings.HasSuffix(lower, ".zip") && !gzipped:
 		return false, false, false, true
 	}
 	return false, false, false, false
@@ -162,23 +180,21 @@ func (a *ZipArchive) Files(ctx context.Context) ([]File, error) {
 	if err != nil {
 		return nil, err
 	}
-	a.entries, a.titles, a.skipped = map[string]archiveEntry{}, map[string]string{}, 0
+	a.entries, a.titles, a.sports, a.skipped = map[string]archiveEntry{}, map[string]string{}, map[string]string{}, 0
 	var files []File
 	add := func(container string, f *zip.File) {
-		fit, gzipped, skipped, _ := fileKind(f.Name)
-		switch {
-		case skipped:
-			a.skipped++
-		case fit && !f.FileInfo().IsDir():
-			p := f.Name
-			if container != "" {
-				p = container + nestedSeparator + f.Name
-			}
-			a.entries[p] = archiveEntry{container: container, name: f.Name, gzipped: gzipped}
-			files = append(files, File{Path: p, Size: int64(f.UncompressedSize64), ModTime: f.Modified})
+		activity, gzipped, track, _ := fileKind(f.Name)
+		if !activity || f.FileInfo().IsDir() {
+			return
 		}
+		p := f.Name
+		if container != "" {
+			p = container + nestedSeparator + f.Name
+		}
+		a.entries[p] = archiveEntry{container: container, name: f.Name, gzipped: gzipped, track: track}
+		files = append(files, File{Path: p, Size: int64(f.UncompressedSize64), ModTime: f.Modified})
 	}
-	var titles map[string]string
+	var csvRows map[string]stravaActivity
 	for _, f := range r.File {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -196,7 +212,7 @@ func (a *ZipArchive) Files(ctx context.Context) ([]File, error) {
 				add(f.Name, g)
 			}
 		case isStravaActivities(f.Name):
-			if titles, err = readStravaTitles(f); err != nil {
+			if csvRows, err = readStravaActivities(f); err != nil {
 				return nil, fmt.Errorf("%s: %w", f.Name, err)
 			}
 		default:
@@ -204,9 +220,15 @@ func (a *ZipArchive) Files(ctx context.Context) ([]File, error) {
 		}
 	}
 	a.closeNested()
-	for p, title := range titles {
-		if _, ok := a.entries[p]; ok {
-			a.titles[p] = title
+	for p, row := range csvRows {
+		if _, ok := a.entries[p]; !ok {
+			continue
+		}
+		if row.title != "" {
+			a.titles[p] = row.title
+		}
+		if sport := stravaSport(row.activityType); sport != "" {
+			a.sports[p] = sport
 		}
 	}
 	// the files of a zip inside together: each is decompressed once
@@ -303,6 +325,9 @@ func (a *ZipArchive) Copy(ctx context.Context, f File, w io.Writer) error {
 		return unreadable(err)
 	}
 	defer src.Close()
+	if entry.track {
+		return copyTrack(src, entry.gzipped, w, unreadable)
+	}
 	var content io.Reader = src
 	if entry.gzipped {
 		gz, err := gzip.NewReader(src)
@@ -322,15 +347,61 @@ func (a *ZipArchive) Copy(ctx context.Context, f File, w io.Writer) error {
 	return nil
 }
 
+// copyTrack writes a GPX or TCX file gzipped: the server decompresses it, and a GPX file is 5 to 10 times
+// larger than its FIT file, too large for an upload once a day long
+func copyTrack(src io.Reader, gzipped bool, w io.Writer, unreadable func(error) error) error {
+	var out limitedWriter
+	out.max = MaxFITSize
+	if gzipped {
+		if _, err := io.Copy(&out, src); err != nil {
+			return unreadable(err)
+		}
+	} else {
+		gz := gzip.NewWriter(&out)
+		if _, err := io.Copy(gz, src); err != nil {
+			return unreadable(err)
+		}
+		if err := gz.Close(); err != nil {
+			return unreadable(err)
+		}
+	}
+	if out.over {
+		return unreadable(fmt.Errorf("larger than %d MB gzipped, the server refuses it", MaxFITSize>>20))
+	}
+	_, err := w.Write(out.buf.Bytes())
+	return err
+}
+
+// limitedWriter keeps up to max bytes, then only notes it got more
+type limitedWriter struct {
+	buf  bytes.Buffer
+	max  int
+	over bool
+}
+
+func (l *limitedWriter) Write(p []byte) (int, error) {
+	if l.over || l.buf.Len()+len(p) > l.max {
+		l.over = true
+		return 0, errors.New("too large")
+	}
+	return l.buf.Write(p)
+}
+
 // isStravaActivities tells whether a file of an archive is the activities.csv of a Strava export, at its root
 func isStravaActivities(name string) bool {
 	return strings.EqualFold(name, "activities.csv")
 }
 
-// readStravaTitles returns the titles of the activities.csv of a Strava export, by the path of their file
+// stravaActivity is a row of the activities.csv of a Strava export
+type stravaActivity struct {
+	title        string
+	activityType string // Ride, Run, Walk…
+}
+
+// readStravaActivities returns the rows of the activities.csv of a Strava export, by the path of their file
 // in the export (its Filename column, "activities/123.fit.gz"). Its first row names the columns; without
-// the columns of the file and of the title, there are none.
-func readStravaTitles(f *zip.File) (map[string]string, error) {
+// the column of the file, there are none.
+func readStravaActivities(f *zip.File) (map[string]stravaActivity, error) {
 	src, err := f.Open()
 	if err != nil {
 		return nil, err
@@ -358,34 +429,64 @@ func readStravaTitles(f *zip.File) (map[string]string, error) {
 		}
 		return -1
 	}
-	fileColumn, titleColumn := column("Filename"), column("Activity Name")
-	if fileColumn < 0 || titleColumn < 0 {
+	fileColumn, titleColumn, typeColumn := column("Filename"), column("Activity Name"), column("Activity Type")
+	if fileColumn < 0 {
 		return nil, nil
 	}
-	titles := map[string]string{}
+	cell := func(record []string, i int) string {
+		if i < 0 || i >= len(record) {
+			return ""
+		}
+		return strings.TrimSpace(record[i])
+	}
+	rows := map[string]stravaActivity{}
 	for {
 		record, err := r.Read()
 		if errors.Is(err, io.EOF) {
-			return titles, nil
+			return rows, nil
 		}
 		if err != nil {
 			return nil, err
 		}
-		if fileColumn >= len(record) || titleColumn >= len(record) {
-			continue
-		}
-		name := strings.TrimSpace(record[fileColumn])
-		title := strings.TrimSpace(record[titleColumn])
-		if name != "" && title != "" {
-			titles[path.Clean(strings.ReplaceAll(name, "\\", "/"))] = title
+		if name := cell(record, fileColumn); name != "" {
+			rows[path.Clean(strings.ReplaceAll(name, "\\", "/"))] = stravaActivity{
+				title: cell(record, titleColumn), activityType: cell(record, typeColumn)}
 		}
 	}
 }
 
-// UploadName is the name a file is sent with: without .gz, it is sent decompressed
+// stravaSports are the FIT names of the sports of Strava ("Activity Type", with or without spaces)
+var stravaSports = map[string]string{
+	"ride": "cycling", "virtualride": "cycling", "gravelride": "cycling", "mountainbikeride": "cycling",
+	"handcycle": "cycling", "velomobile": "cycling",
+	"ebikeride": "e_biking", "emountainbikeride": "e_biking",
+	"run": "running", "trailrun": "running", "virtualrun": "running",
+	"walk": "walking", "hike": "hiking", "swim": "swimming",
+	"alpineski": "alpine_skiing", "backcountryski": "alpine_skiing", "nordicski": "cross_country_skiing",
+	"snowboard": "snowboarding", "snowshoe": "snowshoeing",
+	"rowing": "rowing", "virtualrow": "rowing", "kayaking": "kayaking", "canoeing": "paddling",
+	"standuppaddling": "stand_up_paddleboarding", "surfing": "surfing", "kitesurf": "kitesurfing",
+	"windsurf": "windsurfing", "sail": "sailing",
+	"inlineskate": "inline_skating", "iceskate": "ice_skating", "rockclimbing": "rock_climbing", "golf": "golf",
+	"weighttraining": "training", "workout": "training", "crossfit": "training",
+	"elliptical": "fitness_equipment", "stairstepper": "fitness_equipment",
+}
+
+// stravaSport returns the FIT name of a sport of Strava, empty for one MySportWeb doesn't know
+func stravaSport(activityType string) string {
+	key := strings.ToLower(strings.NewReplacer(" ", "", "-", "", "_", "").Replace(activityType))
+	return stravaSports[key]
+}
+
+// UploadName is the name a file is sent with: a FIT file decompressed, without .gz; a GPX or TCX file
+// gzipped, with .gz
 func (f File) UploadName() string {
 	name := f.Name()
-	if strings.HasSuffix(strings.ToLower(name), ".gz") {
+	_, gzipped, track, _ := fileKind(name)
+	switch {
+	case track && !gzipped:
+		return name + ".gz"
+	case !track && gzipped:
 		return name[:len(name)-len(".gz")]
 	}
 	return name
