@@ -382,7 +382,7 @@ func GetUUID(param string) (uuid.UUID, error) {
 	return uuid.Parse(param)
 }
 
-// Haversine computes the distance between two points at the surface of the Earth. Returns the value in meters
+// Haversine computes the distance between two points at the surface of the Earth, in kilometers
 
 func Haversine(p, q types.GpsPoint) float64 {
 	latp := degreesToRadians(p.Lat)

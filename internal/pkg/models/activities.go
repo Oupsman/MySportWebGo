@@ -529,3 +529,54 @@ func (db *DB) GetMediaAccess(id uuid.UUID) (MediaAccess, error) {
 		Where("activities.id = ?", id).Take(&access).Error
 	return access, err
 }
+
+// HeatmapTrace is an activity on the heatmap of its user: its simplified trace (about 10 m)
+type HeatmapTrace struct {
+	ID                  uuid.UUID
+	Title               string
+	Date                time.Time
+	Sport               string
+	Distance            float64
+	SimplifiedGpsPoints types.GpsPointArray
+}
+
+// heatmapQuery selects the activities of a user with a trace, of sports (none: all), between from (included)
+// and to (excluded), nil for no bound
+func (db *DB) heatmapQuery(userID uint, sports []string, from, to *time.Time) *gorm.DB {
+	// the trace is JSON in bytea: longer than "null" or "[]" when it has points
+	query := db.Model(&Activity{}).Where("user_id = ? AND octet_length(simplified_gps_points) > 4", userID)
+	if len(sports) > 0 {
+		query = query.Where("sport IN ?", sports)
+	}
+	if from != nil {
+		query = query.Where("date >= ?", *from)
+	}
+	if to != nil {
+		query = query.Where("date < ?", *to)
+	}
+	return query
+}
+
+// GetHeatmapTraces returns the traces of the activities of the heatmap of a user, oldest first
+func (db *DB) GetHeatmapTraces(userID uint, sports []string, from, to *time.Time) ([]HeatmapTrace, error) {
+	var traces []HeatmapTrace
+	err := db.heatmapQuery(userID, sports, from, to).
+		Select("id", "title", "date", "sport", "distance", "simplified_gps_points").Order("date").
+		Scan(&traces).Error
+	return traces, err
+}
+
+// HeatmapVersion tells the version of the traces of a heatmap: their number and their latest change; the
+// same version, the same traces
+func (db *DB) HeatmapVersion(userID uint, sports []string, from, to *time.Time) (int64, time.Time, error) {
+	var version struct {
+		Count  int64
+		Latest *time.Time
+	}
+	err := db.heatmapQuery(userID, sports, from, to).Select("COUNT(*) AS count, MAX(updated_at) AS latest").
+		Scan(&version).Error
+	if version.Latest == nil {
+		return version.Count, time.Time{}, err
+	}
+	return version.Count, *version.Latest, err
+}

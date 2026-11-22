@@ -591,18 +591,10 @@ func FTP(c *gin.Context) {
 		"zone_limits": activityService.PowerZoneLimits})
 }
 
-// PowerCurve returns the best measured power of the activities of a sport (?sport=, cycling by default) of
-// the user over each duration of a period, ?from=YYYY-MM-DD&to=YYYY-MM-DD in their timezone, both included
-// and optional (all the activities before, or since), with the critical power fitted on it and, for the
-// rides, the current FTP
-func PowerCurve(c *gin.Context) {
-	db := c.MustGet("App").(*app.App).DB
-	user, location := currentUserLocation(c)
-	sport := c.DefaultQuery("sport", models.FTPSport)
-	if !activityService.IsSportName(sport) {
-		c.JSON(400, gin.H{"error": "unknown sport " + strconv.Quote(sport)})
-		return
-	}
+// periodQuery reads the period of ?from=YYYY-MM-DD&to=YYYY-MM-DD, days of location both included and
+// optional: from included, to excluded (the midnight after its day), nil for no bound. False, with the answer
+// sent, for an invalid one.
+func periodQuery(c *gin.Context, location *time.Location) (*time.Time, *time.Time, bool) {
 	day := func(name string) (*time.Time, bool) {
 		value := c.Query(name)
 		if value == "" {
@@ -617,11 +609,11 @@ func PowerCurve(c *gin.Context) {
 	}
 	from, ok := day("from")
 	if !ok {
-		return
+		return nil, nil, false
 	}
 	to, ok := day("to")
 	if !ok {
-		return
+		return nil, nil, false
 	}
 	if to != nil {
 		// the last day included: until the next midnight (AddDate keeps it across daylight saving changes)
@@ -630,6 +622,25 @@ func PowerCurve(c *gin.Context) {
 	}
 	if from != nil && to != nil && !from.Before(*to) {
 		c.JSON(400, gin.H{"error": "from must not be after to"})
+		return nil, nil, false
+	}
+	return from, to, true
+}
+
+// PowerCurve returns the best measured power of the activities of a sport (?sport=, cycling by default) of
+// the user over each duration of a period, ?from=YYYY-MM-DD&to=YYYY-MM-DD in their timezone, both included
+// and optional (all the activities before, or since), with the critical power fitted on it and, for the
+// rides, the current FTP
+func PowerCurve(c *gin.Context) {
+	db := c.MustGet("App").(*app.App).DB
+	user, location := currentUserLocation(c)
+	sport := c.DefaultQuery("sport", models.FTPSport)
+	if !activityService.IsSportName(sport) {
+		c.JSON(400, gin.H{"error": "unknown sport " + strconv.Quote(sport)})
+		return
+	}
+	from, to, ok := periodQuery(c, location)
+	if !ok {
 		return
 	}
 	curve, cp, err := activityService.UserPowerCurve(&db, user, sport, from, to)
