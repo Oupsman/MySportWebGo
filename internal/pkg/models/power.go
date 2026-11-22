@@ -166,9 +166,9 @@ type PowerCurveBest struct {
 	Date          time.Time `json:"date"`
 }
 
-// GetPowerCurve returns the best power of the rides of a user over each duration, between from (included)
-// and to (excluded), nil for no bound; by increasing duration, the oldest ride on a tie
-func (db *DB) GetPowerCurve(userID uint, from, to *time.Time) ([]PowerCurveBest, error) {
+// GetPowerCurve returns the best power of the activities of a sport of a user over each duration, between
+// from (included) and to (excluded), nil for no bound; by increasing duration, the oldest one on a tie
+func (db *DB) GetPowerCurve(userID uint, sport string, from, to *time.Time) ([]PowerCurveBest, error) {
 	best := []PowerCurveBest{}
 	query := db.Table("activities AS a").
 		Select(`DISTINCT ON (p.duration) p.duration, p.watts, p.start_offset, a.id AS activity_id,
@@ -176,7 +176,7 @@ func (db *DB) GetPowerCurve(userID uint, from, to *time.Time) ([]PowerCurveBest,
 		// jsonb_to_recordset fails on the JSON null of the rides not computed yet
 		Joins(`CROSS JOIN LATERAL jsonb_to_recordset(CASE WHEN jsonb_typeof(a.power_curve) = 'array'
 			THEN a.power_curve ELSE '[]'::jsonb END) AS p(duration float8, watts float8, start_offset float8)`).
-		Where("a.user_id = ? AND a.sport = ?", userID, FTPSport)
+		Where("a.user_id = ? AND a.sport = ?", userID, sport)
 	if from != nil {
 		query = query.Where("a.date >= ?", *from)
 	}
@@ -190,6 +190,7 @@ func (db *DB) GetPowerCurve(userID uint, from, to *time.Time) ([]PowerCurveBest,
 // GetActivityPowerStream returns the measured power of an activity, its sport and its user
 func (db *DB) GetActivityPowerStream(id uuid.UUID) (Activity, error) {
 	var activity Activity
-	err := db.Select("id", "user_id", "sport", "powers", "power_ts").First(&activity, "id = ?", id).Error
+	err := db.Select("id", "user_id", "sport", "powers", "power_ts", "best_efforts", "legs").
+		First(&activity, "id = ?", id).Error
 	return activity, err
 }

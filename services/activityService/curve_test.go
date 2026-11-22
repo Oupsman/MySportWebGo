@@ -5,6 +5,7 @@ import (
 	"MySportWeb/internal/pkg/types"
 	"math"
 	"testing"
+	"time"
 )
 
 // variedRide is two hours of power changing every second, with a 10 minutes pause after the first hour
@@ -62,11 +63,11 @@ func TestPowerCurveShortAndEmpty(t *testing.T) {
 	if c := ComputePowerCurve(nil, nil); c == nil || len(c) != 0 {
 		t.Errorf("no power: %#v", c)
 	}
-	// a run gets none, nor an activity without power
+	// a run with a running power meter has one too
 	run := rideWithPower(250, 600)
 	run.Sport = "running"
 	setPowerCurve(&run)
-	if run.PowerCurve == nil || len(run.PowerCurve) != 0 {
+	if len(run.PowerCurve) == 0 || run.PowerCurve[0].Watts != 250 {
 		t.Errorf("run: %v", run.PowerCurve)
 	}
 	ride := rideWithPower(250, 600)
@@ -101,5 +102,30 @@ func TestFitCriticalPower(t *testing.T) {
 	// too few points between 3 and 20 minutes
 	if got := FitCriticalPower(model(250, 20000)[:14]); got != nil {
 		t.Errorf("two points: %+v", got)
+	}
+}
+
+// TestEstimatedPowerIgnored: the power the analysis estimates on a ride without power meter is in the same
+// stream as measured power, it makes no curve, no zones, no TSS
+func TestEstimatedPowerIgnored(t *testing.T) {
+	ride := rideWithPower(250, 3600)
+	ride.BestEfforts = types.BestEffortArray{{Sport: "cycling", Kind: types.EffortDistance, Target: 10000, Value: 1200}}
+	setPowerCurve(&ride)
+	if ride.PowerCurve == nil || len(ride.PowerCurve) != 0 {
+		t.Errorf("curve of estimated power: %v", ride.PowerCurve)
+	}
+	ftp := func(time.Time, float64) (uint16, error) { return 250, nil }
+	if err := setPowerMetrics(&ride, ftp); err != nil {
+		t.Fatal(err)
+	}
+	if ride.TSS != nil || ride.FTP != 0 || ride.PowerZones[3] != 0 {
+		t.Errorf("metrics of estimated power: tss %v, ftp %d, zones %v", ride.TSS, ride.FTP, ride.PowerZones)
+	}
+	// a multisport activity: its legs share the stream, no curve
+	triathlon := rideWithPower(250, 600)
+	triathlon.Legs = types.LegArray{{Sport: "swimming"}, {Sport: "cycling"}}
+	setPowerCurve(&triathlon)
+	if len(triathlon.PowerCurve) != 0 {
+		t.Errorf("multisport: %v", triathlon.PowerCurve)
 	}
 }

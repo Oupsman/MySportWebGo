@@ -65,7 +65,18 @@ func ownBest20(efforts types.BestEffortArray) float64 {
 	return 0
 }
 
-// powerSamples returns the measured power stream of an activity: the times (s since the start) and the watts
+// hasMeasuredPower tells whether the power stream of an activity was measured by a power meter: the analysis
+// also stores the power it estimates on the rides without one, but only measured power has best efforts
+func hasMeasuredPower(activity models.Activity) bool {
+	for _, e := range activity.BestEfforts {
+		if e.Kind == types.EffortPower {
+			return true
+		}
+	}
+	return false
+}
+
+// powerSamples returns the power stream of an activity, measured or estimated: see hasMeasuredPower: the times (s since the start) and the watts
 func powerSamples(activity models.Activity) ([]float64, []float64) {
 	n := min(len(activity.Powers), len(activity.PowerTS))
 	times := make([]float64, 0, n)
@@ -152,7 +163,7 @@ func powerZone(power float64, bounds types.Uint16Array) int {
 func setPowerMetrics(activity *models.Activity, ftp FTPFunc) error {
 	activity.FTP, activity.NormalizedPower, activity.Intensity, activity.TSS = 0, nil, nil, nil
 	activity.PowerZones, activity.PowerZoneBounds = make(types.FloatArray, models.PowerZones), nil
-	if activity.Sport != models.FTPSport || len(activity.Powers) < 2 || ftp == nil {
+	if activity.Sport != models.FTPSport || len(activity.Powers) < 2 || ftp == nil || !hasMeasuredPower(*activity) {
 		return nil
 	}
 	value, err := ftp(activity.Date, ownBest20(activity.BestEfforts))

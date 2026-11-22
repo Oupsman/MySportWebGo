@@ -35,10 +35,12 @@ func ComputePowerCurve(times, powers []float64) types.PowerCurve {
 	return curve
 }
 
-// setPowerCurve sets the power curve of a ride with a power meter, empty for the other activities
+// setPowerCurve sets the power curve of an activity whose power was measured, of any sport (a ride, a run
+// with a running power meter...): empty without, or with the power the analysis estimated on a ride without
+// power meter, or for a multisport one (its legs share the stream)
 func setPowerCurve(activity *models.Activity) {
 	activity.PowerCurve = types.PowerCurve{}
-	if activity.Sport != models.FTPSport || len(activity.Powers) == 0 {
+	if len(activity.Powers) == 0 || len(activity.Legs) > 0 || !hasMeasuredPower(*activity) {
 		return
 	}
 	times, powers := powerSamples(*activity)
@@ -135,10 +137,10 @@ type PowerCurveBest struct {
 	WattsPerKg *float64 `json:"watts_per_kg"` // nil when the weight is unknown
 }
 
-// UserPowerCurve returns the power curve of the rides of a user between from (included) and to (excluded),
-// nil for no bound, each point divided by the weight of the user at the date of its ride
-func UserPowerCurve(db *models.DB, user models.Users, from, to *time.Time) ([]PowerCurveBest, *CriticalPower, error) {
-	best, err := db.GetPowerCurve(user.ID, from, to)
+// UserPowerCurve returns the power curve of the activities of a sport of a user between from (included) and
+// to (excluded), nil for no bound, each point divided by the weight of the user at the date of its activity
+func UserPowerCurve(db *models.DB, user models.Users, sport string, from, to *time.Time) ([]PowerCurveBest, *CriticalPower, error) {
+	best, err := db.GetPowerCurve(user.ID, sport, from, to)
 	if err != nil {
 		return nil, nil, err
 	}

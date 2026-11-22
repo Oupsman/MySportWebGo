@@ -551,12 +551,18 @@ func FTP(c *gin.Context) {
 		"zone_limits": activityService.PowerZoneLimits})
 }
 
-// PowerCurve returns the best power of the rides of the user over each duration of a period,
-// ?from=YYYY-MM-DD&to=YYYY-MM-DD in their timezone, both included and optional (all the rides before, or
-// since), with the critical power fitted on it and the current FTP
+// PowerCurve returns the best measured power of the activities of a sport (?sport=, cycling by default) of
+// the user over each duration of a period, ?from=YYYY-MM-DD&to=YYYY-MM-DD in their timezone, both included
+// and optional (all the activities before, or since), with the critical power fitted on it and, for the
+// rides, the current FTP
 func PowerCurve(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
 	user, location := currentUserLocation(c)
+	sport := c.DefaultQuery("sport", models.FTPSport)
+	if !activityService.IsSportName(sport) {
+		c.JSON(400, gin.H{"error": "unknown sport " + strconv.Quote(sport)})
+		return
+	}
 	day := func(name string) (*time.Time, bool) {
 		value := c.Query(name)
 		if value == "" {
@@ -586,15 +592,18 @@ func PowerCurve(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "from must not be after to"})
 		return
 	}
-	curve, cp, err := activityService.UserPowerCurve(&db, user, from, to)
+	curve, cp, err := activityService.UserPowerCurve(&db, user, sport, from, to)
 	if err != nil {
 		internalError(c, err)
 		return
 	}
-	ftp, err := activityService.UserFTP(&db, user.ID)(time.Now(), 0)
-	if err != nil {
-		internalError(c, err)
-		return
+	// the FTP is the one of the rides: the power of a run isn't on the same scale
+	var ftp uint16
+	if sport == models.FTPSport {
+		if ftp, err = activityService.UserFTP(&db, user.ID)(time.Now(), 0); err != nil {
+			internalError(c, err)
+			return
+		}
 	}
 	c.JSON(200, gin.H{"points": curve, "critical_power": cp, "ftp": ftp,
 		"durations": activityService.PowerCurveDurations})

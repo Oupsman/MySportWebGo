@@ -93,8 +93,10 @@ func TestPowerMetricsPausesAndShort(t *testing.T) {
 	}
 }
 
+// rideWithPower is a ride at watts measured by a power meter (it has a power best effort)
 func rideWithPower(watts uint16, seconds int) models.Activity {
-	a := models.Activity{Sport: "cycling", Date: time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC)}
+	a := models.Activity{Sport: "cycling", Date: time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC),
+		BestEfforts: types.BestEffortArray{{Sport: "cycling", Kind: types.EffortPower, Target: 5, Value: float64(watts)}}}
 	for s := 0; s <= seconds; s++ {
 		a.Powers = append(a.Powers, watts)
 		a.PowerTS = append(a.PowerTS, formatSeconds(float64(s)))

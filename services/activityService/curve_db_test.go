@@ -2,6 +2,7 @@ package activityService
 
 import (
 	"MySportWeb/internal/pkg/models"
+	"MySportWeb/internal/pkg/types"
 	"context"
 	"testing"
 	"time"
@@ -46,7 +47,7 @@ func TestUserPowerCurve(t *testing.T) {
 
 	byDuration := func(from, to *time.Time) map[float64]PowerCurveBest {
 		t.Helper()
-		curve, _, err := UserPowerCurve(db, user, from, to)
+		curve, _, err := UserPowerCurve(db, user, "cycling", from, to)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,5 +82,35 @@ func TestUserPowerCurve(t *testing.T) {
 	after := day.AddDate(0, 1, 1)
 	if p := byDuration(&after, nil)[1800]; p.ActivityID != tie.ID {
 		t.Errorf("since the second ride: %+v", p)
+	}
+}
+
+// TestPowerCurveBySport: the curve of a sport has its activities only, the estimated power of a ride none
+func TestPowerCurveBySport(t *testing.T) {
+	db := emptyDB(t)
+	user := models.Users{Username: "runner", Email: "runner@test.local", Weight: 60}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	day := time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC)
+	run := saveRide(t, db, user, "running", day, 280, 280)
+	estimated := saveRide(t, db, user, "cycling", day.AddDate(0, 0, 1), 220, 0)
+	// a ride without power meter: the analysis estimated its power, it has no power best effort
+	if err := db.Model(&estimated).Update("best_efforts", types.BestEffortArray{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&models.Activity{}).Where("user_id = ?", user.ID).Update("power_curve", nil).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := BackfillPowerCurves(context.Background(), db, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	running, _, err := UserPowerCurve(db, user, "running", nil, nil)
+	if err != nil || len(running) == 0 || running[0].Watts != 280 || running[0].ActivityID != run.ID {
+		t.Errorf("running curve: %v %v", running, err)
+	}
+	cycling, _, err := UserPowerCurve(db, user, "cycling", nil, nil)
+	if err != nil || len(cycling) != 0 {
+		t.Errorf("cycling curve of estimated power: %v %v", cycling, err)
 	}
 }

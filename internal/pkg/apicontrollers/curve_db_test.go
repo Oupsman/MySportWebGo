@@ -67,7 +67,12 @@ func TestPowerCurveAPI(t *testing.T) {
 		first["activity_id"] != ride.ID.String() || answer["durations"] == nil {
 		t.Errorf("all: %d %v", code, answer)
 	}
-	for _, bad := range []string{"?from=yesterday", "?from=2026-05-03&to=2026-05-02"} {
+	// another sport: its own curve, without FTP
+	code, answer = client.send(http.MethodGet, "/user/powercurve?sport=running", "")
+	if list, _ := answer["points"].([]interface{}); code != http.StatusOK || len(list) != 0 || answer["ftp"] != 0.0 {
+		t.Errorf("running: %d %v", code, answer)
+	}
+	for _, bad := range []string{"?from=yesterday", "?from=2026-05-03&to=2026-05-02", "?sport=biking"} {
 		if code, _ := client.send(http.MethodGet, "/user/powercurve"+bad, ""); code != http.StatusBadRequest {
 			t.Errorf("%s: %d", bad, code)
 		}
