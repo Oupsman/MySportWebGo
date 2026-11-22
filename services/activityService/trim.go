@@ -286,6 +286,7 @@ func TrimActivity(db *models.DB, activity *models.Activity, trimEnd float64, log
 		RestHR:     UserRestHR(db, activity.UserID),
 		Correction: DeviceCorrection(db, activity.UserID),
 		Weight:     ActivityWeight(db, activity.UserID, activity.EquipmentID),
+		FTP:        UserFTP(db, activity.UserID),
 	})
 	if err != nil {
 		return nil, err

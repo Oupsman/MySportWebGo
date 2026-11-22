@@ -48,6 +48,9 @@ type Analysis struct {
 	// Weight gives the weight of the rider and the equipment, of the power estimated without power meter,
 	// nil for DefaultRiderWeight and DefaultEquipmentWeight
 	Weight WeightFunc
+	// FTP gives the FTP of the user, of the power zones and the TSS; nil for none: the training score is
+	// then the device's or the TRIMP
+	FTP FTPFunc
 }
 
 // AnalyzeTrimmed analyses a FIT file, ignoring what was recorded after trimEnd seconds since the start
@@ -179,13 +182,17 @@ func decodeFit(fit *proto.FIT, user models.Users, trimEnd float64,
 	if activity.Sport == "cycling" {
 		activity.Co2 = Commute(activity)
 	}
+	// the best 20 minutes count in the FTP of the power metrics, which give the TSS of the training score
+	activity.BestEfforts = BestEfforts(fitActivity)
+	if err := setPowerMetrics(&activity, opts.FTP); err != nil {
+		return models.Activity{}, err
+	}
 	if err := setTrainingScore(&activity, fitActivity.Sessions, trimmed, restHR); err != nil {
 		return models.Activity{}, err
 	}
 	if err := setHRZones(&activity, restHR); err != nil {
 		return models.Activity{}, err
 	}
-	activity.BestEfforts = BestEfforts(fitActivity)
 
 	return activity, nil
 }

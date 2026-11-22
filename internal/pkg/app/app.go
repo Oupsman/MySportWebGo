@@ -116,6 +116,8 @@ func (app *App) backfill(ctx context.Context) {
 		// after BackfillTimeStamps too: the zones need the time stamps of the heart rates
 		{"failed to compute the heart rate zones of activities", activityService.BackfillHrZones},
 		{"failed to compute the best efforts of activities", activityService.BackfillBestEfforts},
+		// after BackfillBestEfforts: the FTP is estimated from the best 20 minutes
+		{"failed to compute the power metrics of activities", activityService.BackfillPowerMetrics},
 		{"failed to rename activities", activityService.BackfillTitles},
 		// last: it downloads map tiles, the longest on a first start
 		{"failed to draw the thumbnails of activities again", activityService.BackfillThumbnails},

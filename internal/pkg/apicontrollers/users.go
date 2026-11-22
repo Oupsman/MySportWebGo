@@ -286,6 +286,7 @@ type userUpdate struct {
 	Weight               *uint16    `json:"weight"`
 	Height               *uint16    `json:"height"`
 	MaxHR                *uint16    `json:"max_hr"`
+	FTP                  *uint16    `json:"ftp"`
 	Gender               *int       `json:"gender"`
 	Unit                 *int       `json:"unit"`
 	SecurityDistance     *uint16    `json:"security_distance"`
@@ -295,9 +296,10 @@ type userUpdate struct {
 
 // the bounds of the values of userUpdate
 const (
-	maxWeight      = 500 // kg
-	maxHeight      = 300 // cm
-	maxHeartRate   = 250 // bpm, 0 to estimate it from the age
+	maxWeight      = 500  // kg
+	maxHeight      = 300  // cm
+	maxHeartRate   = 250  // bpm, 0 to estimate it from the age
+	maxFTP         = 2000 // W, 0 to estimate it from the rides
 	maxHomeTownLen = 100
 )
 
@@ -335,6 +337,12 @@ func (u userUpdate) fields(now time.Time) (map[string]interface{}, error) {
 			return nil, errors.New("the maximum heart rate is at most 250, 0 to estimate it")
 		}
 		fields["max_hr"] = *u.MaxHR
+	}
+	if u.FTP != nil {
+		if *u.FTP > maxFTP {
+			return nil, fmt.Errorf("the FTP is at most %d W, 0 to estimate it from the rides", maxFTP)
+		}
+		fields["ftp"] = *u.FTP
 	}
 	if u.Gender != nil {
 		if *u.Gender < 0 || *u.Gender >= len(types.Genders) {
@@ -374,6 +382,20 @@ func (u userUpdate) fields(now time.Time) (map[string]interface{}, error) {
 func maxHRChanged(user models.Users, update userUpdate) bool {
 	return (update.MaxHR != nil && *update.MaxHR != user.MaxHR) ||
 		(update.DateOfBirth != nil && !update.DateOfBirth.Equal(user.DateOfBirth))
+}
+
+// recomputePowerMetrics computes again, in the background, the power metrics of the rides of a user whose
+// FTP changed, and their training score
+func recomputePowerMetrics(App *app.App, userID uint) {
+	if err := App.DB.ResetPowerMetrics(userID); err != nil {
+		App.Logger.Error().Err(err).Uint("user_id", userID).Msg("power metrics not reset")
+		return
+	}
+	App.Go(func(ctx context.Context) {
+		if err := activityService.BackfillPowerMetrics(ctx, &App.DB, App.Logger); err != nil {
+			App.Logger.Error().Err(err).Uint("user_id", userID).Msg("power metrics not computed")
+		}
+	})
 }
 
 // recomputeHrZones computes again, in the background, the heart rate zones of the activities of a user whose
@@ -446,6 +468,9 @@ func UpdateUser(c *gin.Context) {
 	if maxHRChanged(currentUser, update) {
 		recomputeHrZones(App, currentUser.ID)
 	}
+	if update.FTP != nil && *update.FTP != currentUser.FTP {
+		recomputePowerMetrics(App, currentUser.ID)
+	}
 
 	if update.Password == "" {
 		c.JSON(200, gin.H{"message": "user updated successfully"})
@@ -504,6 +529,47 @@ func HrZones(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"limits": activityService.HRZoneLimits, "weeks": zones})
+}
+
+// FTP answers the FTP of the user: the one they set (0 when estimated), and the one estimated from their
+// rides of the last FTPWindowDays, with the ride it comes from (null without power data)
+func FTP(c *gin.Context) {
+	db := c.MustGet("App").(*app.App).DB
+	user := middlewares.CurrentUser(c)
+	now := time.Now()
+	best, err := db.GetBestPower(user.ID, activityService.FTPDuration, now.AddDate(0, 0, -activityService.FTPWindowDays), now)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	var estimated gin.H
+	if best != nil {
+		estimated = gin.H{"ftp": activityService.EstimateFTP(best.Value), "best_20min": best.Value,
+			"activity_id": best.ActivityID, "date": best.Date}
+	}
+	c.JSON(200, gin.H{"ftp": user.FTP, "estimated": estimated, "window_days": activityService.FTPWindowDays,
+		"zone_limits": activityService.PowerZoneLimits})
+}
+
+// PowerZones returns the seconds in each power zone of the last weeks, ?weeks=, as HrZones
+func PowerZones(c *gin.Context) {
+	db := c.MustGet("App").(*app.App).DB
+	user, location := currentUserLocation(c)
+	weeks := models.DashboardWeeks
+	if value := c.Query("weeks"); value != "" {
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 1 || n > models.MaxZoneWeeks {
+			c.JSON(400, gin.H{"error": fmt.Sprintf("weeks must be between 1 and %d", models.MaxZoneWeeks)})
+			return
+		}
+		weeks = n
+	}
+	zones, err := db.GetWeeklyPowerZones(user.ID, time.Now().In(location), weeks)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(200, gin.H{"limits": activityService.PowerZoneLimits, "weeks": zones})
 }
 
 // Calendar returns the activities of a month, ?month=YYYY-MM

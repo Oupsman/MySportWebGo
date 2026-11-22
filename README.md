@@ -17,6 +17,9 @@ For now the app can :
 * handle multiple sports (running, biking, hiking, swimming)
 * provide a ton of datas about the sessions (speed, distance, elevation, etc)
 * Estimate your power level (cycling only for now)
+* power zones (Coggan's 7), normalized power, intensity factor and TSS of the rides with a power meter, by your
+  FTP: yours when you set it in your profile, else 95% of your best 20 minutes of the 42 days before the ride.
+  A ride's training score is the one its device recorded, else its TSS, else the TRIMP of its heart rate
 * find your best efforts: the fastest 400 m to marathon of the runs, 10 to 100 km of the rides, and the best
   powers over 5 s to 1 h of any activity with a power meter (`GET /api/v1/user/records`)
 * handle multiple equipments, with a default equipment for each sport (`default_sports` of an equipment, the

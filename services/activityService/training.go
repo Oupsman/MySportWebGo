@@ -93,14 +93,21 @@ func embeddedTrainingScore(sessions []*mesgdef.Session) (float64, bool) {
 }
 
 // setTrainingScore sets the training score of an analysed activity: the one recorded by the device, else
-// its Banister TRIMP. A trimmed activity always gets its TRIMP: the device scored the whole recording.
+// the TSS of its measured power (setPowerMetrics first), else its Banister TRIMP. A trimmed activity never
+// gets the device's: the device scored the whole recording.
 func setTrainingScore(activity *models.Activity, sessions []*mesgdef.Session, trimmed bool, restHR RestHRFunc) error {
 	if !trimmed {
 		if score, ok := embeddedTrainingScore(sessions); ok {
-			activity.Trimp = &score
+			activity.Trimp, activity.ScoreSource = &score, models.ScoreDevice
 			return nil
 		}
 	}
+	if activity.TSS != nil {
+		score := *activity.TSS
+		activity.Trimp, activity.ScoreSource = &score, models.ScorePower
+		return nil
+	}
+	activity.ScoreSource = models.ScoreHR
 	return computeTrimp(activity, restHR)
 }
 

@@ -24,7 +24,8 @@ type Users struct {
 	Gender           int       `json:"gender" gorm:"default:0"`
 	Height           uint16    `json:"height"`
 	MaxHR            uint16    `json:"max_hr" gorm:"default:0"`
-	WeightObjective  float64   `json:"weight_objective" gorm:"default:0"` // the target weight, kg, 0 without
+	FTP              uint16    `json:"ftp" gorm:"column:ftp;not null;default:0"` // W, 0: estimated from the rides
+	WeightObjective  float64   `json:"weight_objective" gorm:"default:0"`        // the target weight, kg, 0 without
 	SecurityDistance uint16    `json:"security_distance" gorm:"default:500"`
 	HomeTown         string    `json:"home_town" gorm:"default:'Earth'"`
 	// the session tokens issued before are refused: set when the password changes

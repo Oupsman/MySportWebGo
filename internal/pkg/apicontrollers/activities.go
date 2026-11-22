@@ -81,6 +81,7 @@ func UploadActivity(c *gin.Context) {
 		RestHR:     activityService.UserRestHR(&db, user.ID),
 		Correction: activityService.DeviceCorrection(&db, user.ID),
 		Weight:     activityService.ImportWeight(&db, user.ID),
+		FTP:        activityService.UserFTP(&db, user.ID),
 	})
 	if err != nil {
 		analysisError(c, err)
@@ -159,6 +160,9 @@ func UploadActivity(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
+	// the rides of the weeks after it may get a higher estimated FTP
+	App := c.MustGet("App").(*app.App)
+	activityService.PowerRideChanged(&db, activity, true, App.Go, App.Logger)
 	// its passes on the segments of the user: the activity is saved, a failure only misses them
 	if err := activityService.MatchActivitySegments(&db, activity.ID); err != nil {
 		c.MustGet("App").(*app.App).Logger.Error().Err(err).Str("activity", activity.ID.String()).
@@ -341,6 +345,8 @@ func DeleteActivity(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
+	// the rides of the weeks after it may lose the FTP estimated from it
+	activityService.PowerRideChanged(&db, *activity, false, App.Go, App.Logger)
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
 }
 

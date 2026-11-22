@@ -109,7 +109,27 @@ type Activity struct {
 	// the fastest stretches over distances and the best powers over durations (activityService.BestEfforts),
 	// empty without any, nil until computed
 	BestEfforts types.BestEffortArray `json:"best_efforts"`
+	// seconds in each power zone (activityService.PowerZoneLimits) of a ride with a power meter, zeros
+	// without power or FTP, nil until computed; the watts bounding them: 0, the lower limits of the zones 2
+	// to 7; the FTP (W) they were computed with, 0 without
+	PowerZones      types.FloatArray  `json:"power_zones"`
+	PowerZoneBounds types.Uint16Array `json:"power_zone_bounds"`
+	FTP             uint16            `json:"ftp" gorm:"column:ftp;not null;default:0"`
+	// the normalized power (W), the intensity factor (normalized power / FTP) and the training stress score
+	// of a ride with a power meter, nil without
+	NormalizedPower *float64 `json:"normalized_power"`
+	Intensity       *float64 `json:"intensity"`
+	TSS             *float64 `json:"tss" gorm:"column:tss"`
+	// where Trimp comes from: ScoreDevice, ScorePower, ScoreHR; empty for the activities scored before
+	ScoreSource string `json:"score_source" gorm:"not null;default:''"`
 }
+
+// The sources of the training score of an activity
+const (
+	ScoreDevice = "device" // recorded by the device: Garmin's training load, or its TSS
+	ScorePower  = "power"  // the TSS of the measured power
+	ScoreHR     = "hr"     // the Banister TRIMP of the heart rate
+)
 
 // HidePrivate removes what only the owner of the activity may see: the trace inside the privacy zones
 // (every position but the public ones), where its files are, who recorded it and with what. The map of
@@ -391,6 +411,8 @@ func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, privacy
 		updates["recorded_duration"] = analysed.RecordedDuration
 		updates["metrics"] = analysed.Metrics
 		updates["best_efforts"] = analysed.BestEfforts
+		// the power stream changed: BackfillPowerMetrics computes its metrics again
+		updates["power_zones"] = nil
 		for column, value := range elevationUpdates(analysed) {
 			updates[column] = value
 		}
