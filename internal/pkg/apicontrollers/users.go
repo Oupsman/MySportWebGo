@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"net/http"
 	"net/mail"
 	"strconv"
 	"strings"
@@ -112,17 +113,25 @@ func Login(c *gin.Context) {
 		return
 	}
 	loginFailures.Reset(failuresKey)
-	logger.Debug().Uint("user_id", existingUser.ID).Msg("password ok, issuing token")
-
-	tokenString, session, err := utils.NewSessionToken(existingUser.ID, existingUser.UUID, existingUser.Role, time.Now())
-	if err != nil {
-		c.JSON(500, gin.H{"error": "could not generate token"})
+	// told after the password only: it doesn't tell who has an account
+	if existingUser.DisabledAt != nil {
+		logger.Info().Uint("user_id", existingUser.ID).Msg("login refused: account disabled")
+		c.JSON(http.StatusForbidden, gin.H{"error": "this account is disabled, ask an admin of the instance"})
 		return
 	}
-	// the token goes to the cookie only: the page never sees it
-	middlewares.SetSessionCookie(c, tokenString, session.ExpiresAt)
-	metrics.Logins.WithLabelValues("success").Inc()
-	c.JSON(200, gin.H{"session": newSessionInfo(existingUser, session)})
+	// with the two-factor authentication, the session comes with a code: LoginSecondFactor
+	if existingUser.TOTPEnabledAt != nil {
+		challenge, err := utils.NewChallengeToken(existingUser.UUID, time.Now())
+		if err != nil {
+			c.JSON(500, gin.H{"error": "could not generate token"})
+			return
+		}
+		logger.Debug().Uint("user_id", existingUser.ID).Msg("password ok, asking the second factor")
+		c.JSON(200, gin.H{"two_factor_required": true, "challenge": challenge})
+		return
+	}
+	logger.Debug().Uint("user_id", existingUser.ID).Msg("password ok, issuing token")
+	issueSession(c, existingUser, false)
 }
 
 // sessionInfo is what the web application knows of its session: whose it is and until when. The token
@@ -132,10 +141,15 @@ type sessionInfo struct {
 	UUID      uuid.UUID `json:"uuid"`
 	Role      string    `json:"role"`
 	ExpiresAt int64     `json:"exp"` // seconds since the epoch
+	// MFA: the login went through the two-factor authentication, which the admin pages require;
+	// TwoFactor: the user has it on
+	MFA       bool `json:"mfa"`
+	TwoFactor bool `json:"two_factor"`
 }
 
 func newSessionInfo(user models.Users, session utils.Session) sessionInfo {
-	return sessionInfo{UserID: user.ID, UUID: user.UUID, Role: user.Role, ExpiresAt: session.ExpiresAt.Unix()}
+	return sessionInfo{UserID: user.ID, UUID: user.UUID, Role: user.Role, ExpiresAt: session.ExpiresAt.Unix(),
+		MFA: session.MFA, TwoFactor: user.TOTPEnabledAt != nil}
 }
 
 // GetSession answers the session of the request: the web application asks it at its start, the cookie
@@ -476,8 +490,10 @@ func UpdateUser(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "user updated successfully"})
 		return
 	}
-	// the session of the request ended with the others: the browser goes on with this one
-	token, session, err := utils.NewSessionToken(currentUser.ID, currentUser.UUID, currentUser.Role, now)
+	// the session of the request ended with the others: the browser goes on with this one, verified by the
+	// second factor if it was
+	current, _ := middlewares.CurrentSession(c)
+	token, session, err := utils.NewSessionTokenMFA(currentUser.ID, currentUser.UUID, currentUser.Role, now, current.MFA)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "password changed, log in again"})
 		return

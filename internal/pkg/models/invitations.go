@@ -11,7 +11,7 @@ import (
 type Invitations struct {
 	ID          uuid.UUID  `gorm:"type:uuid;default:gen_random_uuid()" json:"id"`
 	CreatedAt   time.Time  `json:"created_at"`
-	CreatedByID uint       `gorm:"index;not null" json:"-"`
+	CreatedByID *uint      `gorm:"index" json:"-"` // nil once its admin is deleted
 	Hash        string     `gorm:"uniqueIndex;not null" json:"-"`
 	Hint        string     `json:"hint"`  // the first characters of the code, to recognize it
 	Email       string     `json:"email"` // the only email it registers, "" for any
@@ -19,6 +19,9 @@ type Invitations struct {
 	UsedAt      *time.Time `json:"used_at"`
 	UsedByID    *uint      `json:"-"`
 }
+
+// DeletedUserName stands for a deleted user in the invitations they created or used
+const DeletedUserName = "(deleted user)"
 
 // InvitationView is an invitation as the admins see it, with the names of its users
 type InvitationView struct {
@@ -35,8 +38,10 @@ func (db *DB) CreateInvitation(invitation *Invitations) error {
 func (db *DB) GetInvitations() ([]InvitationView, error) {
 	invitations := []InvitationView{}
 	err := db.Table("invitations").
-		Select("invitations.*, creator.username AS created_by, COALESCE(used.username, '') AS used_by").
-		Joins("JOIN users creator ON creator.id = invitations.created_by_id").
+		Select("invitations.*, COALESCE(creator.username, ?) AS created_by, "+
+			"CASE WHEN invitations.used_at IS NULL THEN '' ELSE COALESCE(used.username, ?) END AS used_by",
+			DeletedUserName, DeletedUserName).
+		Joins("LEFT JOIN users creator ON creator.id = invitations.created_by_id").
 		Joins("LEFT JOIN users used ON used.id = invitations.used_by_id").
 		Order("invitations.created_at desc").Scan(&invitations).Error
 	return invitations, err

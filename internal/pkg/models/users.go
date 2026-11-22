@@ -30,6 +30,13 @@ type Users struct {
 	HomeTown         string    `json:"home_town" gorm:"default:'Earth'"`
 	// the session tokens issued before are refused: set when the password changes
 	SessionsValidAfter time.Time `json:"-"`
+	// DisabledAt is when an admin disabled the account, nil when enabled: no login, no session, no device token
+	DisabledAt *time.Time `json:"disabled_at"`
+	// the two-factor authentication: see models.EnableTOTP
+	TOTPSecret    string     `json:"-" gorm:"column:totp_secret;not null;default:''"`
+	TOTPEnabledAt *time.Time `json:"two_factor_enabled_at" gorm:"column:totp_enabled_at"`
+	TOTPLastStep  int64      `json:"-" gorm:"column:totp_last_step;not null;default:0"`
+	TOTPRecovery  string     `json:"-" gorm:"column:totp_recovery;not null;default:''"`
 }
 
 // RevokedSessions are the session tokens logged out before they expire, by their id (jti). They are

@@ -35,6 +35,7 @@ func registerRouter(t *testing.T, db *models.DB) sessionClient {
 	router.Use(func(c *gin.Context) { c.Set("App", App); c.Next() })
 	router.POST("/register", Register)
 	router.POST("/login", Login)
+	router.POST("/login/2fa", LoginSecondFactor)
 	router.GET("/instance", Instance)
 	router.GET("/admin/invitations", middlewares.IsAdmin(), GetInvitations)
 	router.POST("/admin/invitations", middlewares.IsAdmin(), CreateInvitation)
@@ -266,7 +267,14 @@ func TestInvitations(t *testing.T) {
 	if code, answer := registerAdmin(client, "boss"); code != http.StatusCreated {
 		t.Fatalf("setup: %d %v", code, answer)
 	}
-	admin := client.loginCookie("boss", "password")
+	// an admin without two-factor authentication: no admin page
+	plain := client.loginCookie("boss", "password")
+	if code, body := rawRequest(client, http.MethodGet, "/admin/invitations", plain, ""); code != http.StatusForbidden ||
+		!strings.Contains(string(body), "mfa_required") {
+		t.Errorf("admin without 2FA: %d %s", code, body)
+	}
+	secret := enableTOTP(t, db, "boss")
+	admin := client.loginCookieMFA(db, "boss", "password", secret)
 
 	// the admin routes: the admins' sessions only
 	user := createUsers(t, db, "password", "alice")[0]
@@ -297,8 +305,13 @@ func TestInvitations(t *testing.T) {
 			t.Errorf("%s: %d", name, code)
 		}
 	}
-	// demoted: refused at once, whatever its session says
+	// promoted: the admin pages once logged in with a second factor; demoted: refused at once, whatever its
+	// session says
 	db.Model(&models.Users{}).Where("id = ?", user.ID).Update("role", models.RoleAdmin)
+	if code, _ := rawRequest(client, http.MethodGet, "/admin/invitations", alice, ""); code != http.StatusForbidden {
+		t.Errorf("promoted user without 2FA: %d", code)
+	}
+	alice = client.loginCookieMFA(db, "alice", "password", enableTOTP(t, db, "alice"))
 	if code, _ := rawRequest(client, http.MethodGet, "/admin/invitations", alice, ""); code != http.StatusOK {
 		t.Errorf("promoted user: %d", code)
 	}

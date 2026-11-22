@@ -56,9 +56,24 @@ docker compose logs backend | grep setup_code   # the code that creates the admi
     the code filled in. A used invitation stays in the list (who invited whom), an unused one can be revoked;
   * `open`: anyone reaching the app.
 
-  The roles from the command line, when no admin can do it in the app (lost password, left):
-  `docker compose exec backend mysportweb admin promote <username>` (or `demote`). Demoting the last admin brings
-  the setup code back at the next start.
+* **Two-factor authentication**: required for the admins. An admin sets it up in **Your profile** (an
+  authenticator app scans a QR code, and 10 single-use recovery codes are shown once). Until then, and with a
+  session opened without it, the admin pages are refused. Any user can turn it on. The secrets are encrypted with
+  `MSW_SECRET_KEY`: changing that key turns everyone's second factor unusable, reset it as below.
+* **Managing the users**, in **Admin**: the list with each user's activities and disk use; making a user an admin
+  or not; disabling an account (no login, its sessions and device tokens refused, its data kept) and enabling
+  it again; deleting a disabled account with everything it owns (an account is disabled first, a slip can't
+  delete it at once); a password reset link for a user, valid 24 hours, used once, given to them by hand (there
+  is no email). Each of these asks a code of the admin's authenticator app, every time. Nobody can remove the
+  last admin.
+* **Your data**, in **Your profile**: the export downloads a zip of everything the app keeps about you (your
+  uploaded files and every computed value as JSON, see its README.txt); deleting your account removes all of it,
+  with your password, your username typed again, and your second factor code.
+* **From the command line**, when no admin can do it in the app:
+  `docker compose exec backend mysportweb admin <command> <username>`, the commands being `promote` and `demote`
+  (the roles; demoting the last admin brings the setup code back at the next start), `reset-password` (prints
+  a reset link to give them) and `reset-2fa` (turns off the second factor of someone who
+  lost their phone and their recovery codes).
 
 * **Data**: in `MSW_DATA_DIR` (`./data` by default): `media/` holds the uploaded FIT files, thumbnails, pictures,
   elevation and map tiles (`dem/`, `tiles/`: downloaded again when lost), `postgres/` the bundled database. With

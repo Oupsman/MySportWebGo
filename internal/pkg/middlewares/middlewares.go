@@ -53,10 +53,20 @@ func credentials(c *gin.Context) (token string, fromCookie bool, err error) {
 }
 
 // identify returns the user of the Authorization header or of the session cookie, loaded from the
-// database: a token of a deleted user is refused. It accepts the session tokens (JWT) of the web
+// database: a token of a deleted or disabled user is refused. It accepts the session tokens (JWT) of the web
 // application not logged out nor ended by a password change, and the valid device tokens (msw_...),
 // returned for the latter.
 func identify(c *gin.Context) (models.Users, *models.DeviceTokens, *authError) {
+	user, deviceToken, authErr := identifyToken(c)
+	if authErr == nil && user.DisabledAt != nil {
+		// 401: the web application logs out
+		return models.Users{}, nil, refuse(http.StatusUnauthorized, "this account is disabled")
+	}
+	return user, deviceToken, authErr
+}
+
+// identifyToken is identify, without checking whether the user is disabled
+func identifyToken(c *gin.Context) (models.Users, *models.DeviceTokens, *authError) {
 	token, _, err := credentials(c)
 	if err != nil {
 		return models.Users{}, nil, &authError{http.StatusUnauthorized, err}
@@ -188,6 +198,13 @@ func IsAdmin() gin.HandlerFunc {
 		// the role of the database, not the one of the token: a demoted admin loses access immediately
 		if user.Role != models.RoleAdmin {
 			abort(c, refuse(http.StatusForbidden, "this route is for the admins"))
+			return
+		}
+		// the admins logged in with their second factor; an admin without it sets it up in their profile
+		if session, ok := CurrentSession(c); !ok || !session.MFA {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"code": "mfa_required",
+				"message": "forbidden: the admin pages need the two-factor authentication: set it up in your " +
+					"profile, or log in again with it"})
 			return
 		}
 		c.Set(userKey, user)

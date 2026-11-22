@@ -63,8 +63,9 @@ func CreateInvitation(c *gin.Context) {
 		return
 	}
 	code := utils.NewCode()
+	creator := middlewares.CurrentUser(c).ID
 	invitation := models.Invitations{
-		CreatedByID: middlewares.CurrentUser(c).ID,
+		CreatedByID: &creator,
 		Hash:        utils.HashCode(code),
 		Hint:        code[:4],
 		Email:       body.Email,

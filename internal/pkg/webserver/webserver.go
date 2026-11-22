@@ -88,7 +88,7 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	httpRouter.Use(cors.New(cors.Config{
 		AllowOrigins:  []string{vars.Domain},
 		AllowMethods:  []string{"GET", "OPTIONS", "POST", "DELETE"},
-		AllowHeaders:  []string{"Origin", "Authorization", "Content-Type"},
+		AllowHeaders:  []string{"Origin", "Authorization", "Content-Type", "X-TOTP-Code"},
 		ExposeHeaders: []string{"Content-Length", "Retry-After"},
 		// the session cookie, for the frontend of the development server (another port: another origin)
 		AllowCredentials: true,
@@ -118,10 +118,29 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.GET("/admin/invitations", middlewares.IsAdmin(), apicontrollers.GetInvitations)
 	apiv1.POST("/admin/invitations", middlewares.IsAdmin(), apicontrollers.CreateInvitation)
 	apiv1.DELETE("/admin/invitations/:id", middlewares.IsAdmin(), apicontrollers.RevokeInvitation)
+	// the changes of the users also ask a code of the authenticator, each time (apicontrollers.RequireTOTP)
+	apiv1.GET("/admin/users", middlewares.IsAdmin(), apicontrollers.GetUsers)
+	apiv1.POST("/admin/users/:id/role", middlewares.IsAdmin(), apicontrollers.SetUserRole)
+	apiv1.POST("/admin/users/:id/disable", middlewares.IsAdmin(), apicontrollers.DisableUser)
+	apiv1.POST("/admin/users/:id/enable", middlewares.IsAdmin(), apicontrollers.EnableUser)
+	apiv1.POST("/admin/users/:id/password-reset", middlewares.IsAdmin(), apicontrollers.CreatePasswordReset)
+	apiv1.DELETE("/admin/users/:id", middlewares.IsAdmin(), apicontrollers.AdminDeleteUser)
 	// Users
 	// per IP; the logins are also limited per username, see apicontrollers.Login
 	apiv1.POST("/user/login", middlewares.RateLimit(middlewares.NewRateLimiter(LoginsPerMinute, time.Minute)),
 		apicontrollers.Login)
+	apiv1.POST("/user/password-reset", middlewares.RateLimit(middlewares.NewRateLimiter(LoginsPerMinute, time.Minute)),
+		apicontrollers.ResetPassword)
+	apiv1.POST("/user/login/2fa", middlewares.RateLimit(middlewares.NewRateLimiter(LoginsPerMinute, time.Minute)),
+		apicontrollers.LoginSecondFactor)
+	// your data: sessions only
+	apiv1.GET("/user/export", middlewares.IsAuthorized(), apicontrollers.ExportAccount)
+	apiv1.POST("/user/delete", middlewares.IsAuthorized(), apicontrollers.DeleteAccount)
+	apiv1.GET("/user/2fa", middlewares.IsAuthorized(), apicontrollers.TwoFactorStatus)
+	apiv1.POST("/user/2fa/setup", middlewares.IsAuthorized(), apicontrollers.SetupTwoFactor)
+	apiv1.POST("/user/2fa/enable", middlewares.IsAuthorized(), apicontrollers.EnableTwoFactor)
+	apiv1.POST("/user/2fa/disable", middlewares.IsAuthorized(), apicontrollers.DisableTwoFactor)
+	apiv1.POST("/user/2fa/recovery", middlewares.IsAuthorized(), apicontrollers.NewRecoveryCodes)
 	apiv1.POST("/user/register", middlewares.RateLimit(middlewares.NewRateLimiter(RegistrationsPerHour, time.Hour)),
 		apicontrollers.Register)
 	// Routes given permissions are also open to device tokens holding them, the others to sessions only
