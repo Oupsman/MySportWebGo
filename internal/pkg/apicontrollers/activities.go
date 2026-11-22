@@ -7,6 +7,7 @@ import (
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/services/activityService"
 	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Directory structures :
@@ -221,6 +223,45 @@ func UpdateActivity(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
+}
+
+// MaxTitleLength is the longest title of an activity, in characters
+const MaxTitleLength = 200
+
+// SetActivityTitle renames an activity, and changes nothing else: the clients importing titles from
+// elsewhere (the desktop application, from a Strava export) leave the other fields alone
+func SetActivityTitle(c *gin.Context) {
+	db := c.MustGet("App").(*app.App).DB
+	user := middlewares.CurrentUser(c)
+	activityUUID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		badRequest(c, err)
+		return
+	}
+	var body struct {
+		Title string `json:"title"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		badRequest(c, err)
+		return
+	}
+	title := strings.TrimSpace(body.Title)
+	if title == "" || utf8.RuneCountInString(title) > MaxTitleLength {
+		c.AbortWithStatusJSON(http.StatusBadRequest,
+			gin.H{"error": fmt.Sprintf("the title must have 1 to %d characters", MaxTitleLength)})
+		return
+	}
+	renamed, err := db.RenameActivity(user.ID, activityUUID, title)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	if !renamed {
+		// the same answer whether the activity exists or belongs to another user
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "activity not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"id": activityUUID.String(), "title": title})
 }
 
 func GetActivity(c *gin.Context) {

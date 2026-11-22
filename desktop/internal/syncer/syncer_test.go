@@ -2,7 +2,9 @@ package syncer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -50,6 +52,10 @@ type fakeServer struct {
 	received map[string]bool
 	uploads  int
 	token    string
+	busy     int               // the next uploads answered 503
+	titles   map[string]string // the titles set, by the name of the file of the activity
+	names    map[string]string // the activity ids answered, to the name of their file
+	canTitle bool              // the token holds activities:write
 }
 
 func (s *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -60,13 +66,36 @@ func (s *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"message":"forbidden: the device token lacks the permissions activities:create"}`)
 		return
 	}
-	file, _, err := r.FormFile("file")
+	if strings.HasSuffix(r.URL.Path, "/title") {
+		if !s.canTitle {
+			w.WriteHeader(http.StatusForbidden)
+			io.WriteString(w, `{"message":"forbidden: the device token lacks the permissions activities:write"}`)
+			return
+		}
+		var body struct{ Title string }
+		json.NewDecoder(r.Body).Decode(&body)
+		id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/v1/activity/"), "/title")
+		if s.titles == nil {
+			s.titles = map[string]string{}
+		}
+		s.titles[s.names[id]] = body.Title
+		io.WriteString(w, `{}`)
+		return
+	}
+	file, header, err := r.FormFile("file")
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	content, _ := io.ReadAll(file)
 	s.uploads++
+	if s.busy > 0 {
+		s.busy--
+		w.Header().Set("Retry-After", "7")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		io.WriteString(w, `{"error":"too many activities are being analysed"}`)
+		return
+	}
 	switch {
 	case strings.Contains(string(content), "bad"):
 		w.WriteHeader(http.StatusBadRequest)
@@ -76,7 +105,12 @@ func (s *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"error":"this activity was already imported","id":"x"}`)
 	default:
 		s.received[string(content)] = true
-		io.WriteString(w, `{"id":"new"}`)
+		if s.names == nil {
+			s.names = map[string]string{}
+		}
+		id := fmt.Sprintf("id%d", len(s.names))
+		s.names[id] = header.Filename
+		io.WriteString(w, `{"id":"`+id+`"}`)
 	}
 }
 

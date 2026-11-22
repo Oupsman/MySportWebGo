@@ -418,6 +418,12 @@ func (db *DB) UpdateActivityElevation(id uuid.UUID, analysed *Activity) error {
 	return db.Model(&Activity{}).Where("id = ?", id).Updates(elevationUpdates(analysed)).Error
 }
 
+// RenameActivity renames an activity of a user, false when the user has no such activity
+func (db *DB) RenameActivity(userID uint, id uuid.UUID, title string) (bool, error) {
+	result := db.Model(&Activity{}).Where("id = ? AND user_id = ?", id, userID).Update("title", title)
+	return result.RowsAffected == 1, result.Error
+}
+
 // GetDeviceActivities returns the ids of the activities of a device of a user, oldest first
 func (db *DB) GetDeviceActivities(userID uint, deviceID uuid.UUID) ([]uuid.UUID, error) {
 	var ids []uuid.UUID

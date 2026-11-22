@@ -19,6 +19,7 @@ import (
 
 	"MySportWebSync/internal/api"
 	"MySportWebSync/internal/config"
+	"MySportWebSync/internal/device"
 	"MySportWebSync/internal/syncer"
 )
 
@@ -67,8 +68,22 @@ func (u *UI) Attach(m *syncer.Manager) {
 	u.notices.Wrapping = fyne.TextWrapWord
 	u.notices.Importance = widget.WarningImportance
 	syncAll := widget.NewButtonWithIcon("Synchronize all", theme.ViewRefreshIcon(), m.SyncAll)
-	devicesTab := container.NewBorder(nil, container.NewVBox(u.notices, syncAll), nil, nil,
-		container.NewVScroll(u.devices))
+	importArchive := widget.NewButtonWithIcon("Import an archive (.zip)…", theme.FolderOpenIcon(), func() {
+		u.chooseFile([]string{".zip"}, func(path string) {
+			if err := m.ImportArchive(path); err != nil {
+				dialog.ShowError(err, u.window)
+			}
+		})
+	})
+	archiveHelp := widget.NewLabel("Archive: the export of your account elsewhere, its FIT files are sent as from a " +
+		"device. Strava: request your archive in the settings of your account, its titles are imported too when " +
+		"the token has the activities:write permission. Garmin Connect: Export Your Data, in the data management " +
+		"of your account.")
+	archiveHelp.Wrapping = fyne.TextWrapWord
+	archiveHelp.Importance = widget.LowImportance
+	devicesTab := container.NewBorder(nil,
+		container.NewVBox(u.notices, archiveHelp, container.NewHBox(importArchive, layout.NewSpacer(), syncAll)),
+		nil, nil, container.NewVScroll(u.devices))
 
 	u.history = widget.NewList(
 		func() int { return len(u.events) },
@@ -174,8 +189,14 @@ func (u *UI) deviceCard(d syncer.DeviceStatus) fyne.CanvasObject {
 	}
 	var body fyne.CanvasObject = status
 	button := widget.NewButtonWithIcon("Synchronize", theme.ViewRefreshIcon(), func() { u.manager.Sync(d.ID) })
+	if d.Kind == device.Archive {
+		// the files already sent are recorded: importing it again sends the rest
+		button = widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() { u.manager.Cancel(d.ID) })
+	}
 	if d.Syncing {
-		button.Disable()
+		if d.Kind != device.Archive {
+			button.Disable()
+		}
 		progress := widget.NewProgressBar()
 		progress.Max = float64(max(d.Total, 1))
 		progress.SetValue(float64(d.Done))
@@ -312,6 +333,10 @@ func checkServer(ctx context.Context, client *api.Client) (title, text string, e
 		info.Name, info.Hint, info.ExpiresAt.Local().Format("January 2, 2006"))
 	if days := int(time.Until(info.ExpiresAt).Hours() / 24); days < 30 {
 		text += fmt.Sprintf("\n\nIt expires in %d days: create a new one in MySportWeb soon.", days)
+	}
+	if !info.CanRename() {
+		text += "\n\nThe titles of a Strava archive need the activities:write permission, this token lacks it: " +
+			"its activities are imported without them."
 	}
 	if !info.CanImportHealth() {
 		text += "\n\nThe health imports need the healthdatas:create permission, this token lacks it."

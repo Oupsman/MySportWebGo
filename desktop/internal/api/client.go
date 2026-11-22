@@ -25,6 +25,20 @@ const TokenPrefix = "msw_"
 // Nothing can be uploaded until the settings change.
 var ErrAuth = errors.New("the server refused the device token")
 
+// BusyError is the server analysing too many activities at once (503): the same file can be sent again
+// after RetryAfter
+type BusyError struct {
+	RetryAfter time.Duration
+	Message    string
+}
+
+func (e *BusyError) Error() string {
+	return "the server is busy: " + e.Message
+}
+
+// defaultRetryAfter is the wait of a busy server that doesn't say how long
+const defaultRetryAfter = 30 * time.Second
+
 type Status int
 
 const (
@@ -173,10 +187,63 @@ func (c *Client) Upload(ctx context.Context, name string, content []byte, item, 
 		return UploadResult{}, fmt.Errorf("%w: %s", ErrAuth, message)
 	case resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusRequestEntityTooLarge:
 		return UploadResult{Status: Rejected, Message: message}, nil
+	case resp.StatusCode == http.StatusServiceUnavailable:
+		wait := defaultRetryAfter
+		if seconds, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && seconds > 0 {
+			wait = time.Duration(seconds) * time.Second
+		}
+		return UploadResult{}, &BusyError{RetryAfter: wait, Message: message}
 	default:
 		// the server or a proxy fails: the file is tried again at the next synchronization
 		return UploadResult{}, fmt.Errorf("the server answered %s %s", resp.Status, message)
 	}
+}
+
+// MaxTitleLength is the longest title the server takes, in characters
+const MaxTitleLength = 200
+
+// SetTitle renames an activity, and changes nothing else. ErrAuth when the token lacks activities:write.
+func (c *Client) SetTitle(ctx context.Context, activityID, title string) error {
+	if runes := []rune(strings.TrimSpace(title)); len(runes) > MaxTitleLength {
+		title = string(runes[:MaxTitleLength])
+	}
+	body, err := json.Marshal(map[string]string{"title": title})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.endpoint("/api/v1/activity/"+url.PathEscape(activityID)+"/title"), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	var answer struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	json.NewDecoder(resp.Body).Decode(&answer)
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return nil
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return fmt.Errorf("%w: %s", ErrAuth, answer.Message)
+	case http.StatusNotFound:
+		// a server older than the route, or the activity deleted since
+		return fmt.Errorf("the server can't rename the activity (%s), is it up to date?", answer.Error)
+	default:
+		return fmt.Errorf("the server answered %s %s", resp.Status, answer.Error)
+	}
+}
+
+// CanRename tells whether the token holds the permission of the titles imported with the activities
+func (t TokenInfo) CanRename() bool {
+	return slices.Contains(t.Permissions, "activities:write")
 }
 
 // healthBatch is the number of measures of an import request, the server takes up to 5000

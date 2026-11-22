@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -22,7 +23,23 @@ import (
 const (
 	pollInterval = 3 * time.Second
 	maxEvents    = 500
+	// maxBusyRetries is the number of times a file is sent again to a busy server (503), before the
+	// synchronization stops: the server analyses a few activities at a time, an archive sends thousands
+	maxBusyRetries = 10
+	maxBusyWait    = 2 * time.Minute
 )
+
+// busyWait waits for a busy server, false when ctx is done first; replaced by the tests
+var busyWait = func(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
 
 // Event is a line of the history
 type Event struct {
@@ -45,8 +62,9 @@ type DeviceStatus struct {
 }
 
 type job struct {
-	id     string
-	manual bool // the user asked: the files the server refused are tried again
+	id      string
+	manual  bool          // the user asked: the files the server refused are tried again
+	archive device.Device // an archive to import, not a plugged device
 }
 
 // Manager scans the devices, and synchronizes them one at a time
@@ -64,6 +82,7 @@ type Manager struct {
 	events  []Event
 	queued  map[string]bool
 	jobs    chan job
+	cancels map[string]context.CancelFunc // of the archive imports, queued or running
 }
 
 func NewManager(cfg config.Config, st *state.State, mtp *device.MTPScanner, onChange func(), onDone func(string)) *Manager {
@@ -78,6 +97,7 @@ func NewManager(cfg config.Config, st *state.State, mtp *device.MTPScanner, onCh
 		status:   map[string]*DeviceStatus{},
 		queued:   map[string]bool{},
 		jobs:     make(chan job, 32),
+		cancels:  map[string]context.CancelFunc{},
 	}
 }
 
@@ -186,6 +206,64 @@ func (m *Manager) SyncAll() {
 	}
 }
 
+// ErrImporting is an archive already being imported
+var ErrImporting = errors.New("this archive is already being imported")
+
+// ImportArchive queues the import of an archive of activities (a Strava or Garmin Connect export). It is
+// shown with the devices while it runs, and can be cancelled; importing it again sends only what is left.
+func (m *Manager) ImportArchive(name string) error {
+	a, err := device.OpenArchive(name)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	if _, ok := m.cancels[a.ID()]; ok {
+		m.mu.Unlock()
+		a.Close()
+		return ErrImporting
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancels[a.ID()] = cancel
+	m.status[a.ID()] = &DeviceStatus{ID: a.ID(), Name: a.Name(), Kind: a.Kind(), Syncing: true}
+	m.mu.Unlock()
+	m.event(Event{Device: a.Name(), Text: "import queued"})
+	go func() {
+		// the archive's own context: Cancel stops it whether it waits in the queue or runs
+		select {
+		case m.jobs <- job{id: a.ID(), archive: &cancellable{Device: a, ctx: ctx}}:
+		case <-ctx.Done():
+			m.finishCancelled(a)
+		}
+	}()
+	return nil
+}
+
+// cancellable is an archive with the context of its import
+type cancellable struct {
+	device.Device
+	ctx context.Context
+}
+
+// finishCancelled removes an import cancelled before it started
+func (m *Manager) finishCancelled(a device.Device) {
+	a.Close()
+	m.mu.Lock()
+	delete(m.cancels, a.ID())
+	delete(m.status, a.ID())
+	m.mu.Unlock()
+	m.event(Event{Device: a.Name(), Text: "import cancelled"})
+}
+
+// Cancel stops the import of an archive; the files already sent are recorded
+func (m *Manager) Cancel(id string) {
+	m.mu.Lock()
+	cancel := m.cancels[id]
+	m.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
 func (m *Manager) enqueue(j job) {
 	m.mu.Lock()
 	if m.queued[j.id] {
@@ -203,6 +281,10 @@ func (m *Manager) worker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case j := <-m.jobs:
+			if c, ok := j.archive.(*cancellable); ok {
+				m.importArchive(ctx, c)
+				continue
+			}
 			m.mu.Lock()
 			delete(m.queued, j.id)
 			d := m.devices[j.id]
@@ -260,20 +342,54 @@ func (m *Manager) update(id string, fn func(s *DeviceStatus)) {
 	m.onChange()
 }
 
+func (m *Manager) importArchive(ctx context.Context, c *cancellable) {
+	if c.ctx.Err() != nil {
+		m.finishCancelled(c.Device)
+		return
+	}
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+	go func() {
+		select {
+		case <-c.ctx.Done():
+			stop()
+		case <-ctx.Done():
+		}
+	}()
+	m.syncDevice(ctx, m.Config(), c.Device, false)
+	m.mu.Lock()
+	cancel := m.cancels[c.ID()]
+	delete(m.cancels, c.ID())
+	m.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
 func (m *Manager) syncDevice(ctx context.Context, cfg config.Config, d device.Device, manual bool) {
 	m.update(d.ID(), func(s *DeviceStatus) { s.Syncing, s.Done, s.Total = true, 0, 0 })
 	counts, err := m.upload(ctx, cfg, d, manual)
 	d.Close()
 
 	summary := counts.String()
-	if err != nil {
+	if errors.Is(err, context.Canceled) && d.Kind() == device.Archive {
+		summary = "cancelled"
+		if counts.handled() > 0 {
+			summary = counts.String() + ", then cancelled: importing it again sends the rest"
+		}
+		m.event(Event{Device: d.Name(), Text: summary})
+	} else if err != nil {
 		summary = err.Error()
 		if counts.handled() > 0 {
 			summary = counts.String() + ", then: " + err.Error()
 		}
 		m.event(Event{Device: d.Name(), Text: summary, Failed: true})
 	} else {
-		m.event(Event{Device: d.Name(), Text: "synchronized: " + summary})
+		verb := "synchronized: "
+		if d.Kind() == device.Archive {
+			verb = "imported: "
+		}
+		m.event(Event{Device: d.Name(), Text: verb + summary})
 	}
 	m.mu.Lock()
 	if s, ok := m.status[d.ID()]; ok {
@@ -291,15 +407,28 @@ func (m *Manager) syncDevice(ctx context.Context, cfg config.Config, d device.De
 
 type counts struct {
 	uploaded, duplicates, rejected int
+	titled                         int    // titles set from the archive
+	skipped                        int    // files of an archive the server can't read (GPX, TCX)
+	titlesOff                      string // why the titles stopped being set, empty when they weren't
 }
 
 func (c counts) handled() int { return c.uploaded + c.duplicates + c.rejected }
 
 func (c counts) String() string {
-	if c.handled() == 0 {
-		return "nothing new"
+	text := "nothing new"
+	if c.handled() > 0 {
+		text = fmt.Sprintf("%d uploaded, %d already on the server, %d refused", c.uploaded, c.duplicates, c.rejected)
 	}
-	return fmt.Sprintf("%d uploaded, %d already on the server, %d refused", c.uploaded, c.duplicates, c.rejected)
+	if c.titled > 0 {
+		text += fmt.Sprintf(", %d titles set", c.titled)
+	}
+	if c.titlesOff != "" {
+		text += ", titles not set: " + c.titlesOff
+	}
+	if c.skipped > 0 {
+		text += fmt.Sprintf(", %d GPX/TCX files skipped (the server reads FIT files only)", c.skipped)
+	}
+	return text
 }
 
 func (m *Manager) upload(ctx context.Context, cfg config.Config, d device.Device, manual bool) (counts, error) {
@@ -313,8 +442,14 @@ func (m *Manager) upload(ctx context.Context, cfg config.Config, d device.Device
 		return c, fmt.Errorf("listing the activities: %w", err)
 	}
 
+	if s, ok := d.(device.Skipping); ok {
+		c.skipped = s.Skipped()
+	}
+	titled, _ := d.(device.Titled)
+
+	// the maximum age is the one of the devices: importing an archive is importing the past
 	var cutoff time.Time
-	if cfg.MaxAgeDays > 0 {
+	if cfg.MaxAgeDays > 0 && d.Kind() != device.Archive {
 		cutoff = time.Now().AddDate(0, 0, -cfg.MaxAgeDays)
 	}
 	var pending []device.File
@@ -337,7 +472,19 @@ func (m *Manager) upload(ctx context.Context, cfg config.Config, d device.Device
 		key := state.Key(d.ID(), f)
 		var buf bytes.Buffer
 		if err := d.Copy(ctx, f, &buf); err != nil {
-			return c, fmt.Errorf("reading %s: %w", f.Name(), err)
+			var unreadable *device.UnreadableError
+			if !errors.As(err, &unreadable) {
+				return c, fmt.Errorf("reading %s: %w", f.Name(), err)
+			}
+			// a corrupt or too large file of an archive: recorded as refused, the others go on
+			c.rejected++
+			r := state.Record{Result: state.Rejected, Message: unreadable.Err.Error(), At: time.Now()}
+			if err := m.state.Put(key, r); err != nil {
+				return c, fmt.Errorf("saving the state: %w", err)
+			}
+			m.event(Event{Device: d.Name(), File: f.Name(), Text: "unreadable: " + unreadable.Err.Error(), Failed: true})
+			m.update(d.ID(), func(s *DeviceStatus) { s.Done = i + 1 })
+			continue
 		}
 		sum := sha256.Sum256(buf.Bytes())
 		hash := hex.EncodeToString(sum[:])
@@ -349,7 +496,7 @@ func (m *Manager) upload(ctx context.Context, cfg config.Config, d device.Device
 				return c, fmt.Errorf("saving the state: %w", err)
 			}
 		} else {
-			result, err := client.Upload(ctx, f.Name(), buf.Bytes(), sent, len(pending))
+			result, err := m.send(ctx, client, d.Name(), f, buf.Bytes(), sent, len(pending))
 			if err != nil {
 				if errors.Is(err, api.ErrAuth) {
 					return c, fmt.Errorf("%w, check the token in the settings", err)
@@ -363,6 +510,19 @@ func (m *Manager) upload(ctx context.Context, cfg config.Config, d device.Device
 			case api.Uploaded:
 				c.uploaded++
 				r.Result, e.Text = state.Uploaded, "uploaded"
+				// only a new activity: one already on the server may have been renamed there
+				if titled != nil && c.titlesOff == "" {
+					if title := titled.Title(f); title != "" && result.ActivityID != "" {
+						if err := client.SetTitle(ctx, result.ActivityID, title); errors.Is(err, api.ErrAuth) {
+							c.titlesOff = "the token lacks the activities:write permission"
+						} else if err != nil {
+							m.event(Event{Device: d.Name(), File: f.Name(), Text: "title not set: " + err.Error(), Failed: true})
+						} else {
+							c.titled++
+							e.Text += ", titled " + strconv.Quote(title)
+						}
+					}
+				}
 			case api.Duplicate:
 				c.duplicates++
 				r.Result, e.Text = state.Duplicate, "already on the server"
@@ -378,6 +538,23 @@ func (m *Manager) upload(ctx context.Context, cfg config.Config, d device.Device
 		m.update(d.ID(), func(s *DeviceStatus) { s.Done = i + 1 })
 	}
 	return c, nil
+}
+
+// send uploads a file, waiting for a busy server and sending it again
+func (m *Manager) send(ctx context.Context, client *api.Client, source string, f device.File, content []byte,
+	item, count int) (api.UploadResult, error) {
+	for attempt := 0; ; attempt++ {
+		result, err := client.Upload(ctx, f.UploadName(), content, item, count)
+		var busy *api.BusyError
+		if !errors.As(err, &busy) || attempt == maxBusyRetries {
+			return result, err
+		}
+		wait := min(busy.RetryAfter, maxBusyWait)
+		m.event(Event{Device: source, File: f.Name(), Text: fmt.Sprintf("the server is busy, sent again in %s", wait)})
+		if !busyWait(ctx, wait) {
+			return result, ctx.Err()
+		}
+	}
 }
 
 // Log adds a line to the history, for the work done outside the synchronizations (health imports)

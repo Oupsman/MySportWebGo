@@ -57,6 +57,25 @@ driver, which replaces the MTP driver of Windows): mass storage devices only. On
 device is not listed. `-hidden` starts in the system tray, as the
 autostart entry of `install.sh --autostart` does.
 
+## Archive imports
+
+**Import an archive (.zip)…**, in the Devices tab, sends the activities of the export of your account elsewhere,
+read where it is on this computer (it isn't uploaded whole to the server):
+
+* **Strava**: request your archive in the settings of your Strava account. Its FIT files (`activities/*.fit.gz`)
+  are sent, and the titles of `activities.csv` are given to the activities created: the token needs
+  `activities:write` for the titles, without it the activities are imported without them. An activity the server
+  already had keeps its title. The activities recorded with the Strava application are GPX files: they are counted
+  and skipped, the server reads FIT files only.
+* **Garmin Connect**: *Export Your Data*, in the data management of your account. The FIT files can be in zips
+  inside the archive: each one is decompressed to a temporary file while its files are sent, then removed.
+
+The import is listed with the devices with its progress and a **Cancel** button. It is recorded in `state.json`
+as a synchronization is: importing the archive again, or a later export, sends only what wasn't sent. *Ignore older
+than* doesn't apply to the archives. A file that can't be read (corrupt, larger than the 25 MB the server takes) is
+counted as refused, the others go on. A busy server (503) is waited for, as long as it asks, before the file is
+sent again, up to 10 times.
+
 ## Health imports
 
 The **Health** tab imports health measures into MySportWeb: weight, body fat, muscle, bone, body water, resting heart

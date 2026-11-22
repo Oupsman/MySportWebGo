@@ -166,6 +166,7 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.DELETE("/activity/:id", middlewares.IsAuthorized(models.ActivitiesDelete), apicontrollers.DeleteActivity)
 	apiv1.POST("/activity/:id", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.UpdateActivity)
 	apiv1.POST("/activity/:id/trim", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.TrimActivity)
+	apiv1.POST("/activity/:id/title", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.SetActivityTitle)
 
 	// segments: stretches of a ride, the passes of the activities on them ranked
 	apiv1.GET("/segments", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.GetSegments)
