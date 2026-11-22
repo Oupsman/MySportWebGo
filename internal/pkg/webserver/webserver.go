@@ -120,6 +120,7 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.DELETE("/admin/invitations/:id", middlewares.IsAdmin(), apicontrollers.RevokeInvitation)
 	// the changes of the users also ask a code of the authenticator, each time (apicontrollers.RequireTOTP)
 	apiv1.GET("/admin/users", middlewares.IsAdmin(), apicontrollers.GetUsers)
+	apiv1.POST("/admin/email/test", middlewares.IsAdmin(), apicontrollers.SendTestEmail)
 	apiv1.POST("/admin/users/:id/role", middlewares.IsAdmin(), apicontrollers.SetUserRole)
 	apiv1.POST("/admin/users/:id/disable", middlewares.IsAdmin(), apicontrollers.DisableUser)
 	apiv1.POST("/admin/users/:id/enable", middlewares.IsAdmin(), apicontrollers.EnableUser)
@@ -129,6 +130,14 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	// per IP; the logins are also limited per username, see apicontrollers.Login
 	apiv1.POST("/user/login", middlewares.RateLimit(middlewares.NewRateLimiter(LoginsPerMinute, time.Minute)),
 		apicontrollers.Login)
+	apiv1.POST("/user/password-forgot", middlewares.RateLimit(middlewares.NewRateLimiter(LoginsPerMinute, time.Minute)),
+		apicontrollers.ForgotPassword)
+	apiv1.POST("/user/email/verify", middlewares.RateLimit(middlewares.NewRateLimiter(LoginsPerMinute, time.Minute)),
+		apicontrollers.VerifyEmail)
+	apiv1.GET("/user/email", middlewares.IsAuthorized(), apicontrollers.EmailStatus)
+	apiv1.POST("/user/email/resend", middlewares.IsAuthorized(), apicontrollers.ResendVerification)
+	apiv1.GET("/notifications/email", middlewares.IsAuthorized(), apicontrollers.EmailNotifications)
+	apiv1.POST("/notifications/email", middlewares.IsAuthorized(), apicontrollers.SetEmailNotifications)
 	apiv1.POST("/user/password-reset", middlewares.RateLimit(middlewares.NewRateLimiter(LoginsPerMinute, time.Minute)),
 		apicontrollers.ResetPassword)
 	apiv1.POST("/user/login/2fa", middlewares.RateLimit(middlewares.NewRateLimiter(LoginsPerMinute, time.Minute)),

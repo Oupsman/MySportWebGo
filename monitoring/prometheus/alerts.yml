@@ -82,6 +82,16 @@ groups:
           summary: "MySportWeb can't get map tiles (MAP_TILE_URL)"
           description: "The tile server is down or refuses the backend: the new thumbnails have no map."
 
+      - alert: MySportWebEmailsFailing
+        # failures and no email through: the SMTP server (relay) refuses the backend, or is down. "unless":
+        # the sent series doesn't exist before a first success
+        expr: sum(increase(mysportweb_emails_total{result="failed"}[1h])) > 0 unless sum(increase(mysportweb_emails_total{result="sent"}[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "MySportWeb can't send emails"
+          description: "The SMTP server refuses or doesn't answer: the password resets and the confirmations don't arrive. The error is in the logs of the backend; Admin > Send a test email shows it too."
+
       - alert: MySportWebBackfillFailed
         expr: increase(mysportweb_backfill_errors_total[1h]) > 0
         labels:

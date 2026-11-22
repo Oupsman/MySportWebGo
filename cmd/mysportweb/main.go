@@ -3,6 +3,7 @@ package main
 import (
 	"MySportWeb/internal/pkg/app"
 	"MySportWeb/internal/pkg/elevation"
+	"MySportWeb/internal/pkg/mail"
 	"MySportWeb/internal/pkg/metrics"
 	"MySportWeb/internal/pkg/staticmap"
 	"MySportWeb/internal/pkg/vars"
@@ -19,6 +20,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"os"
+	"strconv"
 	// timezones of the users, also where the system has no timezone database (containers)
 	_ "time/tzdata"
 )
@@ -52,10 +54,23 @@ func main() {
 	activityService.MapTiles = staticmap.NewTiles(vars.MapTileDir, tileURL)
 	driver := "postgres"
 	dsn := vars.Dsn
+	// the emails: an incomplete or inconsistent configuration stops here, rather than failing later
+	mailConfig, err := mail.ParseConfig(os.Getenv)
+	if err != nil {
+		log.Fatal().Msg(err.Error())
+	}
 	App, err := app.NewApp(log.Logger, driver, dsn)
 	if err != nil {
 		// never the DSN: it holds the password of the database
 		log.Fatal().Err(err).Msg("cannot connect to the database")
+	}
+	if mailConfig.Enabled() {
+		App.Mailer = &mail.SMTP{Config: mailConfig}
+		App.Notifications.Email = App.EmailNotification
+		log.Info().Str("smtp", mailConfig.Host+":"+strconv.Itoa(mailConfig.Port)).Str("tls", mailConfig.TLS).
+			Str("from", mailConfig.From.Address).Msg("emails on")
+	} else {
+		log.Info().Msg("emails off: no SMTP_HOST")
 	}
 
 	// SIGTERM (docker stop) or SIGINT (Ctrl+C): the server stops accepting requests, finishes the running ones

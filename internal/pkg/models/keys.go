@@ -42,7 +42,7 @@ func (db *DB) GetKeys() (*Keys, error) {
 func (db *DB) GetUnsentNotifications() ([]types.NotificationsBody, error) {
 	var notifications []types.NotificationsBody
 	// result := db.Where("sent = ?", false).Find(&notifications)
-	result := db.Raw("SELECT n.message, n.id, n.channel_id, c.config, c.channel_provider FROM notifications n "+
+	result := db.Raw("SELECT n.message, n.id, n.channel_id, c.config, c.channel_provider, c.user_id FROM notifications n "+
 		"JOIN channels c ON c.id = n.channel_id WHERE n.sent = ? AND n.deleted_at IS NULL AND c.deleted_at IS NULL "+
 		"ORDER BY n.id", false).Scan(&notifications)
 	if result.Error != nil {

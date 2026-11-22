@@ -42,6 +42,14 @@ services:
       # who may create an account: closed (default: nobody but the first admin, with the setup code of the
       # logs), invite (with an invitation of an admin) or open (anyone)
       REGISTRATION: ${MSW_REGISTRATION:-closed}
+      # the emails, through the SMTP relay of a sending service (see Emails in the README); empty: no email.
+      # An incomplete configuration stops the backend at its start, saying what is missing
+      SMTP_HOST: ${MSW_SMTP_HOST:-}
+      SMTP_PORT: ${MSW_SMTP_PORT:-}
+      SMTP_USERNAME: ${MSW_SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${MSW_SMTP_PASSWORD:-}
+      SMTP_TLS: ${MSW_SMTP_TLS:-}
+      MAIL_FROM: ${MSW_MAIL_FROM:-}
       # the elevation tiles of the altitude correction, kept in MEDIA/dem: empty downloads the missing ones
       # from AWS Terrain Tiles, none only uses the ones put there
       DEM_URL: ${MSW_DEM_URL:-}

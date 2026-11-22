@@ -65,6 +65,10 @@ var (
 
 	// Logins counts the login attempts, by result: success, failure (wrong username or password), locked
 	// (too many failures for the username)
+	Emails = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace, Name: "emails_total",
+		Help: "Emails sent, by kind (verification, password_reset, invitation, notification, test) and result: sent, failed.",
+	}, []string{"kind", "result"})
 	Logins = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace, Name: "logins_total",
 		Help: "Login attempts, by result: success, failure, locked.",
@@ -111,6 +115,7 @@ var (
 
 func init() {
 	Registry.MustRegister(
+		Emails,
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		HTTPRequests, HTTPDuration,

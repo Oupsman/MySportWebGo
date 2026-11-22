@@ -17,6 +17,9 @@ type Notifs struct {
 	PrivKey string
 	// Subject is the contact of the VAPID tokens: the URL of the instance (DOMAIN)
 	Subject string
+	// Email sends a notification (a PushMessage, as JSON) by email to a user, nil when the emails are off:
+	// the notifications of the email channels then wait, and are dropped after StaleAfter
+	Email func(ctx context.Context, userID uint, message string) error
 }
 
 // SendInterval is how often the queued notifications are sent
@@ -34,6 +37,13 @@ func (notif *Notifs) Notify(notification types.NotificationsBody) error {
 	switch notification.ChannelProvider {
 	case models.PushProvider:
 		return notif.BrowserSend(notification)
+	case models.EmailProvider:
+		if notif.Email == nil {
+			return errors.New("the emails are off")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		return notif.Email(ctx, notification.UserID, notification.Message)
 	default:
 		return errors.New("no sender for the channels " + notification.ChannelProvider)
 	}

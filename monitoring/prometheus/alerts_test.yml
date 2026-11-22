@@ -86,3 +86,27 @@ tests:
             exp_annotations:
               summary: "MySportWeb refused uploads: all its analysis slots were taken for a minute"
               description: "A burst of uploads, or analyses stuck: the clients were told to try again (503)."
+
+  # emails: failing with none through fires; failures among successful ones don't
+  - interval: 1m
+    input_series:
+      - series: 'mysportweb_emails_total{job="mysportweb", kind="verification", result="failed"}'
+        values: "0+1x60"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: MySportWebEmailsFailing
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "MySportWeb can't send emails"
+              description: "The SMTP server refuses or doesn't answer: the password resets and the confirmations don't arrive. The error is in the logs of the backend; Admin > Send a test email shows it too."
+  - interval: 1m
+    input_series:
+      - series: 'mysportweb_emails_total{job="mysportweb", kind="verification", result="failed"}'
+        values: "0+1x60"
+      - series: 'mysportweb_emails_total{job="mysportweb", kind="notification", result="sent"}'
+        values: "0+2x60"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: MySportWebEmailsFailing
+        exp_alerts: []

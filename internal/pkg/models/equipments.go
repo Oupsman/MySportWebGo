@@ -335,11 +335,11 @@ type ServiceDue struct {
 }
 
 // ServiceAlertsDue returns the equipments past their maintenance interval whose service cycle (the date of
-// their latest service) wasn't notified yet, of the users with a push subscription: the others are
-// notified once they subscribe
+// their latest service) wasn't notified yet, of the users with a push subscription or the notifications by
+// email: the others are notified once they have one
 func (db *DB) ServiceAlertsDue() ([]ServiceDue, error) {
 	stats, err := db.equipmentsStats("e.maintenance_interval > 0 AND e.user_id IN "+
-		"(SELECT user_id FROM channels WHERE channel_provider = ? AND deleted_at IS NULL)", PushProvider)
+		"(SELECT user_id FROM channels WHERE channel_provider IN ? AND deleted_at IS NULL)", notifyingProviders)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"MySportWeb/internal/pkg/mail"
 	"MySportWeb/internal/pkg/metrics"
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/notifications"
@@ -8,6 +9,9 @@ import (
 	"MySportWeb/internal/pkg/vars"
 	"MySportWeb/services/activityService"
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -21,6 +25,8 @@ type App struct {
 	Client        *http.Client
 	Logger        zerolog.Logger
 	Notifications *notifications.Notifs
+	// Mailer sends the emails, nil when they are off (no SMTP_HOST): see SendMail
+	Mailer mail.Mailer
 	// SetupCode registers the first admin, whatever REGISTRATION says: drawn at the start while the instance
 	// has no admin, printed in the logs only, "" once there is one at the start
 	SetupCode string
@@ -169,4 +175,47 @@ func (app *App) Wait(timeout time.Duration) bool {
 	case <-time.After(timeout):
 		return false
 	}
+}
+
+// ErrMailOff is the answer of SendMail when the emails are off on this instance
+var ErrMailOff = errors.New("the emails are off on this instance: its admin sets SMTP_HOST to turn them on")
+
+// MailEnabled tells whether the instance sends emails
+func (app *App) MailEnabled() bool {
+	return app.Mailer != nil
+}
+
+// SendMail sends an email of a kind (the label of its metric), counted and logged; ErrMailOff when off
+func (app *App) SendMail(ctx context.Context, kind string, m mail.Message) error {
+	if app.Mailer == nil {
+		return ErrMailOff
+	}
+	if err := app.Mailer.Send(ctx, m); err != nil {
+		metrics.Emails.WithLabelValues(kind, "failed").Inc()
+		app.Logger.Error().Err(err).Str("kind", kind).Msg("email not sent")
+		return err
+	}
+	metrics.Emails.WithLabelValues(kind, "sent").Inc()
+	app.Logger.Info().Str("kind", kind).Msg("email sent")
+	return nil
+}
+
+// EmailNotification sends a notification (a notifications.PushMessage, as JSON) by email to a user, at their
+// confirmed address: notifications.Notifs.Email. An unconfirmed address or a disabled user drops it.
+func (app *App) EmailNotification(ctx context.Context, userID uint, message string) error {
+	recipient, err := app.DB.GetEmailRecipient(userID)
+	if err != nil {
+		return err
+	}
+	if !recipient.Verified || recipient.Disabled {
+		app.Logger.Info().Uint("user_id", userID).Msg("notification by email dropped: address not confirmed, or account disabled")
+		return nil
+	}
+	var m notifications.PushMessage
+	if err := json.Unmarshal([]byte(message), &m); err != nil {
+		return fmt.Errorf("notification not readable: %w", err)
+	}
+	site := strings.TrimRight(vars.Domain, "/")
+	return app.SendMail(ctx, "notification", mail.Notification(recipient.Username, recipient.Email, m.Title, m.Body,
+		site+m.URL, site+"/#/profile/view"))
 }

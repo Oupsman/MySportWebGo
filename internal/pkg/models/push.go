@@ -81,11 +81,11 @@ func (db *DB) DeleteChannel(id uint) error {
 	})
 }
 
-// NotifyUser queues a message for each push subscription of a user, sent by notifications.Run; the number
-// of subscriptions it was queued for
+// NotifyUser queues a message for each channel of a user (their push subscriptions, and their email when
+// on), sent by notifications.Run; the number of channels it was queued for
 func (db *DB) NotifyUser(userID uint, message string) (int, error) {
 	var ids []uint
-	err := db.Model(&Channel{}).Where("user_id = ? AND channel_provider = ?", userID, PushProvider).Pluck("id", &ids).Error
+	err := db.Model(&Channel{}).Where("user_id = ? AND channel_provider IN ?", userID, notifyingProviders).Pluck("id", &ids).Error
 	if err != nil || len(ids) == 0 {
 		return 0, err
 	}

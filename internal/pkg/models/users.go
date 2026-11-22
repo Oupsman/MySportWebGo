@@ -32,6 +32,8 @@ type Users struct {
 	SessionsValidAfter time.Time `json:"-"`
 	// DisabledAt is when an admin disabled the account, nil when enabled: no login, no session, no device token
 	DisabledAt *time.Time `json:"disabled_at"`
+	// EmailVerifiedAt is when the user confirmed their email address, nil until then: nothing is sent to it
+	EmailVerifiedAt *time.Time `json:"email_verified_at"`
 	// the two-factor authentication: see models.EnableTOTP
 	TOTPSecret    string     `json:"-" gorm:"column:totp_secret;not null;default:''"`
 	TOTPEnabledAt *time.Time `json:"two_factor_enabled_at" gorm:"column:totp_enabled_at"`

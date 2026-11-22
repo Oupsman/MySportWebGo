@@ -19,6 +19,7 @@ type NotificationsBody struct {
 	ChannelProvider string `json:"channel_provider"`
 	ID              uint   `json:"id"`
 	ChannelID       uint   `json:"channel_id"`
+	UserID          uint   `json:"user_id"`
 }
 
 var Genders = []string{"Male", "Female"}

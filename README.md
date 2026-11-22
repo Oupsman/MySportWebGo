@@ -56,6 +56,8 @@ docker compose logs backend | grep setup_code   # the code that creates the admi
     the code filled in. A used invitation stays in the list (who invited whom), an unused one can be revoked;
   * `open`: anyone reaching the app.
 
+* **Without email**, the reset links below are given by hand; with the emails on (see [Emails](#emails)), the users
+  ask for one from the login page.
 * **Two-factor authentication**: required for the admins. An admin sets it up in **Your profile** (an
   authenticator app scans a QR code, and 10 single-use recovery codes are shown once). Until then, and with a
   session opened without it, the admin pages are refused. Any user can turn it on. The secrets are encrypted with
@@ -163,10 +165,42 @@ docker compose logs backend | grep setup_code   # the code that creates the admi
 
 The variables are prefixed `MSW_` because docker compose also reads the `.env` used for development.
 
+## Emails
+
+The app sends emails to confirm the addresses of the users, for a forgotten password (**Forgot password?** on the
+login page), the invitations (**Send by email** in Admin) and the notifications each user chooses by email. Without
+email, everything works as before: the admins give the reset and invitation links by hand.
+
+They go through the **SMTP relay of a sending service**: a mail server of your own gets its emails classified
+as spam. Set in `.env`:
+
+| Service  | `MSW_SMTP_HOST`          | `MSW_SMTP_PORT` | `MSW_SMTP_USERNAME`        | `MSW_SMTP_PASSWORD`         |
+|----------|--------------------------|-----------------|----------------------------|-----------------------------|
+| SendGrid | `smtp.sendgrid.net`      | 587             | `apikey` (that very word)  | an API key with Mail Send   |
+| Postmark | `smtp.postmarkapp.com`   | 587             | the Server API token       | the same Server API token   |
+| Mailgun  | `smtp.mailgun.org` (`smtp.eu.mailgun.org` in the EU) | 587 | the SMTP user of the domain | its SMTP password |
+| Brevo    | `smtp-relay.brevo.com`   | 587             | the SMTP login of the account | an SMTP key              |
+
+and `MSW_MAIL_FROM`, the sender, e.g. `MySportWeb <sport@example.com>`. `MSW_SMTP_TLS` is `starttls` by default
+(port 587), `tls` with port 465, `none` only towards a relay on the same machine. Check the current values in
+the documentation of your service: they change seldom, but they do.
+
+* **Deliverability**: verify the domain of `MSW_MAIL_FROM` at the service, which gives the DNS records to add:
+  SPF and DKIM, and a DMARC record. Without them, even a relay lands in spam.
+* **Checks**: an incomplete or inconsistent configuration (a host without port or sender, a username without
+  password, an unknown `MSW_SMTP_TLS`, no encryption towards another machine...) stops the backend at its
+  start, its log says what to fix. Whether the server answers isn't checked at the start: **Admin > Send a test
+  email** sends one to you and shows the error of the server if any; the failures are counted in
+  `mysportweb_emails_total` and the `MySportWebEmailsFailing` alert fires when none gets through.
+* **Addresses**: a user confirms theirs from the email sent at the sign up (or from their profile, for the
+  accounts created before the emails). Nothing is sent to an unconfirmed address but its confirmation. A new
+  address replaces the old one once confirmed from its mailbox.
+
 ## Notifications
 
 The app notifies the browsers of a user when an equipment is past its service interval (set on its page), once
-per service. Each user turns them on in **Your profile → Notifications**, on each browser, with a test button.
+per service. Each user turns them on in **Your profile → Notifications**, on each browser, with a test button;
+and by email too, with the emails on and their address confirmed (see [Emails](#emails)).
 
 * They are web push notifications: the app must be served over **HTTPS** (`MSW_DOMAIN`), and the backend must
   reach the push services of the browsers (Google for Chrome and the Chromium ones, Mozilla, Apple, Microsoft).

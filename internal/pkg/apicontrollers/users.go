@@ -242,6 +242,8 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	// their address, confirmed from its mailbox
+	sendVerificationLater(App, user, user.Email)
 	if grant.Admin {
 		App.Logger.Info().Str("username", user.Username).Msg("the admin of the instance is registered, the setup code is used")
 		metrics.Registrations.WithLabelValues("admin").Inc()
@@ -264,7 +266,7 @@ func Instance(c *gin.Context) {
 		}
 		setupRequired = !hasAdmin
 	}
-	c.JSON(200, gin.H{"registration": vars.Registration, "setup_required": setupRequired})
+	c.JSON(200, gin.H{"registration": vars.Registration, "setup_required": setupRequired, "email": App.MailEnabled()})
 }
 
 // Logout revokes the session token of the request (cookie or header): it is refused from now on, even if
@@ -469,6 +471,25 @@ func UpdateUser(c *gin.Context) {
 		fields["sessions_valid_after"] = now
 	}
 
+	// a new address: with the emails on, it replaces the current one once confirmed from its mailbox (the
+	// current one keeps working meanwhile); without, it replaces it at once, unconfirmed
+	pendingEmail := ""
+	if email, ok := fields["email"].(string); ok && !strings.EqualFold(email, currentUser.Email) {
+		if App.MailEnabled() {
+			delete(fields, "email")
+			pendingEmail = email
+			if taken, err := db.EmailTaken(email, currentUser.ID); err != nil {
+				internalError(c, err)
+				return
+			} else if taken {
+				c.JSON(409, gin.H{"error": models.ErrEmailTaken.Error()})
+				return
+			}
+		} else {
+			fields["email_verified_at"] = nil
+		}
+	}
+
 	err = db.UpdateUserFields(currentUser.ID, fields)
 	if errors.Is(err, models.ErrEmailTaken) {
 		c.JSON(409, gin.H{"error": err.Error()})
@@ -486,8 +507,11 @@ func UpdateUser(c *gin.Context) {
 		recomputePowerMetrics(App, currentUser.ID)
 	}
 
+	if pendingEmail != "" {
+		sendVerificationLater(App, currentUser, pendingEmail)
+	}
 	if update.Password == "" {
-		c.JSON(200, gin.H{"message": "user updated successfully"})
+		c.JSON(200, gin.H{"message": "user updated successfully", "email_pending": pendingEmail})
 		return
 	}
 	// the session of the request ended with the others: the browser goes on with this one, verified by the
