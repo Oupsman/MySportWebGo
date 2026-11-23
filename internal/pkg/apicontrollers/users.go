@@ -45,13 +45,30 @@ func describeSecret(secret string) map[string]interface{} {
 	}
 }
 
-// loginFailures counts the failed logins per username: a password can't be guessed from many IPs
+// The failed logins are counted twice:
+//   - per username and IP (loginFailures): maxLoginFailures block that IP for that username. Who guesses a
+//     password from an IP only locks themselves out, not the owner of the account.
+//   - per username, from the browsers where it never logged in (accountFailures): maxAccountFailures, from
+//     any IPs, block the logins of the username from such browsers. A password can't be guessed from many
+//     IPs; its owner still logs in from the browsers they used before (middlewares.IsKnownDevice).
+//
+// loginFailures also counts the failed codes of the second factor, per account ("2fa:" keys): only who knows
+// the password gets there.
 const (
 	maxLoginFailures   = 5
+	maxAccountFailures = 20
 	loginFailureWindow = 15 * time.Minute
 )
 
-var loginFailures = middlewares.NewRateLimiter(maxLoginFailures, loginFailureWindow)
+var (
+	loginFailures   = middlewares.NewRateLimiter(maxLoginFailures, loginFailureWindow)
+	accountFailures = middlewares.NewRateLimiter(maxAccountFailures, loginFailureWindow)
+)
+
+// loginFailureKey is the key of the failed logins of a username from an IP
+func loginFailureKey(username, ip string) string {
+	return strings.ToLower(username) + "\x00" + ip
+}
 
 // invalidLogin is the answer to a wrong username or a wrong password alike: it doesn't tell which
 // usernames exist
@@ -76,12 +93,30 @@ func Login(c *gin.Context) {
 	logger.Debug().Interface("username_facts", describeSecret(user.Username)).
 		Interface("password_facts", describeSecret(user.Password)).Msg("login attempt")
 
-	failuresKey := strings.ToLower(user.Username)
+	failuresKey := loginFailureKey(user.Username, c.ClientIP())
+	accountKey := strings.ToLower(user.Username)
+	known := middlewares.IsKnownDevice(c, user.Username, time.Now())
 	if blocked, wait := loginFailures.Blocked(failuresKey); blocked {
-		logger.Warn().Msg("login refused: too many failures for this username")
+		logger.Warn().Msg("login refused: too many failures for this username from this IP")
 		metrics.Logins.WithLabelValues("locked").Inc()
 		middlewares.TooManyRequests(c, wait)
 		return
+	}
+	if !known {
+		if blocked, wait := accountFailures.Blocked(accountKey); blocked {
+			logger.Warn().Msg("login refused: too many failures for this username from new browsers")
+			metrics.Logins.WithLabelValues("locked").Inc()
+			middlewares.TooManyRequests(c, wait)
+			return
+		}
+	}
+	// a failure counts against the IP, and against the username unless from a browser it logged in from
+	failed := func() {
+		loginFailures.Add(failuresKey)
+		if !known {
+			accountFailures.Add(accountKey)
+		}
+		metrics.Logins.WithLabelValues("failure").Inc()
 	}
 
 	var existingUser models.Users
@@ -97,8 +132,7 @@ func Login(c *gin.Context) {
 		logger.Debug().Msg("login refused: no user with this username (it is case sensitive, the email does not work)")
 		// as long as a wrong password
 		utils.CheckPasswordOfNobody(user.Password)
-		loginFailures.Add(failuresKey)
-		metrics.Logins.WithLabelValues("failure").Inc()
+		failed()
 		c.JSON(400, gin.H{"error": invalidLogin})
 		return
 	}
@@ -107,12 +141,12 @@ func Login(c *gin.Context) {
 
 	if err := utils.CheckPassword(user.Password, existingUser.Password); err != nil {
 		logger.Debug().Err(err).Uint("user_id", existingUser.ID).Msg("login refused: password check failed")
-		loginFailures.Add(failuresKey)
-		metrics.Logins.WithLabelValues("failure").Inc()
+		failed()
 		c.JSON(400, gin.H{"error": invalidLogin})
 		return
 	}
 	loginFailures.Reset(failuresKey)
+	accountFailures.Reset(accountKey)
 	// told after the password only: it doesn't tell who has an account
 	if existingUser.DisabledAt != nil {
 		logger.Info().Uint("user_id", existingUser.ID).Msg("login refused: account disabled")

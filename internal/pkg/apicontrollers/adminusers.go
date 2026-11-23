@@ -231,7 +231,9 @@ func ResetPassword(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
-	loginFailures.Reset(strings.ToLower(user.Username))
+	// a new password: the failures with the old one are forgotten, from every IP
+	accountFailures.Reset(strings.ToLower(user.Username))
+	loginFailures.ResetPrefix(loginFailureKey(user.Username, ""))
 	App.Logger.Info().Uint("user_id", user.ID).Msg("password reset")
 	c.JSON(http.StatusOK, gin.H{"username": user.Username})
 }

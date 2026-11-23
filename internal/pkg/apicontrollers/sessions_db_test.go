@@ -251,7 +251,8 @@ func TestSessions(t *testing.T) {
 		t.Errorf("session after a profile change: %d", code)
 	}
 
-	// bob had one failure above: 4 more lock his username, even with the right password, other users go on
+	// bob had one failure above from this IP: 4 more lock his username from it, even with the right password;
+	// other users go on
 	for i := 0; i < maxLoginFailures-1; i++ {
 		if code, _ := client.login("Bob", "nope"); code != http.StatusBadRequest {
 			t.Fatalf("failure %d: %d", i+2, code)

@@ -95,3 +95,16 @@ func TestRateLimitPerClientIP(t *testing.T) {
 		t.Fatalf("spoofed X-Forwarded-For escaped the limit: %d", w.Code)
 	}
 }
+
+func TestResetPrefix(t *testing.T) {
+	l := NewRateLimiter(1, time.Hour)
+	for _, key := range []string{"bob\x00192.0.2.1", "bob\x00192.0.2.2", "bobby\x00192.0.2.1"} {
+		l.Add(key)
+	}
+	l.ResetPrefix("bob\x00")
+	for key, blocked := range map[string]bool{"bob\x00192.0.2.1": false, "bob\x00192.0.2.2": false, "bobby\x00192.0.2.1": true} {
+		if got, _ := l.Blocked(key); got != blocked {
+			t.Errorf("%q blocked %v, want %v", key, got, blocked)
+		}
+	}
+}

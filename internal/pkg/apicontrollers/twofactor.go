@@ -98,6 +98,8 @@ func issueSession(c *gin.Context, user models.Users, mfa bool) {
 		return
 	}
 	middlewares.SetSessionCookie(c, token, session.ExpiresAt)
+	// this browser logs in during an attack on the account (see accountFailures)
+	middlewares.SetKnownDeviceCookie(c, user.Username, time.Now())
 	metrics.Logins.WithLabelValues("success").Inc()
 	c.JSON(200, gin.H{"session": newSessionInfo(user, session)})
 }

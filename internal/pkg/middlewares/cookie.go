@@ -2,7 +2,12 @@ package middlewares
 
 import (
 	"MySportWeb/internal/pkg/vars"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -100,4 +105,68 @@ func CrossOriginProtection() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// The known-device cookie marks a browser where a user logged in: a password guessed from many IPs blocks
+// the logins of their username, except from the browsers they used before (see apicontrollers.Login).
+// It holds the username and an expiry, signed with SECRET_KEY: it proves a past login, it opens nothing.
+const (
+	knownDeviceCookieSecure = "__Host-msw_known"
+	knownDeviceCookiePlain  = "msw_known"
+	// KnownDeviceLifetime is how long a browser stays known after a login
+	KnownDeviceLifetime = 180 * 24 * time.Hour
+)
+
+func knownDeviceCookieName() string {
+	if secureCookies() {
+		return knownDeviceCookieSecure
+	}
+	return knownDeviceCookiePlain
+}
+
+// knownDeviceMAC signs the username (lowercase) and the expiry of a known-device cookie
+func knownDeviceMAC(username string, expires int64) string {
+	mac := hmac.New(sha256.New, []byte(vars.SecretKey))
+	fmt.Fprintf(mac, "known-device\x00%s\x00%d", username, expires)
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// SetKnownDeviceCookie marks the browser of the request as one where username logged in
+func SetKnownDeviceCookie(c *gin.Context, username string, now time.Time) {
+	expires := now.Add(KnownDeviceLifetime)
+	name := strings.ToLower(username)
+	value := base64.RawURLEncoding.EncodeToString([]byte(name)) + "." + strconv.FormatInt(expires.Unix(), 10) +
+		"." + knownDeviceMAC(name, expires.Unix())
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     knownDeviceCookieName(),
+		Value:    value,
+		Path:     "/",
+		Expires:  expires,
+		MaxAge:   int(KnownDeviceLifetime.Seconds()),
+		HttpOnly: true,
+		Secure:   secureCookies(),
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// IsKnownDevice tells whether the browser of the request logged in as username (case ignored) before, and
+// its cookie hasn't expired
+func IsKnownDevice(c *gin.Context, username string, now time.Time) bool {
+	cookie, err := c.Request.Cookie(knownDeviceCookieName())
+	if err != nil {
+		return false
+	}
+	parts := strings.Split(cookie.Value, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	name, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil || string(name) != strings.ToLower(username) {
+		return false
+	}
+	expires, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil || now.Unix() >= expires {
+		return false
+	}
+	return hmac.Equal([]byte(parts[2]), []byte(knownDeviceMAC(string(name), expires)))
 }

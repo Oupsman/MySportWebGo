@@ -4,6 +4,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -94,6 +95,17 @@ func (l *RateLimiter) Reset(key string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	delete(l.counts, key)
+}
+
+// ResetPrefix forgets the events of the keys starting with prefix
+func (l *RateLimiter) ResetPrefix(prefix string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for key := range l.counts {
+		if strings.HasPrefix(key, prefix) {
+			delete(l.counts, key)
+		}
+	}
 }
 
 // RateLimit refuses the requests of an IP above the limit of l, with 429. The IP is the one gin trusts:
