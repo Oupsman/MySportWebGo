@@ -49,8 +49,11 @@ type Activity struct {
 	Device           types.Device      `json:"device"`
 	DeviceName       string            `json:"device_name" gorm:"index"`         // "Garmin Edge 530", to filter on it
 	DeviceID         *uuid.UUID        `json:"device_id" gorm:"type:uuid;index"` // nil when the file doesn't name the device
-	UserAge          uint8             `json:"user_age"`                         // age of the user at the time of the initial import of activity
-	Thumbnail        string            `json:"thumbnail"`
+	// the name the owner gave the device, shown in place of DeviceName; empty when they gave none. Not
+	// saved: GetActivity reads it for the owner
+	DeviceLabel string `json:"device_label" gorm:"-"`
+	UserAge     uint8  `json:"user_age"` // age of the user at the time of the initial import of activity
+	Thumbnail   string `json:"thumbnail"`
 	// the version of the drawing of its thumbnail (activityService.ThumbnailVersion): an older one is drawn
 	// again at the start
 	ThumbnailVersion int `json:"-" gorm:"not null;default:0"`

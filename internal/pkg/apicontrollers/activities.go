@@ -316,6 +316,12 @@ func GetActivity(c *gin.Context) {
 	}
 	if activity.User.ID != user.ID {
 		activity.HidePrivate()
+	} else if activity.DeviceID != nil {
+		// the name the owner gave the device is theirs: the others see the one of the file
+		if activity.DeviceLabel, err = db.DeviceLabel(*activity.DeviceID); err != nil {
+			internalError(c, err)
+			return
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"activity": activity})
 }

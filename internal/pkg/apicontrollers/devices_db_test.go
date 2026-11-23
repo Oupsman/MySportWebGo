@@ -8,6 +8,7 @@ import (
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/internal/pkg/vars"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,12 +68,26 @@ func TestUpdateDevice(t *testing.T) {
 		t.Errorf("stored correction %q", got)
 	}
 
+	// renamed, trimmed, the correction kept; then back to the name of its files
+	code, answer = client.send(http.MethodPost, "/device/"+hers.String(), token, `{"label": "  Gravel Edge "}`)
+	if code != http.StatusOK || answer["label"] != "Gravel Edge" || answer["name"] != "Garmin Edge 530" ||
+		answer["altitude_correction"] != "replace" {
+		t.Errorf("rename: %d %v", code, answer)
+	}
+	code, answer = client.send(http.MethodPost, "/device/"+hers.String(), token, `{"label": ""}`)
+	if code != http.StatusOK || answer["label"] != "" {
+		t.Errorf("label removed: %d %v", code, answer)
+	}
+
 	for _, refused := range []struct {
 		name, path, body string
 		code             int
 	}{
 		{"unknown correction", "/device/" + hers.String(), `{"altitude_correction": "dem"}`, http.StatusBadRequest},
-		{"no correction", "/device/" + hers.String(), `{}`, http.StatusBadRequest},
+		{"nothing to change", "/device/" + hers.String(), `{}`, http.StatusBadRequest},
+		{"label too long", "/device/" + hers.String(), `{"label": "` + strings.Repeat("é", models.MaxDeviceLabel+1) + `"}`,
+			http.StatusBadRequest},
+		{"label of another user's device", "/device/" + his.String(), `{"label": "mine"}`, http.StatusNotFound},
 		{"not an id", "/device/edge", `{"altitude_correction": "none"}`, http.StatusBadRequest},
 		// the same answer whether the device exists or belongs to another user
 		{"device of another user", "/device/" + his.String(), `{"altitude_correction": "replace"}`, http.StatusNotFound},

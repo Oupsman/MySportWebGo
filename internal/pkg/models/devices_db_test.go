@@ -370,3 +370,78 @@ func TestMergeDevices(t *testing.T) {
 		t.Errorf("other user's devices %+v, %v", mine, err)
 	}
 }
+
+func TestDeviceLabel(t *testing.T) {
+	db, user, other := devicesTestDB(t)
+	day := time.Date(2026, 10, 1, 8, 0, 0, 0, time.UTC)
+	karoo := types.Device{Brand: "Hammerhead", Model: "Karoo 3"}
+	id, err := db.FindOrCreateDevice(user.ID, karoo, "Karoo", AltitudeCorrectionNone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := db.FindOrCreateDevice(other.ID, karoo, "Karoo", AltitudeCorrectionNone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	activity := Activity{UserID: user.ID, Title: "ride", Sport: "cycling", Device: karoo, DeviceName: "Karoo",
+		DeviceID: id, Date: day}
+	if err := db.Omit("User", "Equipment").Create(&activity).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	label := "Karoo 3"
+	if err := db.UpdateDevice(user.ID, *id, &label, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.UpdateDevice(other.ID, *theirs, &label, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.UpdateDevice(other.ID, *id, &label, nil); err != gorm.ErrRecordNotFound {
+		t.Errorf("label of the other user's device: %v", err)
+	}
+	// a correction alone keeps the label, and the label the correction
+	if err := db.SetAltitudeCorrection(user.ID, *id, AltitudeCorrectionReplace); err != nil {
+		t.Fatal(err)
+	}
+	device, err := db.GetDeviceStats(user.ID, *id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if device.Label != "Karoo 3" || device.Name != "Karoo" || device.AltitudeCorrection != AltitudeCorrectionReplace ||
+		device.DisplayName() != "Karoo 3" {
+		t.Errorf("device %+v", device.Devices)
+	}
+	// the next import finds the device without renaming it
+	again, err := db.FindOrCreateDevice(user.ID, karoo, "Karoo", AltitudeCorrectionNone)
+	if err != nil || *again != *id {
+		t.Fatalf("device %v, %v", again, err)
+	}
+	if got, _ := db.DeviceLabel(*id); got != "Karoo 3" {
+		t.Errorf("label after an import %q", got)
+	}
+
+	// the search shows the label, and still filters on the name of the files
+	search, err := db.SearchActivities(user.ID, ActivityFilter{Device: "Karoo"}, "date", true, 1, 25, time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if search.Total != 1 || search.Activities[0].DeviceName != "Karoo 3" {
+		t.Errorf("search %d activities %+v", search.Total, search.Activities)
+	}
+	if len(search.Devices) != 1 || search.Devices[0].Name != "Karoo 3" {
+		t.Errorf("search devices %+v", search.Devices)
+	}
+
+	// back to the name of the files
+	empty := ""
+	if err := db.UpdateDevice(user.ID, *id, &empty, nil); err != nil {
+		t.Fatal(err)
+	}
+	search, err = db.SearchActivities(user.ID, ActivityFilter{}, "date", true, 1, 25, time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if search.Activities[0].DeviceName != "Karoo" || search.Devices[0].Name != "Karoo" {
+		t.Errorf("without label: %+v, %+v", search.Activities, search.Devices)
+	}
+}

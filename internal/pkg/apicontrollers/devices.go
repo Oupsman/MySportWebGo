@@ -7,14 +7,19 @@ import (
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/services/activityService"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 )
 
-// DeviceUpdate is what the user changes on a device
+// DeviceUpdate is what the user changes on a device, the fields absent staying as they are
 type DeviceUpdate struct {
-	AltitudeCorrection string `json:"altitude_correction" binding:"required"`
+	AltitudeCorrection *string `json:"altitude_correction"`
+	// the name the user gives it, "" to show the one its files give
+	Label *string `json:"label"`
 }
 
 // GetDevices returns the recording devices of the user, with their activities, the latest used first
@@ -55,8 +60,8 @@ func GetDevice(c *gin.Context) {
 	c.JSON(http.StatusOK, withRecompute(device))
 }
 
-// UpdateDevice changes the altitude correction of a recording device of the user. It applies to the
-// activities imported after; the ones recorded before are recomputed on request.
+// UpdateDevice changes the name or the altitude correction of a recording device of the user. The altitude
+// correction applies to the activities imported after; the ones recorded before are recomputed on request.
 func UpdateDevice(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
 	user := middlewares.CurrentUser(c)
@@ -70,12 +75,28 @@ func UpdateDevice(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if !models.ValidAltitudeCorrection(update.AltitudeCorrection) {
+	if update.AltitudeCorrection == nil && update.Label == nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "nothing to change: label or altitude_correction"})
+		return
+	}
+	if update.AltitudeCorrection != nil && !models.ValidAltitudeCorrection(*update.AltitudeCorrection) {
 		c.AbortWithStatusJSON(http.StatusBadRequest,
 			gin.H{"error": "altitude_correction must be none, replace or calibrate"})
 		return
 	}
-	if err := db.SetAltitudeCorrection(user.ID, id, update.AltitudeCorrection); err != nil {
+	var label string
+	if update.Label != nil {
+		label = strings.TrimSpace(*update.Label)
+		if utf8.RuneCountInString(label) > models.MaxDeviceLabel {
+			c.AbortWithStatusJSON(http.StatusBadRequest,
+				gin.H{"error": fmt.Sprintf("the name of a device is %d characters at most", models.MaxDeviceLabel)})
+			return
+		}
+	}
+	if update.Label != nil {
+		update.Label = &label
+	}
+	if err := db.UpdateDevice(user.ID, id, update.Label, update.AltitudeCorrection); err != nil {
 		lookupError(c, err, "device")
 		return
 	}

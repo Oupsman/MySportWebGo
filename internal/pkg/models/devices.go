@@ -45,7 +45,9 @@ type Devices struct {
 	Model  string `gorm:"not null;default:'';uniqueIndex:idx_devices_unit" json:"model"`
 	Serial string `gorm:"not null;default:'';uniqueIndex:idx_devices_unit" json:"serial_number"`
 	// "Garmin Edge 530", the device_name of its activities
-	Name               string `json:"name"`
+	Name string `json:"name"`
+	// the name the user gave it, shown in place of Name; empty for Name
+	Label              string `gorm:"not null;default:''" json:"label"`
 	AltitudeCorrection string `gorm:"not null;default:'none'" json:"altitude_correction"`
 	// the device this one was merged into: the same unit, that its files named differently (a firmware
 	// update giving a serial number...). It stays as an alias: the activities of its name go to the other.
@@ -178,7 +180,7 @@ func (db *DB) devicesStats(where string, args ...interface{}) ([]DeviceStats, er
 				WHERE l.device_id = d.id ORDER BY l.date DESC LIMIT 1), '') AS software
 		FROM devices d LEFT JOIN activities a ON a.device_id = d.id
 		WHERE d.merged_into_id IS NULL AND `+where+`
-		GROUP BY d.id ORDER BY last_used DESC NULLS LAST, d.name, d.serial`, args...).
+		GROUP BY d.id ORDER BY last_used DESC NULLS LAST, `+deviceDisplayName("d")+`, d.serial`, args...).
 		Scan(&stats).Error
 	if err != nil || len(stats) == 0 {
 		return stats, err
@@ -203,8 +205,40 @@ func (db *DB) devicesStats(where string, args ...interface{}) ([]DeviceStats, er
 // SetAltitudeCorrection changes the altitude correction of a device of a user, gorm.ErrRecordNotFound
 // when the user has no such device
 func (db *DB) SetAltitudeCorrection(userID uint, id uuid.UUID, correction string) error {
+	return db.UpdateDevice(userID, id, nil, &correction)
+}
+
+// MaxDeviceLabel is the longest name a user may give a device, in characters
+const MaxDeviceLabel = 64
+
+// DisplayName is how the device is shown: the name the user gave it, else the one its files give
+func (d Devices) DisplayName() string {
+	if d.Label != "" {
+		return d.Label
+	}
+	return d.Name
+}
+
+// deviceDisplayName is DisplayName in SQL, for the devices table aliased as alias
+func deviceDisplayName(alias string) string {
+	return "COALESCE(NULLIF(" + alias + ".label, ''), " + alias + ".name)"
+}
+
+// UpdateDevice changes the name the user gave a device of theirs ("" to show the name its files give) and
+// its altitude correction, each when not nil; gorm.ErrRecordNotFound when the user has no such device
+func (db *DB) UpdateDevice(userID uint, id uuid.UUID, label, correction *string) error {
+	updates := map[string]interface{}{}
+	if label != nil {
+		updates["label"] = *label
+	}
+	if correction != nil {
+		updates["altitude_correction"] = *correction
+	}
+	if len(updates) == 0 {
+		return nil
+	}
 	result := db.Model(&Devices{}).Where("user_id = ? AND id = ? AND merged_into_id IS NULL", userID, id).
-		Update("altitude_correction", correction)
+		Updates(updates)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -212,6 +246,16 @@ func (db *DB) SetAltitudeCorrection(userID uint, id uuid.UUID, correction string
 		return gorm.ErrRecordNotFound
 	}
 	return nil
+}
+
+// DeviceLabel returns the name the user gave a device, "" when they gave none or there is no such device
+func (db *DB) DeviceLabel(id uuid.UUID) (string, error) {
+	var labels []string
+	err := db.Model(&Devices{}).Where("id = ?", id).Limit(1).Pluck("label", &labels).Error
+	if err != nil || len(labels) == 0 {
+		return "", err
+	}
+	return labels[0], nil
 }
 
 // MergeDevices merges a device of a user into another: the same unit, that its files named differently.

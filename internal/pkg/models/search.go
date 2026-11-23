@@ -92,8 +92,9 @@ func (db *DB) SearchActivities(userID uint, filter ActivityFilter, sort string, 
 		Select("activities.id, activities.title, activities.date, activities.sport, activities.distance, " +
 			"activities.duration, activities.avg_speed, activities.positive_elevation AS elevation, " +
 			"activities.is_commute, activities.equipment_id, equipments.name AS equipment_name, " +
-			"COALESCE(activities.device_name, '') AS device_name, " + HasMapColumn).
+			"COALESCE(" + deviceDisplayName("devices") + ", activities.device_name, '') AS device_name, " + HasMapColumn).
 		Joins("LEFT JOIN equipments ON equipments.id = activities.equipment_id").
+		Joins("LEFT JOIN devices ON devices.id = activities.device_id").
 		// the date, then the id, keep the order stable between pages
 		Order(order).Order("activities.date DESC").Order("activities.id").
 		Offset((page - 1) * perPage).Limit(perPage).Scan(&search.Activities).Error
@@ -106,9 +107,9 @@ func (db *DB) SearchActivities(userID uint, filter ActivityFilter, sort string, 
 		return search, err
 	}
 	// the most used first
-	err = db.Table("devices").Select("devices.id, devices.name, devices.serial, COUNT(*) AS activities").
+	err = db.Table("devices").Select("devices.id, "+deviceDisplayName("devices")+" AS name, devices.serial, COUNT(*) AS activities").
 		Joins("JOIN activities ON activities.device_id = devices.id").Where("devices.user_id = ?", userID).
-		Group("devices.id").Order("COUNT(*) DESC").Order("devices.name").Order("devices.serial").
+		Group("devices.id").Order("COUNT(*) DESC").Order(deviceDisplayName("devices")).Order("devices.serial").
 		Scan(&search.Devices).Error
 	if err != nil {
 		return search, err
