@@ -106,9 +106,10 @@ services:
     restart: unless-stopped
     environment:
       BACKEND_URL: http://backend:8080
-      # Content-Security-Policy-Report-Only: the browser console tells what the policy would block, nothing
-      # is blocked; Content-Security-Policy once the console stays clean on every page (map included)
-      CSP_HEADER: ${MSW_CSP_HEADER:-Content-Security-Policy-Report-Only}
+      # Content-Security-Policy (default): the browser blocks what the policy doesn't allow (a script injected
+      # in a page). Content-Security-Policy-Report-Only only reports it in the browser console: to try a change
+      # of the policy, or a page it would break
+      CSP_HEADER: ${MSW_CSP_HEADER:-Content-Security-Policy}
     ports:
       - "${MSW_HTTP_PORT:-8080}:80"
     depends_on:

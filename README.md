@@ -291,6 +291,10 @@ are lost.
 
 **Upgrade notes**:
 
+* The version enforcing the Content-Security-Policy blocks what it doesn't allow, instead of only reporting it.
+  Every page was checked without any report. If a page breaks (a map or a chart blank), set
+  `MSW_CSP_HEADER=Content-Security-Policy-Report-Only` and open an issue with the report of the browser console.
+
 * The version with the role `mysportweb_app` gives it the database and its tables at its first start (a few
   seconds), then works with it: nothing to do. Going back to an older version works too (it connects as the
   superuser, which can use anything).
