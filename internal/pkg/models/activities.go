@@ -483,9 +483,16 @@ func (db *DB) FindDuplicateActivity(userID uint, sport string, date time.Time) (
 }
 
 // HasMapColumn is true for an activity whose public trace has two points at least: its thumbnail shows a
-// map, the others are blank. The trace is JSON in a bytea.
-const HasMapColumn = "(activities.public_gps_points IS NOT NULL AND " +
-	"jsonb_path_exists(convert_from(activities.public_gps_points, 'UTF8')::jsonb, '$[1]')) AS has_map"
+// map, the others are blank. The trace is JSON in a bytea, often tens of kilobytes: reading it for every
+// activity of a user (before a sort keeps a page of them) took most of the time of the dashboard. Its size
+// is known without reading it: a point is {"lat":…,"lon":…}, 66 bytes at most with the brackets, so a trace of
+// more than mapTraceBytes has two points; only the tiny ones are read.
+const HasMapColumn = "(CASE WHEN activities.public_gps_points IS NULL THEN false " +
+	"WHEN octet_length(activities.public_gps_points) > " + mapTraceBytes + " THEN true " +
+	"ELSE jsonb_path_exists(convert_from(activities.public_gps_points, 'UTF8')::jsonb, '$[1]') END) AS has_map"
+
+// mapTraceBytes: a public trace longer than that has two points at least (see HasMapColumn)
+const mapTraceBytes = "200"
 
 // ThumbnailToDraw is what drawing the thumbnail of an activity needs
 type ThumbnailToDraw struct {
