@@ -71,6 +71,21 @@ func main() {
 	if err != nil {
 		log.Fatal().Msg(err.Error())
 	}
+	// a superuser (the bundled Postgres) only sets up the role the backend works with
+	role := os.Getenv("DBUSER") + "_app"
+	appDSN, err := vars.DatabaseDSN(func(key string) string {
+		if key == "DBUSER" {
+			return role
+		}
+		return os.Getenv(key)
+	})
+	if err == nil {
+		dsn, err = app.WorkingDSN(log.Logger, dsn, appDSN, role, os.Getenv("DBPASSWORD"))
+	}
+	if err != nil {
+		// never the DSN: it holds the password of the database
+		log.Fatal().Err(err).Msg("cannot connect to the database")
+	}
 	App, err := app.NewApp(log.Logger, driver, dsn)
 	if err != nil {
 		// never the DSN: it holds the password of the database

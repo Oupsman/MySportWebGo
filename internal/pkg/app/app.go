@@ -225,3 +225,29 @@ func (app *App) EmailNotification(ctx context.Context, userID uint, message stri
 	return app.SendMail(ctx, "notification", mail.Notification(recipient.Username, recipient.Email, m.Title, m.Body,
 		site+m.URL, site+"/#/profile/view"))
 }
+
+// WorkingDSN returns the connection string the backend works with: dsn, unless its role is a superuser (the
+// bundled Postgres); then it sets up role, without privileges but owning the database
+// (models.EnsureAppRole), and returns appDSN, the one of role
+func WorkingDSN(logger zerolog.Logger, dsn, appDSN, role, password string) (string, error) {
+	db, err := models.ConnectToDB("postgres", dsn)
+	if err != nil {
+		return "", err
+	}
+	if sqlDB, err := db.DB.DB(); err == nil {
+		defer sqlDB.Close()
+	}
+	super, err := db.IsSuperuser()
+	if err != nil {
+		return "", err
+	}
+	if !super {
+		return dsn, nil
+	}
+	if err := db.EnsureAppRole(role, password); err != nil {
+		return "", fmt.Errorf("setting up the role %s of the backend: %w", role, err)
+	}
+	logger.Info().Str("role", role).
+		Msg("database: the configured user is a superuser, the backend works with a role without privileges owning the database")
+	return appDSN, nil
+}

@@ -90,10 +90,16 @@ docker compose logs backend | grep setup_code   # the code that creates the admi
   Portainer, use absolute paths for `MSW_DATA_DIR` and `MSW_BACKUP_DIR`: the relative ones end up inside the stack
   directory of Portainer.
 * **Bundled database**: `COMPOSE_PROFILES=db` in `.env` starts a Postgres, its data in `MSW_DATA_DIR/postgres`.
+  Its user, `MSW_DBUSER`, is a superuser: at each start the backend uses it only to set up `<MSW_DBUSER>_app`
+  (`mysportweb_app`), with the same password, without any privilege but owning the database and its tables, and
+  works with that role. An SQL injection can then neither read the files of the server nor run commands. The
+  superuser stays for the backups and `mysportweb admin`. A restore made as the superuser (see **Restore**) gives
+  the tables back to `mysportweb_app` at the next start of the backend.
 * **External database**: remove `COMPOSE_PROFILES` and set `MSW_DBHOST`, `MSW_DBPORT`, `MSW_DBUSER`, `MSW_DBPASSWORD`,
   `MSW_DBNAME`, and `MSW_DBSSLMODE`. The default, `prefer`, uses TLS when the database offers it without checking
   its certificate: set `verify-full` (or `require`) for a database reached over a network you don't control.
-  The tables are created at the first start.
+  The tables are created at the first start. Give the backend a user owning its database, not a superuser; given a
+  superuser, it sets up `<MSW_DBUSER>_app` as above.
 * **Storage quota**: each user may store 1 GB of files (activities, thumbnails, pictures), `MSW_USER_QUOTA`
   (`500m`, `5g`, `none` for no quota). An upload above it is refused (507, with the space used). An admin gives a
   user another quota, or none, in the admin page; `GET /api/v1/user/storage` tells a user their space and quota.
@@ -284,6 +290,10 @@ than this version of the backend`, the new version migrated the database: restor
 are lost.
 
 **Upgrade notes**:
+
+* The version with the role `mysportweb_app` gives it the database and its tables at its first start (a few
+  seconds), then works with it: nothing to do. Going back to an older version works too (it connects as the
+  superuser, which can use anything).
 
 * The version with `MSW_REGISTRATION` closes the registrations by default (they were open to anyone, the first
   user becoming the admin): set `MSW_REGISTRATION=open` to keep them open, or `invite`. The existing admin stays.
