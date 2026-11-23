@@ -575,6 +575,13 @@ func currentUserLocation(c *gin.Context) (models.Users, *time.Location) {
 	return user, activityService.UserLocation(user.Timezone)
 }
 
+// The highlights of the dashboard: the new bests and goals completed of the last DashboardHighlightDays, at
+// most DashboardHighlights
+const (
+	DashboardHighlightDays = 30
+	DashboardHighlights    = 20
+)
+
 func Dashboard(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
 	user, location := currentUserLocation(c)
@@ -587,6 +594,13 @@ func Dashboard(c *gin.Context) {
 		if activity.HasMap {
 			dashboard.Recent[i].Thumbnail = activityService.ThumbnailURL(user.UUID, activity.ID)
 		}
+	}
+	now := time.Now().In(location)
+	dashboard.Highlights, err = db.GetRecentHighlights(user.ID, now.AddDate(0, 0, -DashboardHighlightDays),
+		DashboardHighlights, location)
+	if err != nil {
+		internalError(c, err)
+		return
 	}
 	c.JSON(200, dashboard)
 }

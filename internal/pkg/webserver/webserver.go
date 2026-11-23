@@ -220,6 +220,8 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.POST("/segments/:id", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.RenameSegment)
 	apiv1.DELETE("/segments/:id", middlewares.IsAuthorized(models.ActivitiesWrite), apicontrollers.DeleteSegment)
 	apiv1.GET("/activity/:id/segments", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.GetActivitySegments)
+	// what it achieved: new bests, podiums of segments, goals completed
+	apiv1.GET("/activity/:id/highlights", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.GetActivityHighlights)
 
 	// recording devices, created at the import of their first activity; their settings change how their
 	// activities are analysed

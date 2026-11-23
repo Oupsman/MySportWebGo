@@ -159,3 +159,22 @@ func GetActivitySegments(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"efforts": efforts})
 }
+
+// GetActivityHighlights answers what an activity of the user achieved, compared with their activities before
+// it: its best efforts and segment passes in the podium at its date, the goals it completed. Empty for an
+// activity of another user.
+func GetActivityHighlights(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		badRequest(c, err)
+		return
+	}
+	db := c.MustGet("App").(*app.App).DB
+	user, location := currentUserLocation(c)
+	highlights, err := db.GetHighlights(user.ID, []uuid.UUID{id}, location)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"highlights": highlights})
+}

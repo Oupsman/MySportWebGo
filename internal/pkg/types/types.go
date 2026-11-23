@@ -288,6 +288,8 @@ type Dashboard struct {
 	Calendar     []ActivityCalendar `json:"calendar"` // the activities of the current month
 	NbEquipments int64              `json:"nb_equipments"`
 	Timezone     string             `json:"timezone"`
+	// the new bests and the goals completed of the last days, the latest first: set by the caller
+	Highlights []Highlight `json:"highlights"`
 }
 
 type ActivityUpload struct {
@@ -624,4 +626,38 @@ type EffortRecord struct {
 	ActivityID    uuid.UUID `json:"activity_id"`
 	ActivityTitle string    `json:"activity_title"`
 	Date          time.Time `json:"date"`
+}
+
+// The kinds of highlights
+const (
+	HighlightEffort  = "effort"  // a best effort among the best ones of its distance or duration
+	HighlightSegment = "segment" // a pass among the fastest on a segment
+	HighlightGoal    = "goal"    // a goal the activity completed
+)
+
+// Highlight is what an activity achieved, compared with the activities before it: a best effort or a segment
+// pass ranked in the top HighlightTop at its date, or a goal it completed
+type Highlight struct {
+	ActivityID    uuid.UUID `json:"activity_id"`
+	ActivityTitle string    `json:"activity_title"`
+	Date          time.Time `json:"date"`
+	Kind          string    `json:"kind"`
+	Sport         string    `json:"sport"`
+	// an effort: its kind (EffortDistance, EffortPower) and target; Value: its time or power, a segment pass:
+	// its time, a goal: the value of its metric at the end of the activity
+	EffortKind string  `json:"effort_kind,omitempty"`
+	Target     float64 `json:"target"`
+	Value      float64 `json:"value"`
+	// Rank at the date of the activity: 1 a new best. Previous: the best before it, nil for a goal. Current:
+	// a best still the best today.
+	Rank     int      `json:"rank"`
+	Previous *float64 `json:"previous"`
+	Current  bool     `json:"current"`
+	// seconds since the start of the activity, of an effort or a pass
+	StartOffset float64    `json:"start_offset"`
+	SegmentID   *uuid.UUID `json:"segment_id,omitempty"`
+	GoalID      *uuid.UUID `json:"goal_id,omitempty"`
+	// the name of the segment or of the goal
+	Name   string `json:"name,omitempty"`
+	Metric string `json:"metric,omitempty"` // of a goal
 }

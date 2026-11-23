@@ -4,8 +4,10 @@ import (
 	"MySportWeb/internal/pkg/app"
 	"MySportWeb/internal/pkg/middlewares"
 	"MySportWeb/internal/pkg/models"
+	"MySportWeb/internal/pkg/notifications"
 	"MySportWeb/internal/pkg/types"
 	"MySportWeb/services/activityService"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -174,6 +176,14 @@ func UploadActivity(c *gin.Context) {
 		c.MustGet("App").(*app.App).Logger.Error().Err(err).Str("activity", activity.ID.String()).
 			Msg("passes on the segments not found")
 	}
+	// its new bests, after its passes: in the background, the answer doesn't wait
+	App.Go(func(context.Context) {
+		err := notifications.NotifyHighlights(&db, App.Logger, user.ID, activity.ID, activity.Title, activity.Date,
+			activityService.UserLocation(user.Timezone), time.Now())
+		if err != nil {
+			App.Logger.Error().Err(err).Str("activity", activity.ID.String()).Msg("new bests not notified")
+		}
+	})
 
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
 }
