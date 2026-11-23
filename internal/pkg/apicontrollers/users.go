@@ -243,6 +243,10 @@ func Register(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "invalid email"})
 		return
 	}
+	if err := utils.CheckNewPassword(body.Password, user.Username, user.Email); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
 
 	hash, err := utils.GenerateHashPassword(body.Password)
 	if errors.Is(err, bcrypt.ErrPasswordTooLong) {
@@ -488,6 +492,10 @@ func UpdateUser(c *gin.Context) {
 	if update.Password != "" {
 		if update.Password != update.PasswordConfirmation {
 			c.JSON(400, gin.H{"error": "passwords don't match"})
+			return
+		}
+		if err := utils.CheckNewPassword(update.Password, currentUser.Username, currentUser.Email); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
 		newHash, err := utils.GenerateHashPassword(update.Password)

@@ -2194,7 +2194,7 @@
     {
       "type": "timeseries",
       "title": "Connections",
-      "description": "The connection pool of the backend to the database, 100 connections at most (go_sql_max_open_connections).",
+      "description": "The connection pool of the backend to the database, 20 connections at most (go_sql_max_open_connections): the requests beyond wait (see Waiting for a connection).",
       "targets": [
         {
           "datasource": {

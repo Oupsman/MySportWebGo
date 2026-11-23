@@ -60,11 +60,11 @@ func register(client sessionClient, username, email, password string) (int, map[
 }
 
 func registerAdmin(client sessionClient, username string) (int, map[string]string) {
-	return registerWith(client, username, username+"@test.local", "password", `, "setup_code": "`+testSetupCode+`"`)
+	return registerWith(client, username, username+"@test.local", "a long password", `, "setup_code": "`+testSetupCode+`"`)
 }
 
 func registerInvited(client sessionClient, username, email, code string) (int, map[string]string) {
-	return registerWith(client, username, email, "password", `, "invitation": "`+code+`"`)
+	return registerWith(client, username, email, "a long password", `, "invitation": "`+code+`"`)
 }
 
 func role(t *testing.T, db *models.DB, username string) string {
@@ -89,10 +89,10 @@ func TestRegister(t *testing.T) {
 	client := registerRouter(t, db)
 
 	// open registrations: users, the first one included, never the admin
-	if code, answer := register(client, "first", "first@test.local", "password"); code != http.StatusCreated {
+	if code, answer := register(client, "first", "first@test.local", "a long password"); code != http.StatusCreated {
 		t.Fatalf("first registration: %d %v", code, answer)
 	}
-	if code, answer := register(client, "second", "second@test.local", "password"); code != http.StatusCreated {
+	if code, answer := register(client, "second", "second@test.local", "a long password"); code != http.StatusCreated {
 		t.Fatalf("second registration: %d %v", code, answer)
 	}
 	if role(t, db, "first") != models.RoleUser || role(t, db, "second") != models.RoleUser {
@@ -107,17 +107,20 @@ func TestRegister(t *testing.T) {
 		name, username, email, password string
 		want                            int
 	}{
-		{"taken username", "first", "other@test.local", "password", http.StatusConflict},
+		{"taken username", "first", "other@test.local", "a long password", http.StatusConflict},
 		// was answered 201 without creating anything
-		{"taken email", "other", "first@test.local", "password", http.StatusConflict},
-		{"taken email, other case", "other", "First@Test.local", "password", http.StatusConflict},
-		{"username of a deleted user", "second", "other@test.local", "password", http.StatusConflict},
-		{"email of a deleted user", "other", "second@test.local", "password", http.StatusConflict},
-		{"invalid email", "other", "not an email", "password", http.StatusBadRequest},
-		{"email with a name", "other", "Other <other@test.local>", "password", http.StatusBadRequest},
+		{"taken email", "other", "first@test.local", "a long password", http.StatusConflict},
+		{"taken email, other case", "other", "First@Test.local", "a long password", http.StatusConflict},
+		{"username of a deleted user", "second", "other@test.local", "a long password", http.StatusConflict},
+		{"email of a deleted user", "other", "second@test.local", "a long password", http.StatusConflict},
+		{"invalid email", "other", "not an email", "a long password", http.StatusBadRequest},
+		{"email with a name", "other", "Other <other@test.local>", "a long password", http.StatusBadRequest},
 		{"missing password", "other", "other@test.local", "", http.StatusBadRequest},
-		{"blank username", "  ", "other@test.local", "password", http.StatusBadRequest},
+		{"blank username", "  ", "other@test.local", "a long password", http.StatusBadRequest},
 		{"password too long for bcrypt", "other", "other@test.local", strings.Repeat("x", 73), http.StatusBadRequest},
+		{"password too short", "other", "other@test.local", "password", http.StatusBadRequest},
+		{"common password", "other", "other@test.local", "qwertyuiop", http.StatusBadRequest},
+		{"password of the username", "other", "other@test.local", "other12345", http.StatusBadRequest},
 	} {
 		if code, answer := register(client, tt.username, tt.email, tt.password); code != tt.want {
 			t.Errorf("%s: %d %v, want %d", tt.name, code, answer, tt.want)
@@ -145,10 +148,10 @@ func TestRegisterModes(t *testing.T) {
 	if mode, setup := instance(); mode != "closed" || setup != "true" {
 		t.Errorf("new instance: registration %s, setup required %s", mode, setup)
 	}
-	if code, answer := register(client, "visitor", "visitor@test.local", "password"); code != http.StatusForbidden {
+	if code, answer := register(client, "visitor", "visitor@test.local", "a long password"); code != http.StatusForbidden {
 		t.Errorf("closed: %d %v", code, answer)
 	}
-	if code, answer := registerWith(client, "visitor", "visitor@test.local", "password", `, "setup_code": "wrong"`); code != http.StatusForbidden {
+	if code, answer := registerWith(client, "visitor", "visitor@test.local", "a long password", `, "setup_code": "wrong"`); code != http.StatusForbidden {
 		t.Errorf("wrong setup code: %d %v", code, answer)
 	}
 	if count := countUsers(t, db); count != 0 {
@@ -156,7 +159,7 @@ func TestRegisterModes(t *testing.T) {
 	}
 
 	// the setup code registers the admin, whatever the mode; its case and spaces don't matter
-	code, answer := registerWith(client, "boss", "boss@test.local", "password",
+	code, answer := registerWith(client, "boss", "boss@test.local", "a long password",
 		`, "setup_code": " `+strings.ToUpper(testSetupCode)+` "`)
 	if code != http.StatusCreated || answer["role"] != models.RoleAdmin || role(t, db, "boss") != models.RoleAdmin {
 		t.Fatalf("setup: %d %v", code, answer)
@@ -177,7 +180,7 @@ func TestRegisterModes(t *testing.T) {
 	if mode, _ := instance(); mode != "invite" {
 		t.Errorf("registration %s, want invite", mode)
 	}
-	if code, answer := register(client, "visitor", "visitor@test.local", "password"); code != http.StatusForbidden {
+	if code, answer := register(client, "visitor", "visitor@test.local", "a long password"); code != http.StatusForbidden {
 		t.Errorf("invite without invitation: %d %v", code, answer)
 	}
 	if code, answer := registerInvited(client, "visitor", "visitor@test.local", utils.NewCode()); code != http.StatusForbidden {
@@ -268,17 +271,17 @@ func TestInvitations(t *testing.T) {
 		t.Fatalf("setup: %d %v", code, answer)
 	}
 	// an admin without two-factor authentication: no admin page
-	plain := client.loginCookie("boss", "password")
+	plain := client.loginCookie("boss", "a long password")
 	if code, body := rawRequest(client, http.MethodGet, "/admin/invitations", plain, ""); code != http.StatusForbidden ||
 		!strings.Contains(string(body), "mfa_required") {
 		t.Errorf("admin without 2FA: %d %s", code, body)
 	}
 	secret := enableTOTP(t, db, "boss")
-	admin := client.loginCookieMFA(db, "boss", "password", secret)
+	admin := client.loginCookieMFA(db, "boss", "a long password", secret)
 
 	// the admin routes: the admins' sessions only
-	user := createUsers(t, db, "password", "alice")[0]
-	alice := client.loginCookie("alice", "password")
+	user := createUsers(t, db, "a long password", "alice")[0]
+	alice := client.loginCookie("alice", "a long password")
 	token, hash := utils.NewDeviceToken()
 	bossID := uint(0)
 	db.Model(&models.Users{}).Where("username = ?", "boss").Pluck("id", &bossID)
@@ -311,7 +314,7 @@ func TestInvitations(t *testing.T) {
 	if code, _ := rawRequest(client, http.MethodGet, "/admin/invitations", alice, ""); code != http.StatusForbidden {
 		t.Errorf("promoted user without 2FA: %d", code)
 	}
-	alice = client.loginCookieMFA(db, "alice", "password", enableTOTP(t, db, "alice"))
+	alice = client.loginCookieMFA(db, "alice", "a long password", enableTOTP(t, db, "alice"))
 	if code, _ := rawRequest(client, http.MethodGet, "/admin/invitations", alice, ""); code != http.StatusOK {
 		t.Errorf("promoted user: %d", code)
 	}

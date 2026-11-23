@@ -97,7 +97,7 @@ func TestEmailVerification(t *testing.T) {
 	if code, answer, _ := client.browser(http.MethodGet, "/instance", nil, ""); code != http.StatusOK || answer["registration"] == "" {
 		t.Fatalf("instance: %d %v", code, answer)
 	}
-	if code, answer := register(client, "zoe", "zoe@example.org", "password"); code != http.StatusCreated {
+	if code, answer := register(client, "zoe", "zoe@example.org", "a long password"); code != http.StatusCreated {
 		t.Fatalf("register: %d %v", code, answer)
 	}
 	App.Wait(5 * time.Second)
@@ -109,7 +109,7 @@ func TestEmailVerification(t *testing.T) {
 	if page != "verify-email" {
 		t.Errorf("link page %s", page)
 	}
-	cookie := client.loginCookie("zoe", "password")
+	cookie := client.loginCookie("zoe", "a long password")
 	verify := func(code string) int {
 		status, _, _ := client.browser(http.MethodPost, "/email/verify", nil, `{"code": "`+code+`"}`)
 		return status
@@ -131,7 +131,7 @@ func TestEmailVerification(t *testing.T) {
 
 	// a new address: confirmed from its mailbox before it replaces the old one
 	if status, answer := rawRequest(client, http.MethodPost, "/user", cookie,
-		`{"oldpassword": "password", "email": "zoe@new.example"}`); status != http.StatusOK || !strings.Contains(string(answer), "zoe@new.example") {
+		`{"oldpassword": "a long password", "email": "zoe@new.example"}`); status != http.StatusOK || !strings.Contains(string(answer), "zoe@new.example") {
 		t.Fatalf("change: %d %s", status, answer)
 	}
 	App.Wait(5 * time.Second)
@@ -160,9 +160,9 @@ func TestEmailVerification(t *testing.T) {
 		t.Errorf("resend when confirmed: %d", status)
 	}
 	// an address another user has: refused at once
-	createUsers(t, db, "password", "yann")
+	createUsers(t, db, "a long password", "yann")
 	if status, _ := rawRequest(client, http.MethodPost, "/user", cookie,
-		`{"oldpassword": "password", "email": "YANN@test.local"}`); status != http.StatusConflict {
+		`{"oldpassword": "a long password", "email": "YANN@test.local"}`); status != http.StatusConflict {
 		t.Errorf("taken address: %d", status)
 	}
 }
@@ -171,11 +171,11 @@ func TestEmailChangeWithoutMail(t *testing.T) {
 	db := testDB(t)
 	vars.SecretKey = "testsecret"
 	client, _ := emailRouter(t, db, nil)
-	createUsers(t, db, "password", "zoe")
+	createUsers(t, db, "a long password", "zoe")
 	now := time.Now()
 	db.Model(&models.Users{}).Where("username = ?", "zoe").Update("email_verified_at", now)
-	cookie := client.loginCookie("zoe", "password")
-	if status, _ := rawRequest(client, http.MethodPost, "/user", cookie, `{"oldpassword": "password", "email": "z@new.example"}`); status != http.StatusOK {
+	cookie := client.loginCookie("zoe", "a long password")
+	if status, _ := rawRequest(client, http.MethodPost, "/user", cookie, `{"oldpassword": "a long password", "email": "z@new.example"}`); status != http.StatusOK {
 		t.Fatalf("change: %d", status)
 	}
 	var user models.Users
@@ -194,7 +194,7 @@ func TestForgotPassword(t *testing.T) {
 	vars.Domain = "https://sport.example.com"
 	mailer := &recordingMailer{}
 	client, App := emailRouter(t, db, mailer)
-	createUsers(t, db, "password", "zoe", "unconfirmed")
+	createUsers(t, db, "a long password", "zoe", "unconfirmed")
 	db.Model(&models.Users{}).Where("username = ?", "zoe").Update("email_verified_at", time.Now())
 
 	forgot := func(login string) map[string]string {
@@ -220,10 +220,10 @@ func TestForgotPassword(t *testing.T) {
 		t.Errorf("page %s", page)
 	}
 	if status, _, _ := client.browser(http.MethodPost, "/password-reset", nil,
-		`{"code": "`+code+`", "password": "brand new"}`); status != http.StatusOK {
+		`{"code": "`+code+`", "password": "brand new password"}`); status != http.StatusOK {
 		t.Fatalf("reset: %d", status)
 	}
-	client.loginCookie("zoe", "brand new")
+	client.loginCookie("zoe", "brand new password")
 	// at most 3 an hour per account, the answer unchanged
 	forgot("zoe")
 	forgot("zoe")
@@ -239,9 +239,9 @@ func TestInvitationAndTestEmails(t *testing.T) {
 	vars.Domain = "https://sport.example.com"
 	mailer := &recordingMailer{}
 	client, _ := emailRouter(t, db, mailer)
-	createUsers(t, db, "password", "boss")
+	createUsers(t, db, "a long password", "boss")
 	db.Model(&models.Users{}).Where("username = ?", "boss").Update("role", models.RoleAdmin)
-	admin := client.loginCookieMFA(db, "boss", "password", enableTOTP(t, db, "boss"))
+	admin := client.loginCookieMFA(db, "boss", "a long password", enableTOTP(t, db, "boss"))
 
 	if status, _ := rawRequest(client, http.MethodPost, "/admin/invitations", admin, `{"send": true}`); status != http.StatusBadRequest {
 		t.Errorf("send without email: %d", status)
@@ -276,8 +276,8 @@ func TestEmailNotifications(t *testing.T) {
 	vars.Domain = "https://sport.example.com"
 	mailer := &recordingMailer{}
 	client, App := emailRouter(t, db, mailer)
-	users := createUsers(t, db, "password", "zoe")
-	cookie := client.loginCookie("zoe", "password")
+	users := createUsers(t, db, "a long password", "zoe")
+	cookie := client.loginCookie("zoe", "a long password")
 
 	if status, _ := rawRequest(client, http.MethodPost, "/notifications/email", cookie, `{"enabled": true}`); status != http.StatusConflict {
 		t.Errorf("enable unconfirmed: %d", status)

@@ -13,6 +13,11 @@ type DB struct {
 	gorm.DB
 }
 
+// MaxOpenConns is the most connections the backend opens to the database: the requests beyond wait for one
+// (go_sql_wait_count). Well below the 100 of Postgres (max_connections), whose last ones go to the nightly
+// pg_dump, psql, the other clients.
+const MaxOpenConns = 20
+
 func ConnectToDB(driver string, dsn string) (*DB, error) {
 
 	var err error
@@ -34,8 +39,7 @@ func ConnectToDB(driver string, dsn string) (*DB, error) {
 	// SetMaxIdleConns sets the maximum number of connections in the idle connection pool.
 	sqlDB.SetMaxIdleConns(5)
 
-	// SetMaxOpenConns sets the maximum number of open connections to the database.
-	sqlDB.SetMaxOpenConns(100)
+	sqlDB.SetMaxOpenConns(MaxOpenConns)
 
 	// SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
 	sqlDB.SetConnMaxLifetime(time.Minute * 5)

@@ -26,8 +26,6 @@ import (
 const (
 	// PasswordResetLifetime is how long a password reset link is valid
 	PasswordResetLifetime = 24 * time.Hour
-	// minPasswordLength is the shortest password a reset link sets, as the sign up page asks
-	minPasswordLength = 6
 )
 
 // diskUsage returns the size of the files of a directory, 0 when it doesn't exist
@@ -210,8 +208,9 @@ func ResetPassword(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if len([]rune(body.Password)) < minPasswordLength {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "the password needs at least 6 characters"})
+	// the user isn't known before the code is checked: not compared to their username
+	if err := utils.CheckNewPassword(body.Password); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	hash, err := utils.GenerateHashPassword(body.Password)

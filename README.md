@@ -37,7 +37,7 @@ For now the app can :
   choices from `GET /api/v1/user/sports`): an imported activity gets the one of its sport, a commute ride the
   commute bike. The activities imported before keep theirs
 
-# For now, this app IS NOT PRODUCTION READY, AND VERY FAR FROM IT !
+# For now, this app IS NOT PRODUCTION READY, BUT GETTING CLOSER !
 
 ## Desktop synchronization
 
