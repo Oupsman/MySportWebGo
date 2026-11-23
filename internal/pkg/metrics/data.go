@@ -120,7 +120,7 @@ func (d *DataCollector) collectBackups(ch chan<- prometheus.Metric) {
 }
 
 // SlotsInUse reports how many of the capacity slots of a kind of work (analysis, thumbnail) are taken
-func SlotsInUse(kind string, used func() int, capacity int) {
+func SlotsInUse(kind string, used func() int, capacity func() int) {
 	Registry.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: namespace, Name: "slots_in_use", Help: "Slots taken, by kind of work; see slots_capacity.",
 		ConstLabels: prometheus.Labels{"kind": kind},
@@ -128,5 +128,5 @@ func SlotsInUse(kind string, used func() int, capacity int) {
 	Registry.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: namespace, Name: "slots_capacity", Help: "Slots of each kind of work running at a time.",
 		ConstLabels: prometheus.Labels{"kind": kind},
-	}, func() float64 { return float64(capacity) }))
+	}, func() float64 { return float64(capacity()) }))
 }

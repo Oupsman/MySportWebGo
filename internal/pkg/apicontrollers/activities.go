@@ -77,6 +77,9 @@ func UploadActivity(c *gin.Context) {
 		analysisError(c, err)
 		return
 	}
+	if prepared.SourcePath != "" {
+		defer os.Remove(prepared.SourcePath) // fails harmlessly once the file is moved in place
+	}
 	activity, err := activityService.AnalyzeTrimmed(tmpPath, user, 0, activityService.Analysis{
 		RestHR:     activityService.UserRestHR(&db, user.ID),
 		Correction: activityService.DeviceCorrection(&db, user.ID),
@@ -135,9 +138,9 @@ func UploadActivity(c *gin.Context) {
 			}
 		}
 		activity.FilePath = filepath.Join(baseDir, prefix+prepared.FITName)
-		if prepared.Source != nil {
+		if prepared.SourcePath != "" {
 			activity.SourceFilePath = filepath.Join(baseDir, prefix+prepared.SourceName)
-			if err := os.WriteFile(activity.SourceFilePath, prepared.Source, 0o660); err != nil {
+			if err := os.Rename(prepared.SourcePath, activity.SourceFilePath); err != nil {
 				return err
 			}
 		}

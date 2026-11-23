@@ -38,9 +38,12 @@ func TestUploadGPX(t *testing.T) {
 		t.Fatal(err)
 	}
 	if prepared.Format != convert.GPX || prepared.FITName != "Morning_Ride.fit" ||
-		prepared.SourceName != "Morning_Ride.gpx" || !bytes.Equal(prepared.Source, original) {
-		t.Errorf("prepared %s %s %s, source kept %v", prepared.Format, prepared.FITName, prepared.SourceName,
-			bytes.Equal(prepared.Source, original))
+		prepared.SourceName != "Morning_Ride.gpx" || prepared.SourcePath != path+SourceSuffix {
+		t.Errorf("prepared %+v", prepared)
+	}
+	// the GPX file waits on disk, decompressed
+	if source, err := os.ReadFile(prepared.SourcePath); err != nil || !bytes.Equal(source, original) {
+		t.Errorf("source kept: %v, the same %v", err, bytes.Equal(source, original))
 	}
 	user := models.Users{SecurityDistance: 0}
 	activity, err := AnalyzeTrimmed(path, user, 0, Analysis{})
@@ -93,7 +96,7 @@ func TestUploadTCXAndFIT(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prepared.Format != convert.FIT || prepared.FITName != "ride.FIT" || prepared.Source != nil {
+	if prepared.Format != convert.FIT || prepared.FITName != "ride.FIT" || prepared.SourcePath != "" {
 		t.Errorf("FIT: %+v", prepared)
 	}
 	if again, err := AnalyzeTrimmed(path, models.Users{}, 0, Analysis{}); err != nil || again.Sport != "running" {
@@ -111,5 +114,29 @@ func TestUploadRefused(t *testing.T) {
 		if _, err := PrepareUpload(path, "x.gpx", ""); !errors.As(err, &invalid) {
 			t.Errorf("%s: %v, want an InvalidFitError", name, err)
 		}
+		if _, err := os.Stat(path + SourceSuffix); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%s: source left on disk (%v)", name, err)
+		}
+	}
+}
+
+// decompressing and converting take an analysis slot: with every slot taken, an upload waits, then is
+// refused as busy, the file not even read
+func TestPrepareUploadWaitsForASlot(t *testing.T) {
+	path := writeUpload(t, converttest.GPX(false), true)
+	release := fillAnalysisSlots(t)
+	if _, err := PrepareUpload(path, "ride.gpx.gz", "cycling"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("every slot taken: %v, want ErrBusy", err)
+	}
+	if _, err := os.Stat(path + SourceSuffix); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("busy: source written (%v)", err)
+	}
+	release()
+	prepared, err := PrepareUpload(path, "ride.gpx.gz", "cycling")
+	if err != nil || prepared.SourcePath == "" {
+		t.Fatalf("a slot free: %+v %v", prepared, err)
+	}
+	if len(analysisSlots) != 0 {
+		t.Errorf("%d slots still taken after the preparation", len(analysisSlots))
 	}
 }

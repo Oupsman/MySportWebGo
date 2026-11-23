@@ -40,8 +40,9 @@ const (
 	// maxSpeedWindow is the number of points the maximum speed is averaged over: the speed between two
 	// GPS points jumps
 	maxSpeedWindow = 5
-	// MaxDecompressed is the largest activity file once decompressed
-	MaxDecompressed = 200 << 20
+	// MaxDecompressed is the largest activity file once decompressed: a GPX of about 3 days recorded every
+	// second. Converting it takes about 5 times its size in memory.
+	MaxDecompressed = 64 << 20
 )
 
 // InvalidError is a file that can't be converted: not a GPX or TCX file, or without the points of an activity

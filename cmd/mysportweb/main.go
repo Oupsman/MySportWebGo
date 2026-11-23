@@ -4,6 +4,7 @@ import (
 	"MySportWeb/internal/pkg/app"
 	"MySportWeb/internal/pkg/elevation"
 	"MySportWeb/internal/pkg/mail"
+	"MySportWeb/internal/pkg/memlimit"
 	"MySportWeb/internal/pkg/metrics"
 	"MySportWeb/internal/pkg/staticmap"
 	"MySportWeb/internal/pkg/vars"
@@ -32,6 +33,17 @@ func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	vars.Init()
 	log.Info().Str("version", vars.Version).Msg("starting MySportWeb")
+	// the memory limit of the container (mem_limit): Go's garbage collector works harder before it, fewer
+	// files are analysed at a time under a small one
+	limit, soft := memlimit.Apply()
+	activityService.SetConcurrentAnalyses(activityService.AnalysesFor(limit))
+	if limit > 0 {
+		log.Info().Int64("limit_mb", limit>>20).Int64("go_soft_limit_mb", soft>>20).
+			Int("concurrent_analyses", activityService.MaxConcurrentAnalyses).Msg("memory limit of the container")
+	} else {
+		log.Info().Int("concurrent_analyses", activityService.MaxConcurrentAnalyses).
+			Msg("no memory limit: set mem_limit on the backend (MSW_BACKEND_MEMORY) to protect the database")
+	}
 	// the tiles are downloaded at the first activity corrected in their area only
 	demURL := vars.DemURL
 	switch demURL {

@@ -94,6 +94,10 @@ docker compose logs backend | grep setup_code   # the code that creates the admi
   `MSW_DBNAME`, and `MSW_DBSSLMODE`. The default, `prefer`, uses TLS when the database offers it without checking
   its certificate: set `verify-full` (or `require`) for a database reached over a network you don't control.
   The tables are created at the first start.
+* **Memory**: the backend is limited to 1 GB (`MSW_BACKEND_MEMORY`, `mem_limit` in `docker-compose.yaml`).
+  Above it the kernel kills the backend, which restarts, rather than the database. The backend reads the limit at
+  its start (logged: `memory limit of the container`): 2 uploads are analysed at a time under 2 GB, 4 from 2 GB.
+  The largest file accepted (a GPX of 64 MB decompressed, 3 days recorded every second) takes about 350 MB.
 * **Upgrades**: each version migrates the database schema at its start (versioned migrations, see
   [internal/pkg/models/migrations/README.md](internal/pkg/models/migrations/README.md)), one server at a time. Back
   up the database before upgrading: the backend refuses to start on a database migrated by a newer version, going

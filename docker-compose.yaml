@@ -25,6 +25,10 @@ services:
     # a stop lets the running requests finish (90 s at most) and the backfills stop at their next activity
     # (30 s): docker kills after 10 s by default
     stop_grace_period: 2m30s
+    # the hard memory limit of the backend: above it, the kernel kills the backend (restarted by docker), never
+    # the database. The backend reads it at its start: Go's garbage collector works harder at 85% of it, and
+    # 2 files are analysed at a time under 2g, 4 from 2g. 1g handles the largest files accepted.
+    mem_limit: ${MSW_BACKEND_MEMORY:-1g}
     environment:
       DBHOST: ${MSW_DBHOST:-db}
       DBPORT: ${MSW_DBPORT:-5432}
