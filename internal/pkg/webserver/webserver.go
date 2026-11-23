@@ -159,6 +159,9 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	// who is logged in: the web application can't read its cookie
 	apiv1.GET("/user/session", middlewares.IsAuthorized(), apicontrollers.GetSession)
 	apiv1.GET("/user/dashboard", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.Dashboard)
+	// how the user arranged their dashboard: sessions only
+	apiv1.GET("/user/dashboard/layout", middlewares.IsAuthorized(), apicontrollers.GetDashboardLayout)
+	apiv1.PUT("/user/dashboard/layout", middlewares.IsAuthorized(), apicontrollers.SetDashboardLayout)
 	apiv1.GET("/user/hrzones", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.HrZones)
 	apiv1.GET("/user/powerzones", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.PowerZones)
 	apiv1.GET("/user/ftp", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.FTP)

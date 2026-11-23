@@ -39,6 +39,8 @@ type Users struct {
 	TOTPEnabledAt *time.Time `json:"two_factor_enabled_at" gorm:"column:totp_enabled_at"`
 	TOTPLastStep  int64      `json:"-" gorm:"column:totp_last_step;not null;default:0"`
 	TOTPRecovery  string     `json:"-" gorm:"column:totp_recovery;not null;default:''"`
+	// DashboardLayout is the widgets of their dashboard (see DashboardWidget), nil for the default layout
+	DashboardLayout *string `json:"-" gorm:"type:jsonb"`
 }
 
 // RevokedSessions are the session tokens logged out before they expire, by their id (jti). They are
