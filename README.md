@@ -37,7 +37,38 @@ For now the app can :
   choices from `GET /api/v1/user/sports`): an imported activity gets the one of its sport, a commute ride the
   commute bike. The activities imported before keep theirs
 
-# For now, this app IS NOT PRODUCTION READY, BUT GETTING CLOSER !
+## Status
+
+MySportWeb is self-hosted, used daily by its author on a small instance, and not audited by anyone else. It is built
+to be exposed to the internet, for a few users who know each other: a family, a club.
+
+What protects the users and their data:
+
+* **Accounts**: registrations closed by default (`MSW_REGISTRATION`: closed, by invitation, or open). Passwords of
+  10 characters at least, the common ones refused, hashed with bcrypt. Two-factor authentication (an authenticator
+  app, recovery codes) for everyone, required for the admins, and asked again for each change of a user.
+* **Sessions**: in an HttpOnly cookie a script can't read, refused from other sites (CSRF), ended by the logout, a
+  password change or a disabled account. The desktop application and the scripts use device tokens, limited to
+  what they are given.
+* **Logins**: limited per IP; wrong passwords lock out the IP they come from, not the owner of the account, and
+  guesses spread over many IPs lock out the new browsers only, never the ones its owner used.
+* **The pages**: a Content-Security-Policy, HSTS, no framing by other sites. The traces near the homes of the users
+  (their privacy distance) are cut from what the others see.
+* **The server**: uploads analysed a few at a time, within a memory limit (`MSW_BACKEND_MEMORY`) that protects the
+  database; a storage quota per user (`MSW_USER_QUOTA`); the size of the requests and of the decompressed files
+  bounded. The backend works with a database role without privileges, and runs as an unprivileged user.
+* **The data**: a nightly dump of the database, checked, with an alert when it is too old; each user exports all
+  their data, or deletes their account. Metrics and alerts for Prometheus and Grafana (see Monitoring).
+
+What it lacks:
+
+* **One instance only**: the login limits and the analysis slots are in the memory of the backend, nothing shares
+  them between two backends.
+* **No social side**: an activity can be shown to the users of the instance or to anyone, but nobody follows
+  anybody, there is no feed, no comment, no kudos.
+* **English only**.
+* **The media files aren't in the nightly dump**: back up `MSW_DATA_DIR/media` with the machine (see
+  **Backups** in [Deploy with Docker Compose](#deploy-with-docker-compose)).
 
 ## Desktop synchronization
 
@@ -201,6 +232,7 @@ as spam. Set in `.env`:
 | Postmark | `smtp.postmarkapp.com`   | 587             | the Server API token       | the same Server API token   |
 | Mailgun  | `smtp.mailgun.org` (`smtp.eu.mailgun.org` in the EU) | 587 | the SMTP user of the domain | its SMTP password |
 | Brevo    | `smtp-relay.brevo.com`   | 587             | the SMTP login of the account | an SMTP key              |
+| Proton    | `smtp.protonmail.ch`   | 587             | an email address attached to your account | an SMTP key              |
 
 and `MSW_MAIL_FROM`, the sender, e.g. `MySportWeb <sport@example.com>`. `MSW_SMTP_TLS` is `starttls` by default
 (port 587), `tls` with port 465, `none` only towards a relay on the same machine. Check the current values in
