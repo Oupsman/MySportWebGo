@@ -15,11 +15,15 @@ import (
 const ServiceCheckInterval = 15 * time.Minute
 
 // RunServiceAlerts queues the notifications of the maintenance reminders due, once per cycle (a service done
-// for a reminder starts its next one), every ServiceCheckInterval until ctx is done
+// for a reminder starts its next one), and of the goals reached (CheckGoals), every ServiceCheckInterval
+// until ctx is done
 func RunServiceAlerts(ctx context.Context, logger zerolog.Logger, db models.DB) {
 	for {
 		if err := CheckServices(db, logger, time.Now()); err != nil {
 			logger.Error().Err(err).Msg("failed to check the maintenance reminders")
+		}
+		if err := CheckGoals(db, logger, time.Now()); err != nil {
+			logger.Error().Err(err).Msg("failed to check the goals")
 		}
 		select {
 		case <-ctx.Done():
