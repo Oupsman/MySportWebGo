@@ -61,7 +61,7 @@ func TestSegmentsOnRealRides(t *testing.T) {
 	if err := db.CreateSegment(&segment); err != nil {
 		t.Fatal(err)
 	}
-	total, err := MatchSegmentActivities(db, segment)
+	total, err := MatchSegmentActivities(db, segment, MatchCreate)
 	if err != nil {
 		t.Fatal(err)
 	}

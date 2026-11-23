@@ -46,7 +46,7 @@ func CreateSegment(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
-	efforts, err := activityService.MatchSegmentActivities(&db, segment)
+	efforts, err := activityService.MatchSegmentActivities(&db, segment, activityService.MatchCreate)
 	if err != nil {
 		internalError(c, err)
 		return

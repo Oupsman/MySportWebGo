@@ -23,6 +23,8 @@ type Segment struct {
 	MaxLat           float64             `json:"-" gorm:"not null"`
 	MaxLon           float64             `json:"-" gorm:"not null"`
 	SourceActivityID *uuid.UUID          `json:"source_activity_id" gorm:"type:uuid"`
+	// the version of the matching rules its passes were found with, 0 until they are
+	MatchVersion int `json:"-" gorm:"not null;default:0"`
 }
 
 // SegmentEffort is a pass of an activity on a segment
@@ -145,6 +147,42 @@ func (db *DB) ReplaceActivityEfforts(activityID uuid.UUID, efforts []SegmentEffo
 		}
 		return tx.Create(&efforts).Error
 	})
+}
+
+// GetSegmentByID returns a segment, whoever its user: for the background jobs
+func (db *DB) GetSegmentByID(id uuid.UUID) (Segment, error) {
+	var segment Segment
+	err := db.Where("id = ?", id).Take(&segment).Error
+	return segment, err
+}
+
+// GetSegmentsBelowMatchVersion returns the ids of the segments whose passes were found with matching rules
+// older than version, the most recently ridden first
+func (db *DB) GetSegmentsBelowMatchVersion(version int) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := db.Raw(`SELECT s.id FROM segments s
+		LEFT JOIN segment_efforts e ON e.segment_id = s.id
+		LEFT JOIN activities a ON a.id = e.activity_id
+		WHERE s.match_version < ?
+		GROUP BY s.id
+		ORDER BY MAX(a.date) DESC NULLS LAST, s.created_at DESC, s.id`, version).Scan(&ids).Error
+	return ids, err
+}
+
+// SetSegmentMatchVersion records the version of the matching rules the passes of a segment were found with
+func (db *DB) SetSegmentMatchVersion(id uuid.UUID, version int) error {
+	return db.Model(&Segment{}).Where("id = ?", id).Update("match_version", version).Error
+}
+
+// DeleteSegmentEffortsExcept deletes the passes on a segment of the activities not in activityIDs: the ones
+// that can't pass on it any more
+func (db *DB) DeleteSegmentEffortsExcept(segmentID uuid.UUID, activityIDs []uuid.UUID) error {
+	query := db.Where("segment_id = ?", segmentID)
+	if len(activityIDs) > 0 {
+		// NOT IN of an empty list would keep them all
+		query = query.Where("activity_id NOT IN ?", activityIDs)
+	}
+	return query.Delete(&SegmentEffort{}).Error
 }
 
 // GetSegmentsAround returns the segments of a user of a sport whose box meets a box: the ones an activity

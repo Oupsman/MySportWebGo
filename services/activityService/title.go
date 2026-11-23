@@ -96,8 +96,9 @@ func BackfillTitles(ctx context.Context, db *models.DB, logger zerolog.Logger) e
 	if len(activities) == 0 {
 		return nil
 	}
+	progress := newBackfillProgress(ctx, logger, "activities", len(activities), "renaming activities")
 	renamed, skipped := 0, 0
-	for _, a := range activities {
+	for i, a := range activities {
 		// stopping: what is done stays done, the rest goes on at the next start
 		if ctx.Err() != nil {
 			return nil
@@ -105,6 +106,7 @@ func BackfillTitles(ctx context.Context, db *models.DB, logger zerolog.Logger) e
 		location, ok := userLocation(a.Timezone)
 		if !ok {
 			skipped++
+			progress.done(i+1, nil)
 			continue
 		}
 		title := Title(a.Sport, a.Date, location, a.StartPosition)
@@ -112,6 +114,7 @@ func BackfillTitles(ctx context.Context, db *models.DB, logger zerolog.Logger) e
 			return err
 		}
 		renamed++
+		progress.done(i+1, nil)
 	}
 	if skipped > 0 {
 		logger.Warn().Int("activities", skipped).Msg("activities not renamed: their user has no timezone")

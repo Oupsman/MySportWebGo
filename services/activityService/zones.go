@@ -76,7 +76,8 @@ func BackfillHrZones(ctx context.Context, db *models.DB, logger zerolog.Logger) 
 	if err != nil || len(ids) == 0 {
 		return err
 	}
-	for _, id := range ids {
+	progress := newBackfillProgress(ctx, logger, "activities", len(ids), "computing the heart rate zones of activities")
+	for i, id := range ids {
 		// stopping: what is done stays done, the rest goes on at the next start
 		if ctx.Err() != nil {
 			return nil
@@ -91,6 +92,7 @@ func BackfillHrZones(ctx context.Context, db *models.DB, logger zerolog.Logger) 
 		if err := db.SetActivityHrZones(id, activity.HrZones, activity.HrZoneBounds); err != nil {
 			return err
 		}
+		progress.done(i+1, nil)
 	}
 	logger.Info().Int("activities", len(ids)).Msg("heart rate zones computed")
 	return nil

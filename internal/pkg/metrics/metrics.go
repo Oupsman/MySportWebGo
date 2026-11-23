@@ -100,6 +100,33 @@ var (
 		Help: "Backfill steps that failed.",
 	}, []string{"step"})
 
+	// BackfillRemaining is what a backfill step has left to do: activities, or segments for the re-match
+	// of the segments; 0 when it is done, or had nothing to do
+	BackfillRemaining = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace, Name: "backfill_remaining",
+		Help: "Items (activities, segments) a backfill step of the start has left to do.",
+	}, []string{"step"})
+
+	// SegmentMatches counts the matchings of an activity with a segment, by trigger: create (a new segment),
+	// upload, trim, backfill (a segment matched with older rules), reanalysis (an activity analysed again)
+	SegmentMatches = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace, Name: "segment_matches_total",
+		Help: "Matchings of an activity with a segment, by trigger: create, upload, trim, backfill, reanalysis.",
+	}, []string{"trigger"})
+
+	// SegmentPasses counts the passes on segments those matchings found, by trigger
+	SegmentPasses = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace, Name: "segment_passes_total",
+		Help: "Passes on segments found by the matchings, by trigger.",
+	}, []string{"trigger"})
+
+	// SegmentMatchDuration is the time to match an activity with a segment, its reading excluded
+	SegmentMatchDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: namespace, Name: "segment_match_duration_seconds",
+		Help:    "Time to match an activity with a segment, the reading of the activity excluded.",
+		Buckets: []float64{.0005, .001, .0025, .005, .01, .025, .05, .1, .25, .5},
+	})
+
 	// BuildInfo is 1, with the version of the backend
 	BuildInfo = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace, Name: "build_info",
@@ -121,7 +148,8 @@ func init() {
 		HTTPRequests, HTTPDuration,
 		Analyses, AnalysisDuration, Thumbnails, ThumbnailDuration, MapTiles,
 		Logins, Registrations,
-		BackfillRunning, BackfillDuration, BackfillErrors,
+		BackfillRunning, BackfillDuration, BackfillErrors, BackfillRemaining,
+		SegmentMatches, SegmentPasses, SegmentMatchDuration,
 		BuildInfo, SchemaVersion,
 	)
 }

@@ -126,7 +126,7 @@ func BackfillWeights(ctx context.Context, db *models.DB, logger zerolog.Logger) 
 		return nil
 	}
 	logger = logger.With().Str("backfill", "weights").Logger()
-	progress := newBackfillProgress(logger, len(stale), "analysing again the activities with a new weight")
+	progress := newBackfillProgress(ctx, logger, "activities", len(stale), "analysing again the activities with a new weight")
 	failed := 0
 	for i, row := range stale {
 		if err := ctx.Err(); err != nil {

@@ -1,14 +1,36 @@
 package activityService
 
 import (
+	"MySportWeb/internal/pkg/metrics"
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
+	"context"
 	"errors"
 	"fmt"
 	"math"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+	"gorm.io/gorm"
+)
+
+// SegmentMatchVersion is the version of the rules finding the passes on the segments. Increment it whenever
+// MatchSegment, a function it calls or a constant below changes: the segments matched with an older version
+// are matched again at the next start (BackfillSegmentMatches), their rankings and bests following the new
+// rules.
+const SegmentMatchVersion = 1
+
+// MatchTrigger is why an activity is matched with a segment, the label of the segment metrics
+type MatchTrigger string
+
+const (
+	MatchCreate     MatchTrigger = "create"     // a new segment, with the activities of its user
+	MatchUpload     MatchTrigger = "upload"     // a new activity, with the segments of its user
+	MatchTrim       MatchTrigger = "trim"       // a trimmed activity
+	MatchBackfill   MatchTrigger = "backfill"   // a segment matched with older rules, at the start
+	MatchReanalysis MatchTrigger = "reanalysis" // an activity analysed again by a new engine, at the start
 )
 
 // The segments: a stretch of a ride a user selects; the passes of their activities on it are compared.
@@ -300,9 +322,19 @@ func stamps(texts types.MultiString) []float64 {
 	return times
 }
 
+// matchSegment runs MatchSegment, counted in the segment metrics under trigger
+func matchSegment(trigger MatchTrigger, segment models.Segment, activity models.SegmentTrack) []models.SegmentEffort {
+	start := time.Now()
+	efforts := MatchSegment(segment, activity)
+	metrics.SegmentMatchDuration.Observe(time.Since(start).Seconds())
+	metrics.SegmentMatches.WithLabelValues(string(trigger)).Inc()
+	metrics.SegmentPasses.WithLabelValues(string(trigger)).Add(float64(len(efforts)))
+	return efforts
+}
+
 // MatchActivitySegments finds the passes of an activity on the segments of its user, replacing the ones it
-// had: after its upload, its trim
-func MatchActivitySegments(db *models.DB, activityID uuid.UUID) error {
+// had: after its upload, its trim, its analysis by a new engine
+func MatchActivitySegments(db *models.DB, activityID uuid.UUID, trigger MatchTrigger) error {
 	track, err := db.GetSegmentTrack(activityID)
 	if err != nil {
 		return err
@@ -315,15 +347,16 @@ func MatchActivitySegments(db *models.DB, activityID uuid.UUID) error {
 			return err
 		}
 		for _, segment := range segments {
-			efforts = append(efforts, MatchSegment(segment, track)...)
+			efforts = append(efforts, matchSegment(trigger, segment, track)...)
 		}
 	}
 	return db.ReplaceActivityEfforts(activityID, efforts)
 }
 
-// MatchSegmentActivities finds the passes of the activities of the user of a segment on it: at its creation.
-// It returns how many there are.
-func MatchSegmentActivities(db *models.DB, segment models.Segment) (int, error) {
+// MatchSegmentActivities finds the passes of the activities of the user of a segment on it, at its creation
+// or with new rules, and records the version of the rules. The passes are replaced activity by activity: a
+// pass found meanwhile for an activity uploaded during the matching stays. It returns how many there are.
+func MatchSegmentActivities(db *models.DB, segment models.Segment, trigger MatchTrigger) (int, error) {
 	ids, err := db.GetActivitiesAround(segment.UserID, segment.Sport,
 		types.GpsPoint{Lat: segment.MinLat, Lon: segment.MinLon}, types.GpsPoint{Lat: segment.MaxLat, Lon: segment.MaxLon})
 	if err != nil {
@@ -335,11 +368,63 @@ func MatchSegmentActivities(db *models.DB, segment models.Segment) (int, error) 
 		if err != nil {
 			return total, err
 		}
-		efforts := MatchSegment(segment, track)
+		efforts := matchSegment(trigger, segment, track)
 		if err := db.ReplaceSegmentEfforts(segment.ID, id, efforts); err != nil {
 			return total, err
 		}
 		total += len(efforts)
 	}
-	return total, nil
+	// the passes of the activities that can't pass on it any more (another sport now): read again, the
+	// activities uploaded meanwhile keep theirs
+	around, err := db.GetActivitiesAround(segment.UserID, segment.Sport,
+		types.GpsPoint{Lat: segment.MinLat, Lon: segment.MinLon}, types.GpsPoint{Lat: segment.MaxLat, Lon: segment.MaxLon})
+	if err != nil {
+		return total, err
+	}
+	if err := db.DeleteSegmentEffortsExcept(segment.ID, around); err != nil {
+		return total, err
+	}
+	return total, db.SetSegmentMatchVersion(segment.ID, SegmentMatchVersion)
+}
+
+// BackfillSegmentMatches matches again the segments whose passes were found with rules older than
+// SegmentMatchVersion, the most recently ridden first. Their passes may change: the rankings and the bests
+// follow the new rules.
+func BackfillSegmentMatches(ctx context.Context, db *models.DB, logger zerolog.Logger) error {
+	ids, err := db.GetSegmentsBelowMatchVersion(SegmentMatchVersion)
+	if err != nil || len(ids) == 0 {
+		return err
+	}
+	logger = logger.With().Str("backfill", "segments").Int("match_version", SegmentMatchVersion).Logger()
+	progress := newBackfillProgress(ctx, logger, "segments", len(ids), "matching segments again with new rules")
+	passes := 0
+	for i, id := range ids {
+		// stopping: what is done stays done, the rest goes on at the next start
+		if ctx.Err() != nil {
+			return nil
+		}
+		segment, err := db.GetSegmentByID(id)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// deleted meanwhile
+			progress.done(i+1, nil)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		found, err := MatchSegmentActivities(db, segment, MatchBackfill)
+		if err != nil {
+			// deleted while being matched: its passes can't be saved, nor are they needed
+			if _, lookup := db.GetSegmentByID(id); errors.Is(lookup, gorm.ErrRecordNotFound) {
+				progress.done(i+1, nil)
+				continue
+			}
+			return err
+		}
+		passes += found
+		progress.done(i+1, func(e *zerolog.Event) *zerolog.Event { return e.Int("passes", passes) })
+	}
+	logger.Info().Int("segments", len(ids)).Int("passes", passes).Str("elapsed", progress.elapsed()).
+		Msg("segments matched again")
+	return nil
 }

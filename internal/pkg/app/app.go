@@ -127,6 +127,9 @@ func (app *App) backfill(ctx context.Context) {
 		{"failed to compute the power curves of activities", activityService.BackfillPowerCurves},
 		{"failed to rename activities", activityService.BackfillTitles},
 		// last: it downloads map tiles, the longest on a first start
+		// after BackfillTimeStamps: the segments are matched with the traces of the new engine; the activities
+		// it re-analysed were matched already, with the current rules
+		{"failed to match segments again", activityService.BackfillSegmentMatches},
 		{"failed to draw the thumbnails of activities again", activityService.BackfillThumbnails},
 	}
 	for _, step := range steps {
@@ -137,8 +140,10 @@ func (app *App) backfill(ctx context.Context) {
 		// the metrics name the step by what it does: "compute the TRIMP of activities"
 		name := strings.TrimPrefix(step.failure, "failed to ")
 		metrics.BackfillRunning.WithLabelValues(name).Set(1)
+		// 0 until the step counts what it has to do: nothing for most steps at most starts
+		metrics.BackfillRemaining.WithLabelValues(name).Set(0)
 		start := time.Now()
-		err := step.run(ctx, db, logger)
+		err := step.run(activityService.WithBackfillStep(ctx, name), db, logger)
 		metrics.BackfillRunning.WithLabelValues(name).Set(0)
 		metrics.BackfillDuration.WithLabelValues(name).Set(time.Since(start).Seconds())
 		if err != nil {

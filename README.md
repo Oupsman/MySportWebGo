@@ -240,7 +240,7 @@ Where Prometheus reaches the metrics:
 
 The metrics are named `mysportweb_*` (requests by route and status, analyses, thumbnails, map tiles, logins,
 registrations,
-backfills, users and activities, backups), `go_sql_*` (the connection pool), `go_*` and `process_*`. The age
+backfills and what they have left to do, segment matching, users and activities, backups), `go_sql_*` (the connection pool), `go_*` and `process_*`. The age
 of the backups comes from `MSW_BACKUP_DIR`, mounted read-only in the backend: it reads it when
 `MSW_BACKUP_OWNER` is its user, `1000:1000` by default (`mysportweb_backup_dir_readable` is 0 otherwise, and
 the backup alert can't fire). `METRICS_PORT=none` in the environment of the backend turns the metrics off.

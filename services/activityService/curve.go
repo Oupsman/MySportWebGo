@@ -55,7 +55,7 @@ func BackfillPowerCurves(ctx context.Context, db *models.DB, logger zerolog.Logg
 		return err
 	}
 	logger = logger.With().Str("backfill", "power_curve").Logger()
-	progress := newBackfillProgress(logger, len(ids), "computing the power curves of activities")
+	progress := newBackfillProgress(ctx, logger, "activities", len(ids), "computing the power curves of activities")
 	for i, id := range ids {
 		// stopping: what is done stays done, the rest goes on at the next start
 		if ctx.Err() != nil {

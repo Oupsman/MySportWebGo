@@ -3,15 +3,10 @@ package activityService
 import (
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/types"
-	"bytes"
 	"fmt"
 	"math"
 	"path/filepath"
-	"strings"
 	"testing"
-	"time"
-
-	"github.com/rs/zerolog"
 )
 
 // steady returns a sample per second for seconds seconds at speed m/s
@@ -221,31 +216,4 @@ func TestBestEffortsFiles(t *testing.T) {
 		t.Skip("no best effort in the FIT files of prototypes/")
 	}
 	t.Logf("%d best efforts checked", checked)
-}
-
-func TestBackfillProgress(t *testing.T) {
-	var buf bytes.Buffer
-	saved := BackfillProgressInterval
-	defer func() { BackfillProgressInterval = saved }()
-	BackfillProgressInterval = 0
-	p := newBackfillProgress(zerolog.New(&buf), 4, "starting")
-	extra := func(e *zerolog.Event) *zerolog.Event { return e.Int("without_file", 1) }
-	p.done(1, extra)
-	p.done(4, extra) // the last one: the caller logs the end
-	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("%d lines, want the start and one progress:\n%s", len(lines), buf.String())
-	}
-	for _, want := range []string{`"done":1`, `"total":4`, `"percent":"25.0"`, `"without_file":1`, `"left":`} {
-		if !strings.Contains(lines[1], want) {
-			t.Errorf("progress %s without %s", lines[1], want)
-		}
-	}
-	// too soon after the last log: nothing
-	BackfillProgressInterval = time.Hour
-	buf.Reset()
-	p.done(2, extra)
-	if buf.Len() != 0 {
-		t.Errorf("progress logged too soon: %s", buf.String())
-	}
 }

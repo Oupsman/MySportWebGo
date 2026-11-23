@@ -164,7 +164,7 @@ func UploadActivity(c *gin.Context) {
 	App := c.MustGet("App").(*app.App)
 	activityService.PowerRideChanged(&db, activity, true, App.Go, App.Logger)
 	// its passes on the segments of the user: the activity is saved, a failure only misses them
-	if err := activityService.MatchActivitySegments(&db, activity.ID); err != nil {
+	if err := activityService.MatchActivitySegments(&db, activity.ID, activityService.MatchUpload); err != nil {
 		c.MustGet("App").(*app.App).Logger.Error().Err(err).Str("activity", activity.ID.String()).
 			Msg("passes on the segments not found")
 	}

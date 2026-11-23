@@ -57,7 +57,8 @@ func drawThumbnailWhenFree(ctx context.Context, activity models.Activity) (missi
 // BackfillTimeStamps re-reads the FIT file of the activities analysed by an older engine, to fill the
 // time stamps of the sparse series, the recording device, the power, the temperatures, and the privacy
 // zones of the public trace, with the security distance of the user. The thumbnails, drawn from the public
-// trace, are drawn again when it changed.
+// trace, are drawn again when it changed. The activities read are matched with the segments again: the
+// new engine may give time stamps to a trace that had none, or move its points.
 // Activities whose file can't be read are marked as done without them, the frontend then falls back on the
 // records time stamps; their public trace is computed again from the trace saved in the database.
 func BackfillTimeStamps(ctx context.Context, db *models.DB, logger zerolog.Logger) error {
@@ -68,9 +69,10 @@ func BackfillTimeStamps(ctx context.Context, db *models.DB, logger zerolog.Logge
 	if len(ids) == 0 {
 		return nil
 	}
-	logger.Info().Int("activities", len(ids)).Int("engine_version", vars.Engine_version).Msg("re-analysing activities")
+	progress := newBackfillProgress(ctx, logger.With().Int("engine_version", vars.Engine_version).Logger(),
+		"activities", len(ids), "re-analysing activities")
 	failed := 0
-	for _, id := range ids {
+	for i, id := range ids {
 		// stopping: what is done stays done, the rest goes on at the next start
 		if ctx.Err() != nil {
 			return nil
@@ -109,6 +111,12 @@ func BackfillTimeStamps(ctx context.Context, db *models.DB, logger zerolog.Logge
 			if err == nil {
 				err = fixRouteEndpoints(db, stored.RouteID, analysed.StartPosition, analysed.EndPosition)
 			}
+			if err == nil {
+				// the activity is saved: a failure only keeps its passes as they were
+				if err := MatchActivitySegments(db, id, MatchReanalysis); err != nil {
+					logger.Warn().Err(err).Str("activity", id.String()).Msg("passes on the segments not found again")
+				}
+			}
 		}
 		if err != nil {
 			return err
@@ -119,8 +127,10 @@ func BackfillTimeStamps(ctx context.Context, db *models.DB, logger zerolog.Logge
 				logger.Warn().Err(err).Str("activity", id.String()).Msg("thumbnail not drawn again with the new public trace")
 			}
 		}
+		progress.done(i+1, func(e *zerolog.Event) *zerolog.Event { return e.Int("failed", failed) })
 	}
-	logger.Info().Int("activities", len(ids)).Int("failed", failed).Msg("activities re-analysed")
+	logger.Info().Int("activities", len(ids)).Int("failed", failed).Str("elapsed", progress.elapsed()).
+		Msg("activities re-analysed")
 	return nil
 }
 

@@ -346,7 +346,7 @@ func TrimActivity(db *models.DB, activity *models.Activity, trimEnd float64, log
 		logger.Warn().Err(err).Str("activity", trimmed.ID.String()).Msg("thumbnail not drawn again after trimming")
 	}
 	// a pass may have been cut
-	if err := MatchActivitySegments(db, trimmed.ID); err != nil {
+	if err := MatchActivitySegments(db, trimmed.ID, MatchTrim); err != nil {
 		logger.Warn().Err(err).Str("activity", trimmed.ID.String()).Msg("passes on the segments not found again after trimming")
 	}
 	return &trimmed, nil

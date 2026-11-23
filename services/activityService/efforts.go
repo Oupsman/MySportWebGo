@@ -282,43 +282,6 @@ func round1(value float64) float64 {
 	return math.Round(value*10) / 10
 }
 
-// BackfillProgressInterval is how often a backfill logs how far it is
-var BackfillProgressInterval = 30 * time.Second
-
-// backfillProgress logs the progress of a backfill: at its start, then at most every
-// BackfillProgressInterval, with an estimate of the time left
-type backfillProgress struct {
-	logger  zerolog.Logger
-	total   int
-	started time.Time
-	logged  time.Time
-}
-
-func newBackfillProgress(logger zerolog.Logger, total int, msg string) *backfillProgress {
-	now := time.Now()
-	logger.Info().Int("activities", total).Msg(msg)
-	return &backfillProgress{logger: logger, total: total, started: now, logged: now}
-}
-
-// done logs the progress after done activities, when the last log is old enough, with the fields added
-// by fields (nil: none)
-func (p *backfillProgress) done(done int, fields func(*zerolog.Event) *zerolog.Event) {
-	now := time.Now()
-	if done >= p.total || now.Sub(p.logged) < BackfillProgressInterval {
-		return
-	}
-	p.logged = now
-	elapsed := now.Sub(p.started)
-	left := time.Duration(float64(elapsed) / float64(done) * float64(p.total-done)).Round(time.Second)
-	event := p.logger.Info().Int("done", done).Int("total", p.total).
-		Str("percent", strconv.FormatFloat(float64(done)*100/float64(p.total), 'f', 1, 64)).
-		Str("elapsed", elapsed.Round(time.Second).String()).Str("left", left.String())
-	if fields != nil {
-		event = fields(event)
-	}
-	event.Msg("backfill in progress")
-}
-
 // BackfillBestEfforts computes the best efforts of the activities analysed before they existed: their FIT
 // file is analysed again; without readable file, the distance ones come from the stored series
 func BackfillBestEfforts(ctx context.Context, db *models.DB, logger zerolog.Logger) error {
@@ -327,7 +290,7 @@ func BackfillBestEfforts(ctx context.Context, db *models.DB, logger zerolog.Logg
 		return err
 	}
 	logger = logger.With().Str("backfill", "best_efforts").Logger()
-	progress := newBackfillProgress(logger, len(ids), "computing the best efforts of activities")
+	progress := newBackfillProgress(ctx, logger, "activities", len(ids), "computing the best efforts of activities")
 	fromSeries := 0
 	for i, id := range ids {
 		// stopping: what is done stays done, the rest goes on at the next start

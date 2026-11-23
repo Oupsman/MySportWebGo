@@ -20,7 +20,7 @@ func BackfillThumbnails(ctx context.Context, db *models.DB, logger zerolog.Logge
 		return err
 	}
 	logger = logger.With().Str("backfill", "thumbnails").Logger()
-	progress := newBackfillProgress(logger, len(ids), "drawing the thumbnails of activities again")
+	progress := newBackfillProgress(ctx, logger, "activities", len(ids), "drawing the thumbnails of activities again")
 	for i, id := range ids {
 		// stopping: what is done stays done, the rest goes on at the next start
 		if ctx.Err() != nil {

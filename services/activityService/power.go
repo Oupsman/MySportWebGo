@@ -188,8 +188,9 @@ func BackfillPowerMetrics(ctx context.Context, db *models.DB, logger zerolog.Log
 	if err != nil || len(ids) == 0 {
 		return err
 	}
+	progress := newBackfillProgress(ctx, logger, "activities", len(ids), "computing the power metrics of activities")
 	scored := 0
-	for _, id := range ids {
+	for i, id := range ids {
 		// stopping: what is done stays done, the rest goes on at the next start
 		if ctx.Err() != nil {
 			return nil
@@ -211,6 +212,7 @@ func BackfillPowerMetrics(ctx context.Context, db *models.DB, logger zerolog.Log
 		if err := db.SetActivityPowerMetrics(&activity); err != nil {
 			return err
 		}
+		progress.done(i+1, nil)
 	}
 	logger.Info().Int("activities", len(ids)).Int("scored", scored).Msg("power metrics computed")
 	return nil

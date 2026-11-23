@@ -218,8 +218,8 @@ func BackfillRoutes(ctx context.Context, db *models.DB, logger zerolog.Logger) e
 	if len(ids) == 0 {
 		return nil
 	}
-	logger.Info().Int("activities", len(ids)).Msg("assigning routes to activities")
-	for _, id := range ids {
+	progress := newBackfillProgress(ctx, logger, "activities", len(ids), "assigning routes to activities")
+	for i, id := range ids {
 		// stopping: what is done stays done, the rest goes on at the next start
 		if ctx.Err() != nil {
 			return nil
@@ -257,8 +257,9 @@ func BackfillRoutes(ctx context.Context, db *models.DB, logger zerolog.Logger) e
 		if err != nil {
 			return err
 		}
+		progress.done(i+1, nil)
 	}
-	logger.Info().Msg("routes assigned")
+	logger.Info().Str("elapsed", progress.elapsed()).Msg("routes assigned")
 	return nil
 }
 
