@@ -42,6 +42,9 @@ func UploadActivity(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "missing file"})
 		return
 	}
+	if !withinQuota(c, user, uploadParams.File.Size) {
+		return
+	}
 
 	file := uploadParams.File
 	item := uploadParams.Item

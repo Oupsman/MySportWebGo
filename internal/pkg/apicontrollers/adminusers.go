@@ -56,6 +56,7 @@ func GetUsers(c *gin.Context) {
 		if id, err := uuid.Parse(users[i].UUID); err == nil {
 			users[i].DiskBytes = diskUsage(activityService.UserMediaDir(id))
 		}
+		users[i].Quota = models.Users{QuotaBytes: users[i].QuotaBytes}.Quota()
 	}
 	c.JSON(http.StatusOK, gin.H{"users": users})
 }

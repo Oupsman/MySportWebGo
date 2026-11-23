@@ -2,6 +2,7 @@ package models
 
 import (
 	// "MySportWeb/internal/pkg/types" // used by the dead code below
+	"MySportWeb/internal/pkg/vars"
 	"errors"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -41,6 +42,31 @@ type Users struct {
 	TOTPRecovery  string     `json:"-" gorm:"column:totp_recovery;not null;default:''"`
 	// DashboardLayout is the widgets of their dashboard (see DashboardWidget), nil for the default layout
 	DashboardLayout *string `json:"-" gorm:"type:jsonb"`
+	// QuotaBytes is the storage quota an admin gave them, nil for the one of the instance (vars.UserQuota), 0
+	// for none: see Quota. Set by SetUserQuota only.
+	QuotaBytes *int64 `json:"-"`
+}
+
+// Quota is the storage quota of the user, in bytes: the one an admin gave them, else the one of the instance;
+// 0 for none
+func (u Users) Quota() int64 {
+	if u.QuotaBytes != nil {
+		return *u.QuotaBytes
+	}
+	return vars.UserQuota
+}
+
+// SetUserQuota gives a user their own storage quota (bytes, 0 for none), nil for the one of the instance;
+// gorm.ErrRecordNotFound for an unknown user
+func (db *DB) SetUserQuota(id uint, quota *int64) error {
+	result := db.Model(&Users{}).Where("id = ?", id).Update("quota_bytes", quota)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // RevokedSessions are the session tokens logged out before they expire, by their id (jti). They are

@@ -138,13 +138,17 @@ type UserSummary struct {
 	LastDeviceUse *time.Time `json:"last_device_use"`
 	UUID          string     `json:"-"`
 	DiskBytes     int64      `json:"disk_bytes"` // their files, set by the caller
+	// QuotaBytes is the quota an admin gave them, nil for the one of the instance; Quota the one that
+	// applies, set by the caller; 0 for none
+	QuotaBytes *int64 `json:"quota_bytes"`
+	Quota      int64  `json:"quota" gorm:"-"`
 }
 
 // GetUserSummaries returns the users with their activity, by username
 func (db *DB) GetUserSummaries() ([]UserSummary, error) {
 	users := []UserSummary{}
 	err := db.Table("users AS u").
-		Select(`u.id, u.username, u.email, u.role, u.created_at, u.disabled_at, u.uuid,
+		Select(`u.id, u.username, u.email, u.role, u.created_at, u.disabled_at, u.uuid, u.quota_bytes,
 			u.totp_enabled_at IS NOT NULL AS two_factor,
 			(SELECT COUNT(*) FROM activities a WHERE a.user_id = u.id) AS activities,
 			(SELECT MAX(a.date) FROM activities a WHERE a.user_id = u.id) AS last_activity,

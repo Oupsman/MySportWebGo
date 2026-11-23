@@ -126,6 +126,8 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.POST("/admin/users/:id/enable", middlewares.IsAdmin(), apicontrollers.EnableUser)
 	apiv1.POST("/admin/users/:id/password-reset", middlewares.IsAdmin(), apicontrollers.CreatePasswordReset)
 	apiv1.DELETE("/admin/users/:id", middlewares.IsAdmin(), apicontrollers.AdminDeleteUser)
+	// their own too: the quota isn't a privilege
+	apiv1.POST("/admin/users/:id/quota", middlewares.IsAdmin(), apicontrollers.SetUserQuota)
 	// Users
 	// per IP; the logins are also limited per username, see apicontrollers.Login
 	apiv1.POST("/user/login", middlewares.RateLimit(middlewares.NewRateLimiter(LoginsPerMinute, time.Minute)),
@@ -179,6 +181,8 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.GET("/user/records", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.Records)
 	apiv1.GET("/user/sports", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.UserSports)
 	apiv1.GET("/user", middlewares.IsAuthorized(), apicontrollers.GetUser)
+	// the space their files take, and their quota
+	apiv1.GET("/user/storage", middlewares.IsAuthorized(), apicontrollers.GetStorage)
 	apiv1.POST("/user", middlewares.IsAuthorized(), apicontrollers.UpdateUser)
 
 	// browser notifications (web push), from a session only

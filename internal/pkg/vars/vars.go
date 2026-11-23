@@ -135,6 +135,11 @@ func Init() {
 		DemDir = "MEDIA/dem"
 	}
 	DemURL = CheckVariable("DEM_URL", false)
+	if quota := CheckVariable("USER_QUOTA", false); quota != "" {
+		if UserQuota, err = ParseSize(quota); err != nil {
+			panic("USER_QUOTA: " + err.Error())
+		}
+	}
 	MapTileDir = CheckVariable("MAP_TILE_DIR", false)
 	if MapTileDir == "" {
 		MapTileDir = "MEDIA/tiles"

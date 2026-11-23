@@ -203,6 +203,9 @@ func UploadEquipmentPicture(c *gin.Context) {
 		}
 		return
 	}
+	if !withinQuota(c, user, header.Size) {
+		return
+	}
 	file, err := header.Open()
 	if err != nil {
 		internalError(c, err)

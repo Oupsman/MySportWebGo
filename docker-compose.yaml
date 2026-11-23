@@ -46,6 +46,9 @@ services:
       # who may create an account: closed (default: nobody but the first admin, with the setup code of the
       # logs), invite (with an invitation of an admin) or open (anyone)
       REGISTRATION: ${MSW_REGISTRATION:-closed}
+      # the storage quota of each user (their activities, thumbnails, pictures): 1g by default, none for no
+      # quota. An admin gives a user another one in the admin page
+      USER_QUOTA: ${MSW_USER_QUOTA:-1g}
       # the emails, through the SMTP relay of a sending service (see Emails in the README); empty: no email.
       # An incomplete configuration stops the backend at its start, saying what is missing
       SMTP_HOST: ${MSW_SMTP_HOST:-}

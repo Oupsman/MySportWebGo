@@ -94,6 +94,9 @@ docker compose logs backend | grep setup_code   # the code that creates the admi
   `MSW_DBNAME`, and `MSW_DBSSLMODE`. The default, `prefer`, uses TLS when the database offers it without checking
   its certificate: set `verify-full` (or `require`) for a database reached over a network you don't control.
   The tables are created at the first start.
+* **Storage quota**: each user may store 1 GB of files (activities, thumbnails, pictures), `MSW_USER_QUOTA`
+  (`500m`, `5g`, `none` for no quota). An upload above it is refused (507, with the space used). An admin gives a
+  user another quota, or none, in the admin page; `GET /api/v1/user/storage` tells a user their space and quota.
 * **Memory**: the backend is limited to 1 GB (`MSW_BACKEND_MEMORY`, `mem_limit` in `docker-compose.yaml`).
   Above it the kernel kills the backend, which restarts, rather than the database. The backend reads the limit at
   its start (logged: `memory limit of the container`): 2 uploads are analysed at a time under 2 GB, 4 from 2 GB.
