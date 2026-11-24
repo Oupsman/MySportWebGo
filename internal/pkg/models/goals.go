@@ -17,7 +17,7 @@ var (
 )
 
 // goalHistory is how many past periods of a recurring goal are shown
-var goalHistory = map[string]int{"week": 12, "month": 12, "year": 5}
+var goalHistory = map[string]int{"week": 12, "month": 12, "year": 12}
 
 // the SQL summing a metric of the activities; the keys are the only metrics accepted
 var goalSums = map[string]string{
