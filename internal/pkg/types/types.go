@@ -135,6 +135,10 @@ type RouteActivity struct {
 	Distance float64   `json:"distance"`
 	Duration uint32    `json:"duration"`
 	AvgSpeed float64   `json:"avg_speed"`
+	// the time and the speed while moving: the activities compare on them, whether their device paused at the
+	// stops or not; nil until computed, 0 when the records don't tell
+	MovingTime     *float64 `json:"moving_time"`
+	AvgMovingSpeed *float64 `json:"avg_moving_speed"`
 }
 
 type ActivityCalendar struct {

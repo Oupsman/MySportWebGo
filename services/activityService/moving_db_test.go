@@ -26,7 +26,8 @@ func TestMovingTimeOfRides(t *testing.T) {
 			t.Errorf("%s: moving %v s of %d, at %.2f m/s (average %.2f)", name, moving, a.Duration, speed, a.AvgSpeed)
 		}
 		t.Logf("%s: %d s, moving %.0f s; %.1f km/h, moving %.1f km/h", name, a.Duration, moving, a.AvgSpeed*3.6, speed*3.6)
-		if err := db.CreateActivity(&a); err != nil {
+		// as an upload: its route assigned
+		if err := CreateActivity(db, &a, func(*models.Activity) error { return nil }); err != nil {
 			t.Fatal(err)
 		}
 		analysed[a.ID.String()] = moving
@@ -48,6 +49,22 @@ func TestMovingTimeOfRides(t *testing.T) {
 	}
 	if left, _ := db.GetActivitiesWithoutMovingTime(); len(left) != 0 {
 		t.Errorf("%d left without moving time", len(left))
+	}
+
+	// the activities of the route compare on them
+	var routed models.Activity
+	db.Select("id", "route_id").Where("route_id IS NOT NULL").First(&routed)
+	if routed.RouteID == nil {
+		t.Fatal("no route")
+	}
+	others, err := db.GetActivitiesByRoute(*routed.RouteID, routed.ID)
+	if err != nil || len(others) == 0 {
+		t.Fatalf("route activities: %v %v", others, err)
+	}
+	for _, o := range others {
+		if o.MovingTime == nil || *o.MovingTime != analysed[o.ID.String()] || o.AvgMovingSpeed == nil || *o.AvgMovingSpeed <= 0 {
+			t.Errorf("route activity %s: moving %v at %v", o.ID, o.MovingTime, o.AvgMovingSpeed)
+		}
 	}
 
 	// an edit of the activity keeps it

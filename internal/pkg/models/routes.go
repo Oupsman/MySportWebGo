@@ -172,7 +172,7 @@ func (db *DB) SetActivityRoute(activityID, routeID uuid.UUID) error {
 func (db *DB) GetActivitiesByRoute(routeID, excludeID uuid.UUID) ([]types.RouteActivity, error) {
 	activities := []types.RouteActivity{}
 	// only the listed columns: a full row holds every record of the FIT file
-	err := db.Table("activities").Select("id", "title", "date", "distance", "duration", "avg_speed").
+	err := db.Table("activities").Select("id", "title", "date", "distance", "duration", "avg_speed", "moving_time", "avg_moving_speed").
 		Where("route_id = ? AND id <> ?", routeID, excludeID).
 		Order("date desc").Scan(&activities).Error
 	if err != nil {
