@@ -8,6 +8,7 @@ import (
 	"MySportWeb/internal/pkg/metrics"
 	"MySportWeb/internal/pkg/staticmap"
 	"MySportWeb/internal/pkg/vars"
+	"MySportWeb/internal/pkg/weather"
 	"MySportWeb/internal/pkg/webserver"
 	"MySportWeb/services/activityService"
 	"context"
@@ -64,6 +65,9 @@ func main() {
 	}
 	staticmap.UserAgent = "MySportWeb/" + vars.Version + " (self-hosted sport activity tracker)"
 	activityService.MapTiles = staticmap.NewTiles(vars.MapTileDir, tileURL)
+	// the weather at the start of the activities: the coordinates sent rounded to about 10 km
+	weather.UserAgent = staticmap.UserAgent
+	activityService.Weather = weather.New(vars.WeatherURL)
 	driver := "postgres"
 	dsn := vars.Dsn
 	// the emails: an incomplete or inconsistent configuration stops here, rather than failing later

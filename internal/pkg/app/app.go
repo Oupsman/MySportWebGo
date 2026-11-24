@@ -131,6 +131,8 @@ func (app *App) backfill(ctx context.Context) {
 		// it re-analysed were matched already, with the current rules
 		{"failed to match segments again", activityService.BackfillSegmentMatches},
 		{"failed to draw the thumbnails of activities again", activityService.BackfillThumbnails},
+		// last: paced to stay within the limits of the free weather service, the longest on a first start
+		{"failed to get the weather of activities", activityService.BackfillWeather},
 	}
 	for _, step := range steps {
 		if ctx.Err() != nil {

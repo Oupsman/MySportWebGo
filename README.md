@@ -131,6 +131,13 @@ docker compose logs backend | grep setup_code   # the code that creates the admi
   its certificate: set `verify-full` (or `require`) for a database reached over a network you don't control.
   The tables are created at the first start. Give the backend a user owning its database, not a superuser; given a
   superuser, it sets up `<MSW_DBUSER>_app` as above.
+* **Weather**: the weather at the start of each activity (temperature, feels like, wind, precipitation,
+  humidity, clouds) comes from [Open-Meteo](https://open-meteo.com/), at the upload and, for the activities before,
+  in the background at the start (the activities of a day at a place in one request, about 2400 an hour, 6000 per
+  start). Only the start point rounded to 0.1° (about 10 km) and the date are sent: the start is often a home, and
+  the weather of the past isn't more precise anyway. Open-Meteo is free for a non-commercial use (less than 10000
+  requests a day), under CC BY 4.0: the activity page links to it. `MSW_WEATHER_URL=none` sends nothing; the URL
+  of a [self-hosted Open-Meteo](https://github.com/open-meteo/open-meteo) asks it instead.
 * **Storage quota**: each user may store 1 GB of files (activities, thumbnails, pictures), `MSW_USER_QUOTA`
   (`500m`, `5g`, `none` for no quota). An upload above it is refused (507, with the space used). An admin gives a
   user another quota, or none, in the admin page; `GET /api/v1/user/storage` tells a user their space and quota.
@@ -285,7 +292,7 @@ Where Prometheus reaches the metrics:
 
 The metrics are named `mysportweb_*` (requests by route and status, analyses, thumbnails, map tiles, logins,
 registrations,
-backfills and what they have left to do, segment matching, users and activities, backups), `go_sql_*` (the connection pool), `go_*` and `process_*`. The age
+backfills and what they have left to do, segment matching, weather requests, users and activities, backups), `go_sql_*` (the connection pool), `go_*` and `process_*`. The age
 of the backups comes from `MSW_BACKUP_DIR`, mounted read-only in the backend: it reads it when
 `MSW_BACKUP_OWNER` is its user, `1000:1000` by default (`mysportweb_backup_dir_readable` is 0 otherwise, and
 the backup alert can't fire). `METRICS_PORT=none` in the environment of the backend turns the metrics off.

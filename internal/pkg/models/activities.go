@@ -2,6 +2,7 @@ package models
 
 import (
 	"MySportWeb/internal/pkg/types"
+	"MySportWeb/internal/pkg/weather"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -92,11 +93,13 @@ type Activity struct {
 	NegativeElevation     float64             `json:"negative_elevation"`
 	// the altitude correction applied to Altitudes (AltitudeCorrectionNone...): the one of the device, or none
 	// when the ground elevation of the trace is unknown
-	ElevationCorrection string            `json:"elevation_correction" gorm:"not null;default:'none'"`
-	StartPosition       *types.GpsPoint   `json:"start_position"`
-	EndPosition         *types.GpsPoint   `json:"end_position"`
-	Lengths             types.LengthArray `json:"lengths"`
-	Legs                types.LegArray    `json:"legs"` // the sessions of a multi-session file, empty for one session
+	ElevationCorrection string          `json:"elevation_correction" gorm:"not null;default:'none'"`
+	StartPosition       *types.GpsPoint `json:"start_position"`
+	// the weather at its start, nil until asked; read only here: set by SetActivityWeather
+	Weather     *weather.Weather  `json:"weather" gorm:"->;serializer:json"`
+	EndPosition *types.GpsPoint   `json:"end_position"`
+	Lengths     types.LengthArray `json:"lengths"`
+	Legs        types.LegArray    `json:"legs"` // the sessions of a multi-session file, empty for one session
 	// seconds since the start after which the recording is ignored (the device wasn't stopped), 0 for none
 	TrimEnd float64 `json:"trim_end"`
 	// seconds between the start and the end of the whole recording, trimmed or not; 0 for the activities
@@ -148,6 +151,12 @@ func (a *Activity) HidePrivate() {
 	a.Lons = nil
 	a.StartPosition = nil
 	a.EndPosition = nil
+	// the place its weather was asked for, rounded: not to the others either
+	if a.Weather != nil {
+		w := *a.Weather
+		w.Latitude, w.Longitude = 0, 0
+		a.Weather = &w
+	}
 	a.MaxSpeedPosition = types.GpsPoint{}
 	a.GpsCenter, a.GpsBounds = traceBounds(a.PublicGpsPoints)
 

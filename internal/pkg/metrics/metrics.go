@@ -127,6 +127,13 @@ var (
 		Buckets: []float64{.0005, .001, .0025, .005, .01, .025, .05, .1, .25, .5},
 	})
 
+	// WeatherRequests counts the requests to the weather source (Open-Meteo), by result: ok, unavailable (no
+	// weather for that date), rate_limited, error
+	WeatherRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace, Name: "weather_requests_total",
+		Help: "Requests to the weather source (Open-Meteo), by result: ok, unavailable, rate_limited, error.",
+	}, []string{"result"})
+
 	// BuildInfo is 1, with the version of the backend
 	BuildInfo = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace, Name: "build_info",
@@ -149,7 +156,7 @@ func init() {
 		Analyses, AnalysisDuration, Thumbnails, ThumbnailDuration, MapTiles,
 		Logins, Registrations,
 		BackfillRunning, BackfillDuration, BackfillErrors, BackfillRemaining,
-		SegmentMatches, SegmentPasses, SegmentMatchDuration,
+		SegmentMatches, SegmentPasses, SegmentMatchDuration, WeatherRequests,
 		BuildInfo, SchemaVersion,
 	)
 }

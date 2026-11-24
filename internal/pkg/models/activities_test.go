@@ -2,6 +2,7 @@ package models
 
 import (
 	"MySportWeb/internal/pkg/types"
+	"MySportWeb/internal/pkg/weather"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -33,6 +34,9 @@ func TestHidePrivate(t *testing.T) {
 		Title:            "Morning ride",
 		Distance:         42000,
 	}
+	temperature := 12.5
+	a.Weather = &weather.Weather{Latitude: 45.1, Longitude: 5.7, Temperature: &temperature, Source: "open-meteo"}
+	stored := a.Weather
 	a.HidePrivate()
 
 	data, err := json.Marshal(a)
@@ -47,6 +51,11 @@ func TestHidePrivate(t *testing.T) {
 	}
 	if a.UserID != 0 {
 		t.Errorf("user id %d", a.UserID)
+	}
+	// the weather without the place it was asked for; the activity's own value untouched
+	if a.Weather == nil || a.Weather.Latitude != 0 || a.Weather.Longitude != 0 || *a.Weather.Temperature != 12.5 ||
+		stored.Latitude != 45.1 {
+		t.Errorf("weather %+v (stored %+v)", a.Weather, stored)
 	}
 	// what the others see is kept
 	if a.Title != "Morning ride" || a.Distance != 42000 || len(a.PublicGpsPoints) != 2 || a.Device.Model != "Edge 530" {

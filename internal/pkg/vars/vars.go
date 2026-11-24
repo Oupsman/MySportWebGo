@@ -45,6 +45,10 @@ var MapTileDir string
 // staticmap.DefaultURL (OpenStreetMap) by default, "none" for no download (the tiles are then only the ones
 // already in MapTileDir)
 var MapTileURL string
+
+// WeatherURL is where the weather of the activities comes from: WEATHER_URL, the public servers of Open-Meteo
+// when empty, none for no weather, else a server of the same API (a self-hosted Open-Meteo)
+var WeatherURL string
 var Dsn string
 var SecretKey string
 var Domain string
@@ -145,6 +149,7 @@ func Init() {
 		MapTileDir = "MEDIA/tiles"
 	}
 	MapTileURL = CheckVariable("MAP_TILE_URL", false)
+	WeatherURL = CheckVariable("WEATHER_URL", false)
 	TrustedProxies = DefaultTrustedProxies
 	if proxies := CheckVariable("TRUSTED_PROXIES", false); proxies != "" {
 		TrustedProxies = nil

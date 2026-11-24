@@ -63,6 +63,9 @@ services:
       # the map tiles of the thumbnails, kept in MEDIA/tiles: empty downloads them from OpenStreetMap, none
       # only uses the ones put there (the thumbnails are then drawn without map)
       MAP_TILE_URL: ${MSW_MAP_TILE_URL:-}
+      # the weather at the start of the activities: empty asks Open-Meteo (free for a non-commercial use, the
+      # start point rounded to about 10 km), none for no weather, else a self-hosted Open-Meteo
+      WEATHER_URL: ${MSW_WEATHER_URL:-}
       # the metrics for Prometheus, on their own port (never through the frontend), see Monitoring in the
       # README; METRICS_TOKEN: the bearer token the scrapes must send, empty for none
       METRICS_PORT: "9090"

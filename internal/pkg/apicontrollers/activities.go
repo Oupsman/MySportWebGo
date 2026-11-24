@@ -176,6 +176,13 @@ func UploadActivity(c *gin.Context) {
 		c.MustGet("App").(*app.App).Logger.Error().Err(err).Str("activity", activity.ID.String()).
 			Msg("passes on the segments not found")
 	}
+	// its weather, from the weather source: in the background, the answer doesn't wait
+	App.Go(func(ctx context.Context) {
+		if err := activityService.FetchActivityWeather(ctx, &db, activity.ID, activity.Date, activity.StartPosition); err != nil {
+			App.Logger.Warn().Err(err).Str("activity", activity.ID.String()).
+				Msg("weather not read: asked again at the next start")
+		}
+	})
 	// its new bests, after its passes: in the background, the answer doesn't wait
 	App.Go(func(context.Context) {
 		err := notifications.NotifyHighlights(&db, App.Logger, user.ID, activity.ID, activity.Title, activity.Date,
