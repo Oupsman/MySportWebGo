@@ -134,6 +134,8 @@ func (app *App) backfill(ctx context.Context) {
 		{"failed to compute the power metrics of activities", activityService.BackfillPowerMetrics},
 		{"failed to compute the power curves of activities", activityService.BackfillPowerCurves},
 		{"failed to rename activities", activityService.BackfillTitles},
+		// from the stored series, the FIT files aren't read
+		{"failed to compute the moving time of activities", activityService.BackfillMovingTime},
 		// last: it downloads map tiles, the longest on a first start
 		// after BackfillTimeStamps: the segments are matched with the traces of the new engine; the activities
 		// it re-analysed were matched already, with the current rules

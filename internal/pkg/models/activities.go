@@ -95,6 +95,10 @@ type Activity struct {
 	// when the ground elevation of the trace is unknown
 	ElevationCorrection string          `json:"elevation_correction" gorm:"not null;default:'none'"`
 	StartPosition       *types.GpsPoint `json:"start_position"`
+	// MovingTime is the seconds spent moving, AvgMovingSpeed the average speed then (m/s), from the records
+	// (activityService.MovingTime): nil until computed, 0 when the records don't tell
+	MovingTime     *float64 `json:"moving_time"`
+	AvgMovingSpeed *float64 `json:"avg_moving_speed"`
 	// the weather at its start, nil until asked; read only here: set by SetActivityWeather
 	Weather     *weather.Weather  `json:"weather" gorm:"->;serializer:json"`
 	EndPosition *types.GpsPoint   `json:"end_position"`
@@ -424,6 +428,8 @@ func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, privacy
 		updates["temperatures"] = analysed.Temperatures
 		updates["temperature_time_stamps"] = analysed.TemperatureTimeStamps
 		updates["recorded_duration"] = analysed.RecordedDuration
+		updates["moving_time"] = analysed.MovingTime
+		updates["avg_moving_speed"] = analysed.AvgMovingSpeed
 		updates["metrics"] = analysed.Metrics
 		updates["best_efforts"] = analysed.BestEfforts
 		// the power stream changed: BackfillPowerMetrics computes its metrics again
@@ -598,4 +604,25 @@ func (db *DB) HeatmapVersion(userID uint, sports []string, from, to *time.Time) 
 		return version.Count, time.Time{}, err
 	}
 	return version.Count, *version.Latest, err
+}
+
+// GetActivitiesWithoutMovingTime returns the ids of the activities whose moving time was never computed
+func (db *DB) GetActivitiesWithoutMovingTime() ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := db.Model(&Activity{}).Where("moving_time IS NULL").Order("date DESC").Pluck("id", &ids).Error
+	return ids, err
+}
+
+// GetActivityMovingSeries returns what the moving time of an activity needs: its sport, distance, duration,
+// and the time stamps and distances of its records
+func (db *DB) GetActivityMovingSeries(id uuid.UUID) (Activity, error) {
+	var activity Activity
+	err := db.Select("id", "sport", "distance", "duration", "time_stamps", "distances").First(&activity, "id = ?", id).Error
+	return activity, err
+}
+
+// SetActivityMoving saves the moving time and the average moving speed of an activity
+func (db *DB) SetActivityMoving(id uuid.UUID, moving, speed float64) error {
+	return db.Model(&Activity{}).Where("id = ?", id).
+		Updates(map[string]interface{}{"moving_time": moving, "avg_moving_speed": speed}).Error
 }

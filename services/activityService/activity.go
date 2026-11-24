@@ -171,6 +171,8 @@ func decodeFit(fit *proto.FIT, user models.Users, trimEnd float64,
 	if err != nil {
 		return models.Activity{}, err
 	}
+	// from the records: the stops a device without auto-pause counts in its duration
+	setMoving(&activity)
 	if len(activity.Legs) > 0 {
 		estimateLegsPower(&activity)
 	}
