@@ -5,6 +5,7 @@ import (
 	"MySportWeb/internal/pkg/metrics"
 	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/notifications"
+	"MySportWeb/internal/pkg/status"
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/internal/pkg/vars"
 	"MySportWeb/services/activityService"
@@ -30,6 +31,10 @@ type App struct {
 	// SetupCode registers the first admin, whatever REGISTRATION says: drawn at the start while the instance
 	// has no admin, printed in the logs only, "" once there is one at the start
 	SetupCode string
+	// Status samples the metrics for the status page of the admins (status.Sampler), nil when not set;
+	// MemoryLimit is the container's (memlimit), 0 without
+	Status      *status.Sampler
+	MemoryLimit int64
 
 	// the context of Start, and the work running in the background (Go)
 	ctx        context.Context
@@ -93,6 +98,9 @@ func (app *App) Start(ctx context.Context) error {
 	app.Go(func(ctx context.Context) { app.Notifications.Run(ctx, app.Logger, app.Client, app.DB) })
 	app.Go(func(ctx context.Context) { notifications.RunServiceAlerts(ctx, app.Logger, app.DB) })
 	app.Go(app.backfill)
+	if app.Status != nil {
+		app.Go(app.Status.Run)
+	}
 	return nil
 }
 

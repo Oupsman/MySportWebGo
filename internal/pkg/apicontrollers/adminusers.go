@@ -4,6 +4,7 @@ import (
 	"MySportWeb/internal/pkg/app"
 	"MySportWeb/internal/pkg/middlewares"
 	"MySportWeb/internal/pkg/models"
+	"MySportWeb/internal/pkg/status"
 	"MySportWeb/internal/pkg/utils"
 	"MySportWeb/internal/pkg/vars"
 	"MySportWeb/services/activityService"
@@ -304,4 +305,21 @@ func DeleteAccount(c *gin.Context) {
 	}
 	middlewares.ClearSessionCookie(c)
 	c.JSON(http.StatusOK, gin.H{"deleted": true})
+}
+
+// GetStatus answers the state of the instance for the admins: the health checks, the current values, what
+// happened in the last hour and day, the history of the last day (status.Report). 503 before it samples.
+func GetStatus(c *gin.Context) {
+	App := c.MustGet("App").(*app.App)
+	if App.Status == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "the status isn't sampled"})
+		return
+	}
+	report, err := App.Status.Build(status.Options{Version: vars.Version, MemoryLimit: App.MemoryLimit,
+		MediaDir: activityService.MediaDir})
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, report)
 }

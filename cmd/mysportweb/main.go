@@ -7,6 +7,7 @@ import (
 	"MySportWeb/internal/pkg/memlimit"
 	"MySportWeb/internal/pkg/metrics"
 	"MySportWeb/internal/pkg/staticmap"
+	"MySportWeb/internal/pkg/status"
 	"MySportWeb/internal/pkg/vars"
 	"MySportWeb/internal/pkg/weather"
 	"MySportWeb/internal/pkg/webserver"
@@ -111,13 +112,16 @@ func main() {
 	g, ctx := errgroup.WithContext(ctx)
 	listenAddr := fmt.Sprintf(":%s", vars.ListenPort)
 	g.Go(func() error { return webserver.RunHttp(ctx, listenAddr, App) })
+	// the metrics: for the status page of the admins, read in the process, and for Prometheus when served
+	metrics.BuildInfo.WithLabelValues(vars.Version).Set(1)
+	if sqlDB, err := App.DB.DB.DB(); err == nil {
+		// the connection pool of the database: go_sql_* labelled db_name="mysportweb"
+		metrics.Registry.MustRegister(collectors.NewDBStatsCollector(sqlDB, "mysportweb"))
+	}
+	metrics.Registry.MustRegister(metrics.NewDataCollector(App.DB.Counts, vars.BackupDir))
+	App.Status = status.NewSampler(metrics.Registry)
+	App.MemoryLimit = limit
 	if vars.MetricsPort != "none" {
-		metrics.BuildInfo.WithLabelValues(vars.Version).Set(1)
-		if sqlDB, err := App.DB.DB.DB(); err == nil {
-			// the connection pool of the database: go_sql_* labelled db_name="mysportweb"
-			metrics.Registry.MustRegister(collectors.NewDBStatsCollector(sqlDB, "mysportweb"))
-		}
-		metrics.Registry.MustRegister(metrics.NewDataCollector(App.DB.Counts, vars.BackupDir))
 		metricsAddr := fmt.Sprintf(":%s", vars.MetricsPort)
 		g.Go(func() error { return webserver.RunMetrics(ctx, metricsAddr, vars.MetricsToken, log.Logger) })
 	}

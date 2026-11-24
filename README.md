@@ -271,6 +271,11 @@ and by email too, with the emails on and their address confirmed (see [Emails](#
 
 ## Monitoring
 
+**Without Prometheus**: the admin page (Admin in the menu) starts with a **Status**: health checks (backups,
+server errors, memory, disk, backfills, refused uploads, database connections, locked logins, emails, weather),
+the current values, and charts of the last day. The backend reads its own metrics, a sample a minute kept in memory
+for 24 hours: the charts start again at each restart. Prometheus and Grafana below keep the history and send alerts.
+
 The backend serves metrics for Prometheus on its own port, 9090 in the container, never through the frontend.
 `monitoring/` has what your Prometheus and Grafana need:
 

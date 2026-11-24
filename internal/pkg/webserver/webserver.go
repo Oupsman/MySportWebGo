@@ -120,6 +120,8 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.DELETE("/admin/invitations/:id", middlewares.IsAdmin(), apicontrollers.RevokeInvitation)
 	// the changes of the users also ask a code of the authenticator, each time (apicontrollers.RequireTOTP)
 	apiv1.GET("/admin/users", middlewares.IsAdmin(), apicontrollers.GetUsers)
+	// the state of the instance, from the metrics read in the process: no Prometheus needed
+	apiv1.GET("/admin/status", middlewares.IsAdmin(), apicontrollers.GetStatus)
 	apiv1.POST("/admin/email/test", middlewares.IsAdmin(), apicontrollers.SendTestEmail)
 	apiv1.POST("/admin/users/:id/role", middlewares.IsAdmin(), apicontrollers.SetUserRole)
 	apiv1.POST("/admin/users/:id/disable", middlewares.IsAdmin(), apicontrollers.DisableUser)

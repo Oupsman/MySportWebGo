@@ -18,6 +18,7 @@ require (
 	github.com/pquerna/otp v1.4.0
 	github.com/pressly/goose/v3 v3.30.1
 	github.com/prometheus/client_golang v1.23.2
+	github.com/prometheus/client_model v0.6.2
 	github.com/rs/zerolog v1.34.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/exp v0.0.0-20261109185158-a52e3aef5920
@@ -58,7 +59,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
-	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.23.0 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
