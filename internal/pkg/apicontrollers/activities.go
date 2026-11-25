@@ -14,7 +14,6 @@ import (
 	"github.com/google/uuid"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -48,134 +47,42 @@ func UploadActivity(c *gin.Context) {
 		return
 	}
 
-	file := uploadParams.File
-	item := uploadParams.Item
-	// count := uploadParams.Count
-	baseDir := filepath.Join(activityService.MediaDir, user.UUID.String(), "Activities")
-	if err := os.MkdirAll(baseDir, 0770); err != nil {
-		internalError(c, err)
-		return
-	}
-
-	// analysed from a temporary file: a refused upload must not overwrite the FIT file of an activity
-	// with the same file name, nor stay on disk
-	tmp, err := os.CreateTemp(baseDir, "upload-*.fit")
-	if err != nil {
-		internalError(c, err)
-		return
-	}
-	tmpPath := tmp.Name()
-	tmp.Close()
-	defer os.Remove(tmpPath) // fails harmlessly once the file is moved in place
-	if err = c.SaveUploadedFile(file, tmpPath); err != nil {
-		// the upload was read when binding: writing it is the server's failure
-		internalError(c, err)
-		return
-	}
 	if uploadParams.Sport != "" && !activityService.IsSportName(uploadParams.Sport) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "unknown sport " + strconv.Quote(uploadParams.Sport)})
 		return
 	}
-	// a GPX or TCX file becomes a FIT file, a gzipped one is decompressed
-	prepared, err := activityService.PrepareUpload(tmpPath, file.Filename, uploadParams.Sport)
+	App := c.MustGet("App").(*app.App)
+
+	// analysed from a temporary file: a refused upload must not overwrite the FIT file of an activity
+	// with the same file name, nor stay on disk
+	tmpPath, err := activityService.CreateImportFile(user.UUID)
 	if err != nil {
+		internalError(c, err)
+		return
+	}
+	defer os.Remove(tmpPath) // fails harmlessly once the file is moved in place
+	if err = c.SaveUploadedFile(uploadParams.File, tmpPath); err != nil {
+		// the upload was read when binding: writing it is the server's failure
+		internalError(c, err)
+		return
+	}
+	activity, err := activityService.ImportFile(c.Request.Context(), &db, user, tmpPath, uploadParams.File.Filename,
+		activityService.ImportOptions{
+			Sport:           uploadParams.Sport,
+			ResetLastImport: uploadParams.Item == 0,
+			Logger:          App.Logger,
+		})
+	var duplicate *activityService.DuplicateError
+	switch {
+	case errors.As(err, &duplicate):
+		c.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": err.Error(), "id": duplicate.ExistingID.String()})
+		return
+	case err != nil:
 		analysisError(c, err)
-		return
-	}
-	if prepared.SourcePath != "" {
-		defer os.Remove(prepared.SourcePath) // fails harmlessly once the file is moved in place
-	}
-	activity, err := activityService.AnalyzeTrimmed(tmpPath, user, 0, activityService.Analysis{
-		RestHR:     activityService.UserRestHR(&db, user.ID),
-		Correction: activityService.DeviceCorrection(&db, user.ID),
-		Weight:     activityService.ImportWeight(&db, user.ID),
-		FTP:        activityService.UserFTP(&db, user.ID),
-	})
-	if err != nil {
-		analysisError(c, err)
-		return
-	}
-	activity.UserID = user.ID
-	if err := activityService.AssignDefaultEquipment(&db, &activity); err != nil {
-		internalError(c, err)
-		return
-	}
-	activity.ID = uuid.New()
-	activity.Filename = filepath.Base(file.Filename)
-
-	// checked again when saving; checked here to answer before generating the thumbnail, which is slow
-	existing, err := db.FindDuplicateActivity(user.ID, activity.Sport, activity.Date)
-	if err != nil {
-		internalError(c, err)
-		return
-	}
-	if existing != nil {
-		c.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": "this activity was already imported", "id": existing.String()})
-		return
-	}
-
-	// reset LastImport status
-	if item == 0 {
-		err = db.ResetImportStatus(user.ID)
-		if err != nil {
-			internalError(c, err)
-			return
-		}
-
-	}
-
-	err = activityService.GenerateThumbnail(activity)
-	if err != nil {
-		if !serverBusy(c, err) {
-			internalError(c, err)
-		}
-		return
-	}
-	activity.ThumbnailVersion = activityService.ThumbnailVersion
-
-	// the FIT file keeps its name, prefixed by the activity id when another file has it; the GPX or TCX
-	// file it was converted from is kept beside it, never served
-	store := func(activity *models.Activity) error {
-		prefix := ""
-		for _, name := range []string{prepared.FITName, prepared.SourceName} {
-			if _, err := os.Stat(filepath.Join(baseDir, name)); name != "" && err == nil {
-				prefix = activity.ID.String() + "_"
-			}
-		}
-		activity.FilePath = filepath.Join(baseDir, prefix+prepared.FITName)
-		if prepared.SourcePath != "" {
-			activity.SourceFilePath = filepath.Join(baseDir, prefix+prepared.SourceName)
-			if err := os.Rename(prepared.SourcePath, activity.SourceFilePath); err != nil {
-				return err
-			}
-		}
-		if err := os.Rename(tmpPath, activity.FilePath); err != nil {
-			if activity.SourceFilePath != "" {
-				os.Remove(activity.SourceFilePath)
-			}
-			return err
-		}
-		return nil
-	}
-	err = activityService.CreateActivity(&db, &activity, store)
-	if err != nil {
-		os.Remove(activityService.ThumbnailPath(user.UUID, activity.ID))
-		var duplicate *activityService.DuplicateError
-		if errors.As(err, &duplicate) {
-			c.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": err.Error(), "id": duplicate.ExistingID.String()})
-			return
-		}
-		internalError(c, err)
 		return
 	}
 	// the rides of the weeks after it may get a higher estimated FTP
-	App := c.MustGet("App").(*app.App)
 	activityService.PowerRideChanged(&db, activity, true, App.Go, App.Logger)
-	// its passes on the segments of the user: the activity is saved, a failure only misses them
-	if err := activityService.MatchActivitySegments(&db, activity.ID, activityService.MatchUpload); err != nil {
-		c.MustGet("App").(*app.App).Logger.Error().Err(err).Str("activity", activity.ID.String()).
-			Msg("passes on the segments not found")
-	}
 	// its weather, from the weather source: in the background, the answer doesn't wait
 	App.Go(func(ctx context.Context) {
 		if err := activityService.FetchActivityWeather(ctx, &db, activity.ID, activity.Date, activity.StartPosition); err != nil {
