@@ -49,6 +49,8 @@ services:
       # the storage quota of each user (their activities, thumbnails, pictures): 1g by default, none for no
       # quota. An admin gives a user another one in the admin page
       USER_QUOTA: ${MSW_USER_QUOTA:-1g}
+      # the largest zip of an export a user can import (profile page); the frontend's nginx accepts as large
+      IMPORT_MAX_SIZE: ${MSW_IMPORT_MAX_SIZE:-2g}
       # the emails, through the SMTP relay of a sending service (see Emails in the README); empty: no email.
       # An incomplete configuration stops the backend at its start, saying what is missing
       SMTP_HOST: ${MSW_SMTP_HOST:-}

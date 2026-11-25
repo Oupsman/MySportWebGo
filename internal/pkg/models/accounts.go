@@ -24,7 +24,7 @@ func isLastAdmin(tx *gorm.DB, user Users) (bool, error) {
 
 // DeleteUser deletes a user and everything they own: activities (their passes on the segments), routes,
 // segments, equipments with their services and default sports, devices, device tokens, push subscriptions
-// and their notifications, health data, validations. Their invitations stay, without them. Their files
+// and their notifications, health data, validations, imports. Their invitations stay, without them. Their files
 // (MEDIA/<uuid>) are the caller's: activityService.DeleteUser. ErrLastAdmin for the last admin.
 func (db *DB) DeleteUser(id uint) (Users, error) {
 	var user Users
@@ -55,6 +55,7 @@ func (db *DB) DeleteUser(id uint) (Users, error) {
 			tx.Unscoped().Where("user_id = ?", id).Delete(&Channel{}),
 			tx.Unscoped().Where("user_id = ?", id).Delete(&HealthData{}),
 			tx.Unscoped().Where("user_id = ?", id).Delete(&Validations{}),
+			tx.Unscoped().Where("user_id = ?", id).Delete(&AccountImport{}),
 			// the invitations: ON DELETE SET NULL
 			tx.Unscoped().Delete(&Users{}, id),
 		}

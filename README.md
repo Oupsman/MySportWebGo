@@ -58,7 +58,7 @@ What protects the users and their data:
   database; a storage quota per user (`MSW_USER_QUOTA`); the size of the requests and of the decompressed files
   bounded. The backend works with a database role without privileges, and runs as an unprivileged user.
 * **The data**: a nightly dump of the database, checked, with an alert when it is too old; each user exports all
-  their data, or deletes their account. Metrics and alerts for Prometheus and Grafana (see Monitoring).
+  their data, imports it into another account or instance, or deletes their account. Metrics and alerts for Prometheus and Grafana (see Monitoring).
 
 What it lacks:
 
@@ -109,7 +109,13 @@ docker compose logs backend | grep setup_code   # the code that creates the admi
   last admin.
 * **Your data**, in **Your profile**: the export downloads a zip of everything the app keeps about you (your
   uploaded files and every computed value as JSON, see its README.txt); deleting your account removes all of it,
-  with your password, your username typed again, and your second factor code.
+  with your password, your username typed again, and your second factor code. The import takes the zip of an
+  export, of this instance or another one, and adds what your account doesn't have: the activities (analysed
+  again from their files, with the titles, equipment, visibility and trims you set), the equipment with their
+  pictures, services and reminders, the devices, the health measures, the segments, the goals, and the settings
+  of your profile when you ask for them. Nothing of your account is replaced: importing the same zip twice adds
+  nothing. It runs in the background (a notification when done); the zip is at most 2 GB
+  (`MSW_IMPORT_MAX_SIZE`, the reverse proxy in front must accept as much).
 * **From the command line**, when no admin can do it in the app:
   `docker compose exec backend mysportweb admin <command> <username>`, the commands being `promote` and `demote`
   (the roles; demoting the last admin brings the setup code back at the next start), `reset-password` (prints

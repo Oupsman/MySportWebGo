@@ -144,6 +144,11 @@ func Init() {
 			panic("USER_QUOTA: " + err.Error())
 		}
 	}
+	if size := CheckVariable("IMPORT_MAX_SIZE", false); size != "" {
+		if ImportMaxSize, err = ParseSize(size); err != nil || ImportMaxSize <= 0 {
+			panic("IMPORT_MAX_SIZE: a size above 0, e.g. 2g")
+		}
+	}
 	MapTileDir = CheckVariable("MAP_TILE_DIR", false)
 	if MapTileDir == "" {
 		MapTileDir = "MEDIA/tiles"

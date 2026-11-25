@@ -1,6 +1,7 @@
 package main
 
 import (
+	"MySportWeb/internal/pkg/apicontrollers"
 	"MySportWeb/internal/pkg/app"
 	"MySportWeb/internal/pkg/elevation"
 	"MySportWeb/internal/pkg/mail"
@@ -125,7 +126,14 @@ func main() {
 		metricsAddr := fmt.Sprintf(":%s", vars.MetricsPort)
 		g.Go(func() error { return webserver.RunMetrics(ctx, metricsAddr, vars.MetricsToken, log.Logger) })
 	}
-	g.Go(func() error { return App.Start(ctx) })
+	g.Go(func() error {
+		if err := App.Start(ctx); err != nil {
+			return err
+		}
+		// the imports of accounts the last stop interrupted, in the background of the App
+		apicontrollers.ResumeAccountImports(App)
+		return nil
+	})
 	err = g.Wait()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to run")

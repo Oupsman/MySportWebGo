@@ -74,6 +74,7 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 		"/api/v1/activity":              FitBodyLimit,
 		"/api/v1/equipment/:id/picture": PictureBodyLimit,
 		"/api/v1/healthdatas/import":    HealthImportBodyLimit,
+		"/api/v1/user/import":           vars.ImportMaxSize,
 	}))
 
 	// the cors middleware refuses other origins silently (403, or a missing header in the browser)
@@ -148,6 +149,9 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 		apicontrollers.LoginSecondFactor)
 	// your data: sessions only
 	apiv1.GET("/user/export", middlewares.IsAuthorized(), apicontrollers.ExportAccount)
+	apiv1.POST("/user/import", middlewares.IsAuthorized(), apicontrollers.ImportAccount)
+	apiv1.GET("/user/import", middlewares.IsAuthorized(), apicontrollers.GetAccountImport)
+	apiv1.DELETE("/user/import", middlewares.IsAuthorized(), apicontrollers.CancelAccountImport)
 	apiv1.POST("/user/delete", middlewares.IsAuthorized(), apicontrollers.DeleteAccount)
 	apiv1.GET("/user/2fa", middlewares.IsAuthorized(), apicontrollers.TwoFactorStatus)
 	apiv1.POST("/user/2fa/setup", middlewares.IsAuthorized(), apicontrollers.SetupTwoFactor)

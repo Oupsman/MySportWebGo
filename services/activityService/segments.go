@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -94,6 +95,45 @@ func NewSegment(activity models.SegmentTrack, start, end int, name string) (mode
 		SourceActivityID: &activity.ID,
 	}
 	segment.MinLat, segment.MinLon, segment.MaxLat, segment.MaxLon = bounds(trace)
+	return segment, nil
+}
+
+// maxSegmentPoints is the number of points of the longest segment NewSegment can make: one every
+// segmentPointMeters at least
+const maxSegmentPoints = int(MaxSegmentMeters/segmentPointMeters) + 2
+
+// ErrSegmentTrace is the trace of a segment of an export that isn't a valid one
+var ErrSegmentTrace = errors.New("the trace of the segment is invalid")
+
+// SegmentFromPoints builds a segment of a user from the trace of a segment of an export, checked as NewSegment
+// checks the stretch of an activity: its name, its sport, its points, its length. elevationGain is the climb
+// the export gives, its altitudes aren't in the trace.
+func SegmentFromPoints(userID uint, name, sport string, points types.GpsPointArray, elevationGain float64) (models.Segment, error) {
+	name = strings.TrimSpace(name)
+	if len([]rune(name)) == 0 || len([]rune(name)) > 100 {
+		return models.Segment{}, ErrSegmentNameSize
+	}
+	if !IsSportName(sport) {
+		return models.Segment{}, errors.New("unknown sport " + strconv.Quote(sport))
+	}
+	if len(points) < 2 || len(points) > maxSegmentPoints {
+		return models.Segment{}, ErrSegmentTrace
+	}
+	for i := range points {
+		if !ValidPosition(&points[i]) {
+			return models.Segment{}, ErrSegmentTrace
+		}
+	}
+	distance := traceLength(points)
+	if distance < MinSegmentMeters || distance > MaxSegmentMeters {
+		return models.Segment{}, ErrSegmentLength
+	}
+	if !(elevationGain > 0) || math.IsInf(elevationGain, 0) {
+		elevationGain = 0
+	}
+	segment := models.Segment{UserID: userID, Name: name, Sport: sport, Points: points,
+		Distance: math.Round(distance), ElevationGain: math.Min(elevationGain, distance)}
+	segment.MinLat, segment.MinLon, segment.MaxLat, segment.MaxLon = bounds(points)
 	return segment, nil
 }
 

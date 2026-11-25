@@ -6,6 +6,13 @@ import (
 	"strings"
 )
 
+// DefaultImportMaxSize is the largest zip of an export a user can import, when IMPORT_MAX_SIZE is unset
+const DefaultImportMaxSize = 2 << 30
+
+// ImportMaxSize is the largest zip of an export a user can import, in bytes: IMPORT_MAX_SIZE. The reverse
+// proxy in front of the backend must accept requests as large (client_max_body_size of nginx).
+var ImportMaxSize int64 = DefaultImportMaxSize
+
 // DefaultUserQuota is the storage quota of a user without one of their own, when USER_QUOTA is unset
 const DefaultUserQuota = 1 << 30
 
