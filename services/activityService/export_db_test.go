@@ -39,9 +39,22 @@ func TestExportUser(t *testing.T) {
 	if err := db.CreateEquipment(&bike); err != nil {
 		t.Fatal(err)
 	}
+	picture, err := SaveEquipmentPicture(user.UUID, bike.ID, []byte("JPEG bytes"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetEquipmentPicture(bike.ID, picture); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetDashboardLayout(user.ID, []models.DashboardWidget{{ID: "calendar", W: 6, H: 2}}); err != nil {
+		t.Fatal(err)
+	}
+	from, to := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC)
 	for _, row := range []interface{}{
 		&models.Services{EquipmentID: bike.ID, Date: day, Mileage: 100, Description: "chain"},
 		&models.HealthData{UserID: user.ID, Date: day, Weight: 70},
+		&models.Goal{UserID: user.ID, Name: "june", Metric: "distance", Target: 500000, Period: "custom",
+			Sports: models.SportList{"cycling"}, StartsOn: &from, EndsOn: &to},
 	} {
 		if err := db.Create(row).Error; err != nil {
 			t.Fatal(err)
@@ -64,7 +77,7 @@ func TestExportUser(t *testing.T) {
 		files[f.Name] = string(content)
 	}
 	prefix := "2026-05-01_080000_" + ride.ID.String()[:8]
-	for _, name := range []string{"README.txt", "profile.json", "activities.csv", "health.json", "equipments.json",
+	for _, name := range []string{"README.txt", "manifest.json", "goals.json", "profile.json", "activities.csv", "health.json", "equipments.json",
 		"devices.json", "routes.json", "segments.json", "activities/" + prefix + ".json"} {
 		if _, ok := files[name]; !ok {
 			t.Errorf("missing %s", name)
@@ -92,9 +105,30 @@ func TestExportUser(t *testing.T) {
 	if !strings.Contains(files["equipments.json"], `"chain"`) || !strings.Contains(files["equipments.json"], `"cycling"`) {
 		t.Errorf("equipments.json: %s", files["equipments.json"])
 	}
+	var manifest ExportManifest
+	if err := json.Unmarshal([]byte(files["manifest.json"]), &manifest); err != nil || manifest.Format != ExportFormat ||
+		manifest.Username != "exporter" {
+		t.Errorf("manifest: %+v %v", manifest, err)
+	}
+	var goals []ExportGoal
+	if err := json.Unmarshal([]byte(files["goals.json"]), &goals); err != nil || len(goals) != 1 ||
+		goals[0].Name != "june" || goals[0].StartsOn == nil || *goals[0].StartsOn != "2026-06-01" ||
+		goals[0].EndsOn == nil || *goals[0].EndsOn != "2026-06-30" || len(goals[0].Sports) != 1 {
+		t.Errorf("goals.json: %s %v", files["goals.json"], err)
+	}
+	var equipments []struct {
+		ID          string `json:"id"`
+		PictureFile string `json:"picture_file"`
+	}
+	json.Unmarshal([]byte(files["equipments.json"]), &equipments)
+	if len(equipments) != 1 || equipments[0].PictureFile != "pictures/"+bike.ID.String()+".jpg" ||
+		files[equipments[0].PictureFile] != "JPEG bytes" {
+		t.Errorf("picture: %+v", equipments)
+	}
 	var profile map[string]interface{}
 	json.Unmarshal([]byte(files["profile.json"]), &profile)
-	if profile["username"] != "exporter" || profile["email"] != "exporter@test.local" {
+	if layout, _ := json.Marshal(profile["dashboard_layout"]); profile["username"] != "exporter" ||
+		profile["email"] != "exporter@test.local" || !strings.Contains(string(layout), `"calendar"`) {
 		t.Errorf("profile: %v", profile)
 	}
 }

@@ -2,6 +2,7 @@ package activityService
 
 import (
 	"MySportWeb/internal/pkg/models"
+	"MySportWeb/internal/pkg/vars"
 	"archive/zip"
 	"context"
 	"encoding/csv"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,19 +24,41 @@ const exportReadme = `MySportWeb export
 
 Everything MySportWeb keeps about you, on %s.
 
-profile.json            your account (no password nor second factor secret)
+manifest.json           the version of this export's format, and of MySportWeb that made it
+profile.json            your account (no password nor second factor secret) and your dashboard layout
 activities.csv          one line per activity: its date, sport, title, distance, duration...
 activities/*.json       each activity with everything the analysis computed: every recorded series, the trace,
                         the zones, the best efforts, the power curve...
 files/                  the files you uploaded: FIT, and the GPX and TCX files the FIT files were converted from
 health.json             your weights, resting heart rates, blood pressures...
 equipments.json         your equipment, with their services, maintenance reminders and the sports they are the default of
+pictures/               the pictures of your equipment, named in equipments.json (picture_file)
+goals.json              your goals
 devices.json            the devices your activities were recorded with
 routes.json             the routes your activities follow
 segments.json           your segments, with the passes of your activities on them
 
 The dates are in UTC (RFC 3339), the distances in meters, the durations in seconds, the speeds in m/s.
 `
+
+// ExportFormat is the version of the layout of the exports: an import refuses a newer one. 1 is the exports
+// without manifest.json.
+const ExportFormat = 2
+
+// ExportManifest is manifest.json, what an import reads first
+type ExportManifest struct {
+	Format     int       `json:"format"`
+	AppVersion string    `json:"app_version"`
+	ExportedAt time.Time `json:"exported_at"`
+	Username   string    `json:"username"`
+}
+
+// ExportGoal is a goal in goals.json: its dates are hidden from the JSON of the model
+type ExportGoal struct {
+	models.Goal
+	StartsOn *string `json:"starts_on"` // YYYY-MM-DD, nil for a goal of every period
+	EndsOn   *string `json:"ends_on"`
+}
 
 // ExportUser writes the zip of everything a user owns to w: their original files and every computed value,
 // as JSON (see exportReadme). The activities are read one at a time: the memory doesn't grow with them.
@@ -53,14 +77,23 @@ func ExportUser(ctx context.Context, db *models.DB, user models.Users, w io.Writ
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(readme, exportReadme, time.Now().UTC().Format(time.RFC3339))
+	now := time.Now().UTC()
+	fmt.Fprintf(readme, exportReadme, now.Format(time.RFC3339))
+	if err := addJSON("manifest.json", ExportManifest{Format: ExportFormat, AppVersion: vars.Version,
+		ExportedAt: now, Username: user.Username}); err != nil {
+		return err
+	}
 
+	layout, err := db.GetDashboardLayout(user.ID)
+	if err != nil {
+		return err
+	}
 	if err := addJSON("profile.json", map[string]interface{}{
 		"username": user.Username, "email": user.Email, "role": user.Role, "created_at": user.CreatedAt,
 		"date_of_birth": user.DateOfBirth, "gender": user.Gender, "weight": user.Weight, "height": user.Height,
 		"max_hr": user.MaxHR, "ftp": user.FTP, "weight_objective": user.WeightObjective, "unit": user.Unit,
 		"timezone": user.Timezone, "home_town": user.HomeTown, "security_distance": user.SecurityDistance,
-		"two_factor_enabled_at": user.TOTPEnabledAt,
+		"two_factor_enabled_at": user.TOTPEnabledAt, "dashboard_layout": layout,
 	}); err != nil {
 		return err
 	}
@@ -117,15 +150,6 @@ func ExportUser(ctx context.Context, db *models.DB, user models.Users, w io.Writ
 	if err := csv.NewWriter(summary).WriteAll(rows); err != nil {
 		return err
 	}
-	for _, u := range uploads {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := addFile(z, u.from, u.to); err != nil {
-			return err
-		}
-	}
-
 	health, err := db.GetHealthDatas(user.ID)
 	if err != nil {
 		return err
@@ -140,6 +164,8 @@ func ExportUser(ctx context.Context, db *models.DB, user models.Users, w io.Writ
 	type equipmentExport struct {
 		models.EquipmentStats
 		Services []models.Services `json:"services"`
+		// PictureFile is its picture in the zip, empty without one
+		PictureFile string `json:"picture_file"`
 	}
 	exported := make([]equipmentExport, len(equipments))
 	for i, e := range equipments {
@@ -148,6 +174,10 @@ func ExportUser(ctx context.Context, db *models.DB, user models.Users, w io.Writ
 			return err
 		}
 		exported[i] = equipmentExport{EquipmentStats: e, Services: services}
+		if from := equipmentPictureFile(user.UUID, e.Picture); from != "" {
+			exported[i].PictureFile = "pictures/" + e.ID.String() + filepath.Ext(from)
+			uploads = append(uploads, upload{from, exported[i].PictureFile})
+		}
 	}
 	if err := addJSON("equipments.json", exported); err != nil {
 		return err
@@ -185,7 +215,49 @@ func ExportUser(ctx context.Context, db *models.DB, user models.Users, w io.Writ
 	if err := addJSON("segments.json", exportedSegments); err != nil {
 		return err
 	}
+	var goals []models.Goal
+	if err := db.Where("user_id = ?", user.ID).Order("created_at, id").Find(&goals).Error; err != nil {
+		return err
+	}
+	exportedGoals := make([]ExportGoal, len(goals))
+	for i, g := range goals {
+		exportedGoals[i] = ExportGoal{Goal: g, StartsOn: dateString(g.StartsOn), EndsOn: dateString(g.EndsOn)}
+	}
+	if err := addJSON("goals.json", exportedGoals); err != nil {
+		return err
+	}
+	// the files last: they are the bulk of the zip
+	for _, u := range uploads {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := addFile(z, u.from, u.to); err != nil {
+			return err
+		}
+	}
 	return z.Close()
+}
+
+// dateString is a date as YYYY-MM-DD, nil for nil
+func dateString(date *time.Time) *string {
+	if date == nil {
+		return nil
+	}
+	s := date.Format(time.DateOnly)
+	return &s
+}
+
+// equipmentPictureFile is the file of the picture of an equipment, from its URL path (SaveEquipmentPicture);
+// empty without picture, or for a path outside the directory of the user
+func equipmentPictureFile(userUUID uuid.UUID, urlPath string) string {
+	if urlPath == "" {
+		return ""
+	}
+	path := filepath.Clean(filepath.FromSlash(strings.TrimPrefix(urlPath, "/")))
+	if !strings.HasPrefix(path, filepath.Clean(UserMediaDir(userUUID))+string(filepath.Separator)) {
+		return ""
+	}
+	return path
 }
 
 // addFile copies a file of the user into the zip; a missing one (lost from the disk) is skipped
