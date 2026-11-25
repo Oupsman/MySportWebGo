@@ -1,4 +1,4 @@
-# Alert rules of MySportWeb, for Prometheus (rule_files in prometheus.yml), see Monitoring in the README.
+# Alert rules of MySportWeb, for Prometheus (rule_files in prometheus.yml), see Monitoring in INSTALL.md.
 # The scrape job of the backend must be named mysportweb (scrape.yml); the other rules read metrics named
 # mysportweb_* whatever the job.
 groups:

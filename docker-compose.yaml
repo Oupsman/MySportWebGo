@@ -10,7 +10,7 @@
 # postgres/ (the bundled database); the dumps of the database in MSW_BACKUP_DIR (./backups). With Portainer,
 # absolute paths: the relative ones are inside the stack directory of Portainer.
 #
-# The images are pulled from MSW_REGISTRY, version MSW_TAG (both images share it: see Releases in the README);
+# The images are pulled from MSW_REGISTRY, version MSW_TAG (both images share it: see Upgrades in INSTALL.md);
 # this file never builds them: Portainer can't build. To build them here instead (MSW_TAG=dev for instance):
 #   docker compose -f docker-compose.yaml -f docker-compose.build.yaml up --build
 name: mysportweb
@@ -51,7 +51,7 @@ services:
       USER_QUOTA: ${MSW_USER_QUOTA:-1g}
       # the largest zip of an export a user can import (profile page); the frontend's nginx accepts as large
       IMPORT_MAX_SIZE: ${MSW_IMPORT_MAX_SIZE:-2g}
-      # the emails, through the SMTP relay of a sending service (see Emails in the README); empty: no email.
+      # the emails, through the SMTP relay of a sending service (see Emails in INSTALL.md); empty: no email.
       # An incomplete configuration stops the backend at its start, saying what is missing
       SMTP_HOST: ${MSW_SMTP_HOST:-}
       SMTP_PORT: ${MSW_SMTP_PORT:-}
@@ -68,8 +68,8 @@ services:
       # the weather at the start of the activities: empty asks Open-Meteo (free for a non-commercial use, the
       # start point rounded to about 10 km), none for no weather, else a self-hosted Open-Meteo
       WEATHER_URL: ${MSW_WEATHER_URL:-}
-      # the metrics for Prometheus, on their own port (never through the frontend), see Monitoring in the
-      # README; METRICS_TOKEN: the bearer token the scrapes must send, empty for none
+      # the metrics for Prometheus, on their own port (never through the frontend), see Monitoring in
+      # INSTALL.md; METRICS_TOKEN: the bearer token the scrapes must send, empty for none
       METRICS_PORT: "9090"
       METRICS_TOKEN: ${MSW_METRICS_TOKEN:-}
       # the age of the last backup of the backup service, in the metrics
@@ -124,8 +124,8 @@ services:
         condition: service_healthy
 
   # Nightly dump of the database into MSW_BACKUP_DIR, to back up elsewhere with MSW_DATA_DIR/media (a backup of
-  # the machine after MSW_BACKUP_TIME, or of these files, see the README). A backup now (before an upgrade):
-  # docker compose run --rm backup now. The restore: see the README.
+  # the machine after MSW_BACKUP_TIME, or of these files, see Backups in INSTALL.md). A backup now (before an upgrade):
+  # docker compose run --rm backup now. The restore: see Restore in INSTALL.md.
   backup:
     # pg_dump can't dump a server more recent than itself: the major version of the database
     image: ${MSW_BACKUP_IMAGE:-postgres:16-trixie}
@@ -232,7 +232,7 @@ services:
 
   db:
     # bookworm, not trixie like the others: another glibc sorts the text differently, the indexes of an existing
-    # database would need a REINDEX. Moving to trixie: through a dump and its restore (see the README).
+    # database would need a REINDEX. Moving to trixie: through a dump and its restore (see Restore in INSTALL.md).
     image: postgres:16-bookworm
     profiles: [db]
     restart: unless-stopped

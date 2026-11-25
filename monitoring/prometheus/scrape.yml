@@ -1,4 +1,4 @@
-# The scrape job of MySportWeb, to add to scrape_configs in prometheus.yml (see Monitoring in the README).
+# The scrape job of MySportWeb, to add to scrape_configs in prometheus.yml (see Monitoring in INSTALL.md).
 # The alert rules (alerts.yml) expect the job to be named mysportweb.
 scrape_configs:
   - job_name: mysportweb

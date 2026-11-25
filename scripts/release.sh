@@ -72,4 +72,4 @@ done
 for repo in "$backend" "$frontend"; do
   git -C "$repo" push --quiet origin "$tag" || fail "pushing $tag from $repo: push it by hand (git push origin $tag)"
 done
-echo "Pushed $tag. Once both pipelines published their images: MSW_TAG=$version in the stack (see Upgrades in the README)."
+echo "Pushed $tag. Once both pipelines published their images: MSW_TAG=$version in the stack (see Upgrades in INSTALL.md)."
