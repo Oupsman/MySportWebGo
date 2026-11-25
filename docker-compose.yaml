@@ -115,6 +115,8 @@ services:
       # in a page). Content-Security-Policy-Report-Only only reports it in the browser console: to try a change
       # of the policy, or a page it would break
       CSP_HEADER: ${MSW_CSP_HEADER:-Content-Security-Policy}
+      # the largest zip of an export nginx lets through to the backend: the same as the backend's
+      IMPORT_MAX_SIZE: ${MSW_IMPORT_MAX_SIZE:-2g}
     ports:
       - "${MSW_HTTP_PORT:-8080}:80"
     depends_on:
