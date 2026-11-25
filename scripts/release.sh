@@ -9,6 +9,7 @@
 # Both repositories must be on their default branch, without uncommitted changes to tracked files, and
 # pushed: the tag must be on a commit the CI has. Nothing is tagged unless both pass, and it asks first.
 set -euo pipefail
+FRONTEND=/home/oupsman/WebstormProjects/mysportweb-vuetify
 
 version=${1:-}
 if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
