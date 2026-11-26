@@ -69,3 +69,19 @@ func CommentMessage(author string, activityID uuid.UUID, title, body string) Pus
 	return PushMessage{Title: fmt.Sprintf("%s commented on %s", author, title),
 		Body: shorten(strings.Join(strings.Fields(body), " "), commentShown), URL: activityURL(activityID)}
 }
+
+// FollowMessage is the notification of a new follower, or of their request when the user accepts each one
+func FollowMessage(follower string, request bool) PushMessage {
+	if request {
+		return PushMessage{Title: follower + " asks to follow you", Body: "Accept or refuse on your followers page.",
+			URL: "/#/followers"}
+	}
+	return PushMessage{Title: follower + " follows you", Body: "They see your activities not private in their feed.",
+		URL: "/#/followers"}
+}
+
+// FollowAcceptedMessage is the notification of a follow request accepted, to the follower
+func FollowAcceptedMessage(followee string, followeeUUID uuid.UUID) PushMessage {
+	return PushMessage{Title: followee + " accepted your request", Body: "Their activities are in your feed now.",
+		URL: "/#/athletes/" + followeeUUID.String()}
+}

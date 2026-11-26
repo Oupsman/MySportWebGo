@@ -244,6 +244,12 @@ func GetActivity(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You can't access this activity"})
 		return
 	}
+	// who it is of, as the logged in users see a user (a link to their profile); not told to the visitors
+	// of a public activity
+	var owner *models.SocialUser
+	if authenticated {
+		owner = &models.SocialUser{UUID: activity.User.UUID, Username: activity.User.Username}
+	}
 	if activity.User.ID != user.ID {
 		activity.HidePrivate()
 	} else if activity.DeviceID != nil {
@@ -253,7 +259,7 @@ func GetActivity(c *gin.Context) {
 			return
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"activity": activity})
+	c.JSON(http.StatusOK, gin.H{"activity": activity, "owner": owner})
 }
 
 func DeleteActivity(c *gin.Context) {

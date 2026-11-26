@@ -224,6 +224,9 @@ type SocialExport struct {
 	CommentsGiven    []SocialExportItem `json:"comments_given"`
 	CheersReceived   []SocialExportItem `json:"cheers_received"`
 	CommentsReceived []SocialExportItem `json:"comments_received"`
+	// the users they follow and their followers, with the requests (accepted_at null)
+	Following []FollowView `json:"following"`
+	Followers []FollowView `json:"followers"`
 }
 
 // GetSocialExport returns the cheers and comments a user gave, and those of the others on their activities
@@ -250,5 +253,10 @@ func (db *DB) GetSocialExport(userID uint) (SocialExport, error) {
 			return export, err
 		}
 	}
-	return export, nil
+	var err error
+	if export.Following, err = db.GetFollows(userID, false); err != nil {
+		return export, err
+	}
+	export.Followers, err = db.GetFollows(userID, true)
+	return export, err
 }

@@ -38,8 +38,8 @@ workplaces.json         your workplaces: an activity starting or ending in one i
 devices.json            the devices your activities were recorded with
 routes.json             the routes your activities follow
 segments.json           your segments, with the passes of your activities on them
-social.json             the cheers and comments you gave, and those of the others on your activities (by their
-                        username); an import doesn't restore them
+social.json             the cheers and comments you gave, those of the others on your activities, the users you
+                        follow and your followers (by their username); an import doesn't restore them
 
 The dates are in UTC (RFC 3339), the distances in meters, the durations in seconds, the speeds in m/s.
 `

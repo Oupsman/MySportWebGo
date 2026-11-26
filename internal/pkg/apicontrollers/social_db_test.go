@@ -60,6 +60,7 @@ func socialUsers(t *testing.T, db *models.DB, router *gin.Engine, names ...strin
 		users[i], clients[i] = u, jsonClient{router: router, token: token}
 		// the ids start again in each test: not the comments of the previous ones
 		commentLimiter.Reset(fmt.Sprint(u.ID))
+		followLimiter.Reset(fmt.Sprint(u.ID))
 	}
 	return users, clients
 }

@@ -243,6 +243,17 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.POST("/activity/:id/comments", middlewares.IsAuthorized(), apicontrollers.CreateComment)
 	apiv1.POST("/activity/:id/comments/:comment", middlewares.IsAuthorized(), apicontrollers.UpdateComment)
 	apiv1.DELETE("/activity/:id/comments/:comment", middlewares.IsAuthorized(), apicontrollers.DeleteComment)
+	// the follows and the feed: for the sessions only too
+	apiv1.GET("/users/search", middlewares.IsAuthorized(), apicontrollers.SearchUsers)
+	apiv1.GET("/users/:uuid", middlewares.IsAuthorized(), apicontrollers.GetProfile)
+	apiv1.GET("/users/:uuid/activities", middlewares.IsAuthorized(), apicontrollers.GetProfileActivities)
+	apiv1.POST("/users/:uuid/follow", middlewares.IsAuthorized(), apicontrollers.Follow)
+	apiv1.DELETE("/users/:uuid/follow", middlewares.IsAuthorized(), apicontrollers.Unfollow)
+	apiv1.GET("/user/follows", middlewares.IsAuthorized(), apicontrollers.GetFollows)
+	apiv1.POST("/user/follows/approval", middlewares.IsAuthorized(), apicontrollers.SetFollowApproval)
+	apiv1.POST("/user/followers/:uuid/accept", middlewares.IsAuthorized(), apicontrollers.AcceptFollower)
+	apiv1.DELETE("/user/followers/:uuid", middlewares.IsAuthorized(), apicontrollers.RemoveFollower)
+	apiv1.GET("/feed", middlewares.IsAuthorized(), apicontrollers.GetFeed)
 
 	// recording devices, created at the import of their first activity; their settings change how their
 	// activities are analysed
