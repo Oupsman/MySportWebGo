@@ -45,6 +45,8 @@ type Users struct {
 	// QuotaBytes is the storage quota an admin gave them, nil for the one of the instance (vars.UserQuota), 0
 	// for none: see Quota. Set by SetUserQuota only.
 	QuotaBytes *int64 `json:"-"`
+	// NotifySocial: the user is notified of the cheers and comments on their activities
+	NotifySocial bool `json:"notify_social" gorm:"not null;default:true"`
 }
 
 // Quota is the storage quota of the user, in bytes: the one an admin gave them, else the one of the instance;

@@ -253,7 +253,9 @@ func (db *DB) LeaveRoute(routeID uuid.UUID) error {
 func (db *DB) GetActivitiesByUser(userID uint, start, number int) ([]types.ActivitySummary, error) {
 	var activities []types.ActivitySummary
 	// only the listed columns: a full row holds every record of the FIT file
-	err := db.Table("activities").Select("id", "title", "date", "sport", "thumbnail").
+	err := db.Table("activities").Select("id, title, date, sport, thumbnail, "+
+		"(SELECT count(*) FROM cheers WHERE cheers.activity_id = activities.id) AS cheer_count, "+
+		"(SELECT count(*) FROM comments WHERE comments.activity_id = activities.id) AS comment_count").
 		Where("user_id = ?", userID).Order("date desc").Offset(start).Limit(number).Scan(&activities).Error
 	if err != nil {
 		return nil, err

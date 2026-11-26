@@ -38,6 +38,8 @@ workplaces.json         your workplaces: an activity starting or ending in one i
 devices.json            the devices your activities were recorded with
 routes.json             the routes your activities follow
 segments.json           your segments, with the passes of your activities on them
+social.json             the cheers and comments you gave, and those of the others on your activities (by their
+                        username); an import doesn't restore them
 
 The dates are in UTC (RFC 3339), the distances in meters, the durations in seconds, the speeds in m/s.
 `
@@ -232,6 +234,13 @@ func ExportUser(ctx context.Context, db *models.DB, user models.Users, w io.Writ
 		return err
 	}
 	if err := addJSON("workplaces.json", workplaces); err != nil {
+		return err
+	}
+	social, err := db.GetSocialExport(user.ID)
+	if err != nil {
+		return err
+	}
+	if err := addJSON("social.json", social); err != nil {
 		return err
 	}
 	// the files last: they are the bulk of the zip

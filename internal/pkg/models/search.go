@@ -92,7 +92,10 @@ func (db *DB) SearchActivities(userID uint, filter ActivityFilter, sort string, 
 		Select("activities.id, activities.title, activities.date, activities.sport, activities.distance, " +
 			"activities.duration, activities.avg_speed, activities.positive_elevation AS elevation, " +
 			"activities.is_commute, activities.equipment_id, equipments.name AS equipment_name, " +
-			"COALESCE(" + deviceDisplayName("devices") + ", activities.device_name, '') AS device_name, " + HasMapColumn).
+			"COALESCE(" + deviceDisplayName("devices") + ", activities.device_name, '') AS device_name, " +
+			"(SELECT count(*) FROM cheers WHERE cheers.activity_id = activities.id) AS cheer_count, " +
+			"(SELECT count(*) FROM comments WHERE comments.activity_id = activities.id) AS comment_count, " +
+			HasMapColumn).
 		Joins("LEFT JOIN equipments ON equipments.id = activities.equipment_id").
 		Joins("LEFT JOIN devices ON devices.id = activities.device_id").
 		// the date, then the id, keep the order stable between pages

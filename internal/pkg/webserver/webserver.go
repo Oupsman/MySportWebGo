@@ -88,7 +88,7 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	})
 	httpRouter.Use(cors.New(cors.Config{
 		AllowOrigins:  []string{vars.Domain},
-		AllowMethods:  []string{"GET", "OPTIONS", "POST", "DELETE"},
+		AllowMethods:  []string{"GET", "OPTIONS", "POST", "PUT", "DELETE"},
 		AllowHeaders:  []string{"Origin", "Authorization", "Content-Type", "X-TOTP-Code"},
 		ExposeHeaders: []string{"Content-Length", "Retry-After"},
 		// the session cookie, for the frontend of the development server (another port: another origin)
@@ -143,6 +143,8 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.POST("/user/email/resend", middlewares.IsAuthorized(), apicontrollers.ResendVerification)
 	apiv1.GET("/notifications/email", middlewares.IsAuthorized(), apicontrollers.EmailNotifications)
 	apiv1.POST("/notifications/email", middlewares.IsAuthorized(), apicontrollers.SetEmailNotifications)
+	apiv1.GET("/notifications/social", middlewares.IsAuthorized(), apicontrollers.SocialNotifications)
+	apiv1.POST("/notifications/social", middlewares.IsAuthorized(), apicontrollers.SetSocialNotifications)
 	apiv1.POST("/user/password-reset", middlewares.RateLimit(middlewares.NewRateLimiter(LoginsPerMinute, time.Minute)),
 		apicontrollers.ResetPassword)
 	apiv1.POST("/user/login/2fa", middlewares.RateLimit(middlewares.NewRateLimiter(LoginsPerMinute, time.Minute)),
@@ -234,6 +236,13 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.GET("/activity/:id/segments", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.GetActivitySegments)
 	// what it achieved: new bests, podiums of segments, goals completed
 	apiv1.GET("/activity/:id/highlights", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.GetActivityHighlights)
+	// the cheers and the comments: for the sessions of the web application only, never the device tokens
+	apiv1.GET("/activity/:id/social", middlewares.IsAuthorized(), apicontrollers.GetActivitySocial)
+	apiv1.PUT("/activity/:id/cheer", middlewares.IsAuthorized(), apicontrollers.CheerActivity)
+	apiv1.DELETE("/activity/:id/cheer", middlewares.IsAuthorized(), apicontrollers.UncheerActivity)
+	apiv1.POST("/activity/:id/comments", middlewares.IsAuthorized(), apicontrollers.CreateComment)
+	apiv1.POST("/activity/:id/comments/:comment", middlewares.IsAuthorized(), apicontrollers.UpdateComment)
+	apiv1.DELETE("/activity/:id/comments/:comment", middlewares.IsAuthorized(), apicontrollers.DeleteComment)
 
 	// recording devices, created at the import of their first activity; their settings change how their
 	// activities are analysed

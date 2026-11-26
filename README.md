@@ -13,7 +13,9 @@ For now the app can :
 * import and parse FIT files coming from various devices, and GPX and TCX files (gzipped or not): they are
   converted to FIT files, the sport of a GPX file that doesn't name it chosen at the upload. The GPX or TCX file
   is kept beside the FIT file, never served
-* handle multiple users BUT the social side of the app is yet to be implemented
+* handle multiple users: they cheer the activities of the others they may see, and comment those whose owner
+  allows comments ("Comments allowed", off by default); the owner is notified, and deletes any comment on their
+  activities
 * handle multiple sports (running, biking, hiking, swimming)
 * provide a ton of datas about the sessions (speed, distance, elevation, etc)
 * Estimate your power level (cycling only for now)
@@ -65,8 +67,8 @@ What it lacks:
 
 * **One instance only**: the login limits and the analysis slots are in the memory of the backend, nothing shares
   them between two backends.
-* **No social side**: an activity can be shown to the users of the instance or to anyone, but nobody follows
-  anybody, there is no feed, no comment, no kudos.
+* **No follows nor feed**: an activity can be shown to the users of the instance or to anyone, cheered and
+  commented by the logged in users who see it, but nobody follows anybody and there is no feed.
 * **English only**.
 * **The media files aren't in the nightly dump**: back up `MSW_DATA_DIR/media` with the machine (see
   [Backups](INSTALL.md#backups) in INSTALL.md).

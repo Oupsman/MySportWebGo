@@ -36,7 +36,7 @@ func models() []interface{} {
 	return []interface{}{&Users{}, &Equipments{}, &Devices{}, &Services{}, &Activity{}, &Route{}, &HealthData{},
 		&Validations{}, &Keys{}, &Notifications{}, &DeviceTokens{}, &RevokedSessions{}, &Invitations{},
 		&Segment{}, &SegmentEffort{}, &EquipmentDefault{}, &PasswordResets{}, &EmailVerifications{},
-		&MaintenanceReminder{}, &ServiceReminder{}, &Goal{}, &AccountImport{}, &Workplace{}}
+		&MaintenanceReminder{}, &ServiceReminder{}, &Goal{}, &AccountImport{}, &Workplace{}, &Cheer{}, &Comment{}}
 }
 
 // CreateOrMigrate brings the schema of the database to the version of the backend, applying the pending

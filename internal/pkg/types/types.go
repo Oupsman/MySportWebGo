@@ -125,6 +125,9 @@ type ActivitySummary struct {
 	Date      time.Time `json:"date"`
 	Sport     string    `json:"sport"`
 	Thumbnail string    `json:"thumbnail"`
+	// the cheers and the comments of the activity
+	CheerCount   int64 `json:"cheer_count"`
+	CommentCount int64 `json:"comment_count"`
 }
 
 // RouteActivity is an activity of a route, with what is needed to compare it to the others
@@ -236,6 +239,9 @@ type ActivityRow struct {
 	HasMap        bool       `json:"-"`
 	// the URL of its thumbnail, "" without map (indoor, or a short loop inside the privacy zones)
 	Thumbnail string `json:"thumbnail"`
+	// the cheers and the comments of the activity
+	CheerCount   int64 `json:"cheer_count"`
+	CommentCount int64 `json:"comment_count"`
 }
 
 // RecomputeStatus is the progress of the analysis of the activities of a device again
