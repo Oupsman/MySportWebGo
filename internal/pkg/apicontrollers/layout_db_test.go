@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -60,8 +61,24 @@ func TestDashboardLayout(t *testing.T) {
 	}
 	status, widgets, _ := call(http.MethodGet, "")
 	want := []models.DashboardWidget{{ID: "calendar", W: 4}, {ID: "weekly", W: 8, H: 420, Hidden: true}}
-	if status != http.StatusOK || len(widgets) != 2 || widgets[0] != want[0] || widgets[1] != want[1] {
-		t.Fatalf("saved: %d %+v", status, widgets)
+	if status != http.StatusOK || !reflect.DeepEqual(widgets, want) {
+		t.Fatalf("saved before the grid: %d %+v", status, widgets)
+	}
+	// on the grid: a widget as high as the two beside it
+	grid := `{"widgets":[{"id":"readiness","x":8,"y":0,"w":4,"h":20},{"id":"calendar","x":0,"y":0,"w":8,"h":10},` +
+		`{"id":"weekly","x":0,"y":10,"w":8,"h":10,"hidden":true}]}`
+	if status, _, _ := call(http.MethodPut, grid); status != http.StatusOK {
+		t.Fatalf("save on the grid: %d", status)
+	}
+	at := func(n int) *int { return &n }
+	status, widgets, _ = call(http.MethodGet, "")
+	want = []models.DashboardWidget{
+		{ID: "readiness", X: at(8), Y: at(0), W: 4, H: 20},
+		{ID: "calendar", X: at(0), Y: at(0), W: 8, H: 10},
+		{ID: "weekly", X: at(0), Y: at(10), W: 8, H: 10, Hidden: true},
+	}
+	if status != http.StatusOK || !reflect.DeepEqual(widgets, want) {
+		t.Fatalf("saved on the grid: %d %+v", status, widgets)
 	}
 	// bob's dashboard stays the default one
 	if got, err := db.GetDashboardLayout(bob.ID); err != nil || got != nil {
@@ -73,6 +90,14 @@ func TestDashboardLayout(t *testing.T) {
 		`{"widgets":[{"id":"calendar","w":4,"h":-1}]}`,
 		`{"widgets":[{"id":"Calendar!","w":4}]}`,
 		`{"widgets":[{"id":"calendar","w":4},{"id":"calendar","w":6}]}`,
+		`{"widgets":[{"id":"calendar","x":9,"y":0,"w":4,"h":10}]}`,
+		`{"widgets":[{"id":"calendar","x":-1,"y":0,"w":4,"h":10}]}`,
+		`{"widgets":[{"id":"calendar","x":0,"y":-1,"w":4,"h":10}]}`,
+		`{"widgets":[{"id":"calendar","x":0,"y":0,"w":4,"h":0}]}`,
+		`{"widgets":[{"id":"calendar","x":0,"y":0,"w":4,"h":101}]}`,
+		`{"widgets":[{"id":"calendar","x":0,"w":4,"h":10}]}`,
+		`{"widgets":[{"id":"calendar","x":0,"y":0,"w":4,"h":10},{"id":"weekly","w":8,"h":0}]}`,
+		`{"widgets":[{"id":"weekly","w":8,"h":0},{"id":"calendar","x":0,"y":0,"w":4,"h":10}]}`,
 		`not json`,
 	} {
 		if status, _, _ := call(http.MethodPut, bad); status != http.StatusBadRequest {
@@ -80,7 +105,7 @@ func TestDashboardLayout(t *testing.T) {
 		}
 	}
 	// refused: the saved layout is kept
-	if _, widgets, _ := call(http.MethodGet, ""); len(widgets) != 2 {
+	if _, widgets, _ := call(http.MethodGet, ""); len(widgets) != 3 {
 		t.Errorf("after the refused ones: %+v", widgets)
 	}
 	// back to the default layout
