@@ -1,5 +1,7 @@
 package models
 
+import "gorm.io/gorm"
+
 // EmailProvider is the provider of the channels sending the notifications of a user by email, to their
 // confirmed address (read when sending: a changed address is followed); one per user, without config
 const EmailProvider = "email"
@@ -14,20 +16,32 @@ func (db *DB) HasEmailChannel(userID uint) (bool, error) {
 	return n > 0, err
 }
 
-// SetEmailChannel turns the notifications by email of a user on or off; off removes what it still had to send
+// lockUser makes the other transactions changing the channels of a user wait for tx: checking that a channel
+// is missing then creating it isn't atomic otherwise, two requests at the same time would both create it
+func lockUser(tx *gorm.DB, userID uint) error {
+	return tx.Exec("SELECT id FROM users WHERE id = ? FOR UPDATE", userID).Error
+}
+
+// SetEmailChannel turns the notifications by email of a user on or off; off removes what it still had to send.
+// A user has one email channel at most (channels_one_email), whatever the requests at the same time.
 func (db *DB) SetEmailChannel(userID uint, on bool) error {
-	has, err := db.HasEmailChannel(userID)
-	if err != nil || has == on {
-		return err
-	}
-	if on {
-		return db.Omit("User").Create(&Channel{UserID: uint64(userID), ChannelProvider: EmailProvider, Name: "email"}).Error
-	}
-	channels := db.Model(&Channel{}).Select("id").Where("user_id = ? AND channel_provider = ?", userID, EmailProvider)
-	if err := db.Unscoped().Where("channel_id IN (?)", channels).Delete(&Notifications{}).Error; err != nil {
-		return err
-	}
-	return db.Unscoped().Where("user_id = ? AND channel_provider = ?", userID, EmailProvider).Delete(&Channel{}).Error
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := lockUser(tx, userID); err != nil {
+			return err
+		}
+		has, err := (&DB{DB: *tx}).HasEmailChannel(userID)
+		if err != nil || has == on {
+			return err
+		}
+		if on {
+			return tx.Omit("User").Create(&Channel{UserID: uint64(userID), ChannelProvider: EmailProvider, Name: "email"}).Error
+		}
+		channels := tx.Model(&Channel{}).Select("id").Where("user_id = ? AND channel_provider = ?", userID, EmailProvider)
+		if err := tx.Unscoped().Where("channel_id IN (?)", channels).Delete(&Notifications{}).Error; err != nil {
+			return err
+		}
+		return tx.Unscoped().Where("user_id = ? AND channel_provider = ?", userID, EmailProvider).Delete(&Channel{}).Error
+	})
 }
 
 // EmailRecipient is where a notification by email goes: the user, their address and whether it can be used

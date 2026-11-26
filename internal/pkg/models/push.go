@@ -23,6 +23,10 @@ type PushChannel struct {
 func (db *DB) SavePushChannel(userID uint, endpoint, config, name string) (PushChannel, error) {
 	var channel Channel
 	err := db.Transaction(func(tx *gorm.DB) error {
+		// the same browser subscribing twice at the same time: one channel
+		if err := lockUser(tx, userID); err != nil {
+			return err
+		}
 		// Find, not First: a new subscription isn't an error to log
 		found := tx.Where("user_id = ? AND channel_provider = ? AND config::jsonb->>'endpoint' = ?",
 			userID, PushProvider, endpoint).Limit(1).Find(&channel)
