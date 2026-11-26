@@ -1,3 +1,7 @@
+//go:build ignore
+
+// A prototype, kept out of the build: run it with go run prototypes/map.go
+
 package main
 
 import (
