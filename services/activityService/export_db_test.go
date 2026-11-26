@@ -117,8 +117,10 @@ func TestExportUser(t *testing.T) {
 		goals[0].EndsOn == nil || *goals[0].EndsOn != "2026-06-30" || len(goals[0].Sports) != 1 {
 		t.Errorf("goals.json: %s %v", files["goals.json"], err)
 	}
-	if !strings.Contains(files["workplaces.json"], `"office"`) || !strings.Contains(files["workplaces.json"], `"diameter":300`) {
-		t.Errorf("workplaces.json: %s", files["workplaces.json"])
+	var workplaces []models.Workplace
+	if err := json.Unmarshal([]byte(files["workplaces.json"]), &workplaces); err != nil || len(workplaces) != 1 ||
+		workplaces[0].Name != "office" || workplaces[0].Diameter != 300 || workplaces[0].Lat != 45.19 {
+		t.Errorf("workplaces.json: %s %v", files["workplaces.json"], err)
 	}
 	var equipments []struct {
 		ID          string `json:"id"`
