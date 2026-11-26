@@ -56,7 +56,7 @@ const (
 // importTopFiles are the files at the root of an export
 var importTopFiles = map[string]bool{"README.txt": true, "manifest.json": true, "profile.json": true,
 	"activities.csv": true, "health.json": true, "equipments.json": true, "devices.json": true, "routes.json": true,
-	"segments.json": true, "goals.json": true}
+	"segments.json": true, "goals.json": true, "workplaces.json": true}
 
 // importDirs are the directories of an export and the largest file of each
 var importDirs = map[string]int64{"activities/": maxImportJSON, "files/": maxImportFile,
@@ -480,6 +480,8 @@ func runAccountImport(ctx, shutdown context.Context, App *app.App, imp models.Ac
 		// after the activities: their passes are found when the segment is created
 		{"segments", j.importSegments},
 		{"goals", j.importGoals},
+		// after the activities: their commute flags are the ones of the export
+		{"workplaces", j.importWorkplaces},
 	}
 	for _, step := range steps {
 		err := step.run(ctx)
@@ -1097,6 +1099,51 @@ func (j *accountImport) importGoals(context.Context) error {
 			return err
 		}
 		existing[key(input.Name, input.Metric, input.Period)] = true
+		count.Created++
+	}
+	return nil
+}
+
+// importWorkplaces creates the workplaces of the export the user doesn't have: the same name and center. An
+// export without workplaces.json (older) has none.
+func (j *accountImport) importWorkplaces(context.Context) error {
+	var workplaces []workplaceInput
+	if found, err := j.export.decode("workplaces.json", &workplaces); err != nil {
+		j.report.Skip("workplaces", "workplaces.json", err)
+		return nil
+	} else if !found {
+		return nil
+	}
+	current, err := j.db.GetWorkplaces(j.user.ID)
+	if err != nil {
+		return err
+	}
+	key := func(name string, lat, lon float64) string {
+		return fmt.Sprintf("%s\x00%.6f\x00%.6f", strings.ToLower(strings.TrimSpace(name)), lat, lon)
+	}
+	existing := map[string]bool{}
+	for _, w := range current {
+		existing[key(w.Name, w.Lat, w.Lon)] = true
+	}
+	count := j.report.Count("workplaces")
+	for _, input := range workplaces {
+		if existing[key(input.Name, input.Lat, input.Lon)] {
+			count.Existing++
+			continue
+		}
+		if len(existing) >= maxWorkplaces {
+			j.report.Skip("workplaces", input.Name, fmt.Errorf("%d workplaces at most", maxWorkplaces))
+			continue
+		}
+		workplace := models.Workplace{UserID: j.user.ID}
+		if err := input.apply(&workplace); err != nil {
+			j.report.Skip("workplaces", input.Name, err)
+			continue
+		}
+		if err := j.db.SaveWorkplace(&workplace); err != nil {
+			return err
+		}
+		existing[key(input.Name, input.Lat, input.Lon)] = true
 		count.Created++
 	}
 	return nil

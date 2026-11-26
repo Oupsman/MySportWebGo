@@ -55,6 +55,7 @@ func TestExportUser(t *testing.T) {
 		&models.HealthData{UserID: user.ID, Date: day, Weight: 70},
 		&models.Goal{UserID: user.ID, Name: "june", Metric: "distance", Target: 500000, Period: "custom",
 			Sports: models.SportList{"cycling"}, StartsOn: &from, EndsOn: &to},
+		&models.Workplace{UserID: user.ID, Name: "office", Lat: 45.19, Lon: 5.72, Diameter: 300},
 	} {
 		if err := db.Create(row).Error; err != nil {
 			t.Fatal(err)
@@ -78,7 +79,7 @@ func TestExportUser(t *testing.T) {
 	}
 	prefix := "2026-05-01_080000_" + ride.ID.String()[:8]
 	for _, name := range []string{"README.txt", "manifest.json", "goals.json", "profile.json", "activities.csv", "health.json", "equipments.json",
-		"devices.json", "routes.json", "segments.json", "activities/" + prefix + ".json"} {
+		"devices.json", "routes.json", "segments.json", "workplaces.json", "activities/" + prefix + ".json"} {
 		if _, ok := files[name]; !ok {
 			t.Errorf("missing %s", name)
 		}
@@ -115,6 +116,9 @@ func TestExportUser(t *testing.T) {
 		goals[0].Name != "june" || goals[0].StartsOn == nil || *goals[0].StartsOn != "2026-06-01" ||
 		goals[0].EndsOn == nil || *goals[0].EndsOn != "2026-06-30" || len(goals[0].Sports) != 1 {
 		t.Errorf("goals.json: %s %v", files["goals.json"], err)
+	}
+	if !strings.Contains(files["workplaces.json"], `"office"`) || !strings.Contains(files["workplaces.json"], `"diameter":300`) {
+		t.Errorf("workplaces.json: %s", files["workplaces.json"])
 	}
 	var equipments []struct {
 		ID          string `json:"id"`

@@ -34,6 +34,7 @@ health.json             your weights, resting heart rates, blood pressures...
 equipments.json         your equipment, with their services, maintenance reminders and the sports they are the default of
 pictures/               the pictures of your equipment, named in equipments.json (picture_file)
 goals.json              your goals
+workplaces.json         your workplaces: an activity starting or ending in one is a commute
 devices.json            the devices your activities were recorded with
 routes.json             the routes your activities follow
 segments.json           your segments, with the passes of your activities on them
@@ -224,6 +225,13 @@ func ExportUser(ctx context.Context, db *models.DB, user models.Users, w io.Writ
 		exportedGoals[i] = ExportGoal{Goal: g, StartsOn: dateString(g.StartsOn), EndsOn: dateString(g.EndsOn)}
 	}
 	if err := addJSON("goals.json", exportedGoals); err != nil {
+		return err
+	}
+	workplaces, err := db.GetWorkplaces(user.ID)
+	if err != nil {
+		return err
+	}
+	if err := addJSON("workplaces.json", workplaces); err != nil {
 		return err
 	}
 	// the files last: they are the bulk of the zip

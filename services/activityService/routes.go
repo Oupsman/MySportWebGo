@@ -142,21 +142,7 @@ func assignRoute(db *models.DB, activity *models.Activity) error {
 	}
 	activity.RouteID = &route.ID
 	if route.IsCommute {
-		activity.IsCommute = true
-		if activity.Co2 == 0 {
-			activity.Co2 = Commute(*activity)
-		}
-		// instead of the default equipment
-		if activity.Sport == models.CommuteSport {
-			bike, err := db.GetCommuteEquipment(activity.UserID)
-			if err != nil {
-				return err
-			}
-			if bike != nil && bike.OwnedOn(activity.Date) {
-				activity.Equipment = *bike
-				activity.EquipmentID = &bike.ID
-			}
-		}
+		return markCommute(db, activity)
 	}
 	return nil
 }
@@ -190,6 +176,10 @@ func CreateActivity(db *models.DB, activity *models.Activity, store func(activit
 			return &DuplicateError{ExistingID: *existing}
 		}
 		if err := assignRoute(txDB, activity); err != nil {
+			return err
+		}
+		// not on a commute route: a commute all the same when it starts or ends at a workplace
+		if err := commuteFromWorkplaces(txDB, activity); err != nil {
 			return err
 		}
 		// a new device starts without correction: the user enables it on the device page

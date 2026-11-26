@@ -172,6 +172,12 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.POST("/user/goals", middlewares.IsAuthorized(), apicontrollers.CreateGoal)
 	apiv1.POST("/user/goals/:id", middlewares.IsAuthorized(), apicontrollers.UpdateGoal)
 	apiv1.DELETE("/user/goals/:id", middlewares.IsAuthorized(), apicontrollers.DeleteGoal)
+	// the workplaces: an activity starting or ending at one is a commute
+	apiv1.GET("/user/workplaces", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.GetWorkplaces)
+	apiv1.POST("/user/workplaces", middlewares.IsAuthorized(), apicontrollers.CreateWorkplace)
+	apiv1.POST("/user/workplaces/:id", middlewares.IsAuthorized(), apicontrollers.UpdateWorkplace)
+	apiv1.DELETE("/user/workplaces/:id", middlewares.IsAuthorized(), apicontrollers.DeleteWorkplace)
+	apiv1.POST("/user/workplaces/:id/apply", middlewares.IsAuthorized(), apicontrollers.ApplyWorkplace)
 	// how the user arranged their dashboard: sessions only
 	apiv1.GET("/user/dashboard/layout", middlewares.IsAuthorized(), apicontrollers.GetDashboardLayout)
 	apiv1.PUT("/user/dashboard/layout", middlewares.IsAuthorized(), apicontrollers.SetDashboardLayout)
