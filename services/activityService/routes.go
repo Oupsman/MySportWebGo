@@ -152,7 +152,7 @@ func assignRoute(db *models.DB, activity *models.Activity) error {
 			if err != nil {
 				return err
 			}
-			if bike != nil {
+			if bike != nil && bike.OwnedOn(activity.Date) {
 				activity.Equipment = *bike
 				activity.EquipmentID = &bike.ID
 			}

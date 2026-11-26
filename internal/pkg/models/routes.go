@@ -142,8 +142,9 @@ func (db *DB) SetRouteCommute(routeID uuid.UUID, isCommute bool) (int64, error) 
 		if err != nil || len(bikes) == 0 {
 			return err
 		}
-		return tx.Model(&Activity{}).Where("route_id = ? AND sport = ?", routeID, CommuteSport).
-			Update("equipment_id", bikes[0].ID).Error
+		// not to the rides recorded before the bike was bought
+		return tx.Model(&Activity{}).Where("route_id = ? AND sport = ? AND date >= ?", routeID, CommuteSport,
+			bikes[0].OwnedSince()).Update("equipment_id", bikes[0].ID).Error
 	})
 	return count, err
 }

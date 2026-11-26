@@ -142,12 +142,24 @@ func (db *DB) GetCommuteEquipment(userID uint) (*Equipments, error) {
 	return &equipments[0], nil
 }
 
-// AssignCommuteEquipment gives an equipment to the user's commute rides, it returns how many changed
-func (db *DB) AssignCommuteEquipment(userID uint, equipmentID uuid.UUID) (int64, error) {
+// OwnedSince is the first day the equipment can have been used: the day of its purchase, the zero time when
+// its purchase date is unknown
+func (e Equipments) OwnedSince() time.Time {
+	return e.DateOfPurchase.UTC().Truncate(24 * time.Hour)
+}
+
+// OwnedOn tells if the equipment was already bought on date, true when its purchase date is unknown
+func (e Equipments) OwnedOn(date time.Time) bool {
+	return !date.Before(e.OwnedSince())
+}
+
+// AssignCommuteEquipment gives an equipment to the user's commute rides recorded since its purchase, it
+// returns how many changed
+func (db *DB) AssignCommuteEquipment(userID uint, equipment Equipments) (int64, error) {
 	result := db.Model(&Activity{}).
-		Where("user_id = ? AND is_commute AND sport = ? AND (equipment_id IS NULL OR equipment_id <> ?)",
-			userID, CommuteSport, equipmentID).
-		Update("equipment_id", equipmentID)
+		Where("user_id = ? AND is_commute AND sport = ? AND date >= ? AND (equipment_id IS NULL OR equipment_id <> ?)",
+			userID, CommuteSport, equipment.OwnedSince(), equipment.ID).
+		Update("equipment_id", equipment.ID)
 	return result.RowsAffected, result.Error
 }
 

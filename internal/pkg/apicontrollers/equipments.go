@@ -120,7 +120,8 @@ func UpdateEquipment(c *gin.Context) {
 	c.JSON(http.StatusOK, equipment)
 }
 
-// AssignCommuteEquipment gives the commute equipment to the commute rides recorded before it was chosen
+// AssignCommuteEquipment gives the commute equipment to the commute rides recorded since its purchase, before it
+// was chosen
 func AssignCommuteEquipment(c *gin.Context) {
 	db := c.MustGet("App").(*app.App).DB
 	user, equipment, ok := equipmentOwner(c)
@@ -131,7 +132,7 @@ func AssignCommuteEquipment(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "this equipment is not the commute one"})
 		return
 	}
-	updated, err := db.AssignCommuteEquipment(user.ID, equipment.ID)
+	updated, err := db.AssignCommuteEquipment(user.ID, equipment)
 	if err != nil {
 		internalError(c, err)
 		return

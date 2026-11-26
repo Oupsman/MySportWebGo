@@ -12,7 +12,8 @@ func Commute(activity models.Activity) float32 {
 }
 
 // EquipmentOnUpdate returns the equipment to save when the user edits an activity: a ride becoming a
-// commute gets the commute equipment, unless the user chooses another equipment in the same edit.
+// commute gets the commute equipment, unless the user chooses another equipment in the same edit or the ride
+// was recorded before the commute equipment was bought: it then only becomes a commute.
 func EquipmentOnUpdate(db *models.DB, activity models.Activity, isCommute bool, requested *uuid.UUID) (*uuid.UUID, error) {
 	unchanged := (requested == nil) == (activity.EquipmentID == nil) &&
 		(requested == nil || *requested == *activity.EquipmentID)
@@ -20,7 +21,7 @@ func EquipmentOnUpdate(db *models.DB, activity models.Activity, isCommute bool, 
 		return requested, nil
 	}
 	bike, err := db.GetCommuteEquipment(activity.UserID)
-	if err != nil || bike == nil {
+	if err != nil || bike == nil || !bike.OwnedOn(activity.Date) {
 		return requested, err
 	}
 	return &bike.ID, nil

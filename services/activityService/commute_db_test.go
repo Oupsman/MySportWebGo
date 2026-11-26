@@ -3,6 +3,7 @@ package activityService
 import (
 	"MySportWeb/internal/pkg/models"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -183,6 +184,33 @@ func TestCommuteEquipment(t *testing.T) {
 			t.Errorf("%s: equipment %v, want %v", test.name, equipment, test.want)
 		}
 	}
+	// a ride recorded before the commute bike was bought becomes a commute without it
+	bought := models.Equipments{Name: "new commuter", UserID: int(user.ID), IsCommute: true,
+		DateOfPurchase: got.Date.AddDate(0, 0, 1)}
+	if err := db.CreateEquipment(&bought); err != nil {
+		t.Fatal(err)
+	}
+	if equipment, err := EquipmentOnUpdate(db, *got, true, &road.ID); err != nil || *equipment != road.ID {
+		t.Errorf("a ride older than the commute bike got it: %v, %v", equipment, err)
+	}
+	// bought the day of the ride, at midnight: the ride gets it
+	bought.DateOfPurchase = got.Date.UTC().Truncate(24 * time.Hour)
+	if err := db.UpdateEquipment(&bought); err != nil {
+		t.Fatal(err)
+	}
+	if equipment, err := EquipmentOnUpdate(db, *got, true, &road.ID); err != nil || *equipment != bought.ID {
+		t.Errorf("a ride of the day of the purchase without the commute bike: %v, %v", equipment, err)
+	}
+	if updated, err := db.AssignCommuteEquipment(user.ID, models.Equipments{ID: bought.ID,
+		DateOfPurchase: first.Date.AddDate(1, 0, 0)}); err != nil || updated != 0 {
+		t.Errorf("the commute bike given to %d rides recorded before its purchase: %v", updated, err)
+	}
+	// back to the city bike
+	city.IsCommute = true
+	if err := db.UpdateEquipment(&city); err != nil {
+		t.Fatal(err)
+	}
+
 	// already a commute: the user may ride another bike, it is kept
 	commute, err := db.GetActivity(first.ID)
 	if err != nil {
@@ -201,7 +229,7 @@ func TestCommuteEquipment(t *testing.T) {
 	if err := db.Omit("User", "Equipment").Create(&run).Error; err != nil {
 		t.Fatal(err)
 	}
-	updated, err := db.AssignCommuteEquipment(user.ID, city.ID)
+	updated, err := db.AssignCommuteEquipment(user.ID, city)
 	if err != nil || updated != 1 {
 		t.Fatalf("assigned to %d rides, want 1: %v", updated, err)
 	}
