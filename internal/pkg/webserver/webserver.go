@@ -186,6 +186,8 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	// how the user arranged their dashboard: sessions only
 	apiv1.GET("/user/dashboard/layout", middlewares.IsAuthorized(), apicontrollers.GetDashboardLayout)
 	apiv1.PUT("/user/dashboard/layout", middlewares.IsAuthorized(), apicontrollers.SetDashboardLayout)
+	apiv1.GET("/user/activities/columns", middlewares.IsAuthorized(), apicontrollers.GetActivitiesColumns)
+	apiv1.PUT("/user/activities/columns", middlewares.IsAuthorized(), apicontrollers.SetActivitiesColumns)
 	apiv1.GET("/user/hrzones", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.HrZones)
 	apiv1.GET("/user/powerzones", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.PowerZones)
 	apiv1.GET("/user/ftp", middlewares.IsAuthorized(models.ActivitiesRead), apicontrollers.FTP)

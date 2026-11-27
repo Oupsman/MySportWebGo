@@ -536,7 +536,8 @@ func (j *accountImport) progress() error {
 	return err
 }
 
-// importProfile applies the settings of profile.json and the dashboard layout, when the user asked for them
+// importProfile applies the settings of profile.json, the dashboard layout and the columns of the activities
+// table, when the user asked for them
 func (j *accountImport) importProfile(context.Context) error {
 	if !j.imp.WithProfile {
 		return nil
@@ -545,6 +546,8 @@ func (j *accountImport) importProfile(context.Context) error {
 		userUpdate
 		WeightObjective *float64                 `json:"weight_objective"`
 		DashboardLayout []models.DashboardWidget `json:"dashboard_layout"`
+		// absent from the exports made before them
+		ActivitiesColumns []string `json:"activities_columns"`
 	}
 	found, err := j.export.decode("profile.json", &profile)
 	if err != nil || !found {
@@ -579,6 +582,13 @@ func (j *accountImport) importProfile(context.Context) error {
 		if err := models.ValidateDashboardLayout(profile.DashboardLayout); err != nil {
 			j.report.Skip("profile", "dashboard layout", err)
 		} else if err := j.db.SetDashboardLayout(j.user.ID, profile.DashboardLayout); err != nil {
+			return err
+		}
+	}
+	if profile.ActivitiesColumns != nil {
+		if err := models.ValidateActivitiesColumns(profile.ActivitiesColumns); err != nil {
+			j.report.Skip("profile", "activities columns", err)
+		} else if err := j.db.SetActivitiesColumns(j.user.ID, profile.ActivitiesColumns); err != nil {
 			return err
 		}
 	}

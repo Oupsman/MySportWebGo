@@ -244,6 +244,22 @@ type ActivityRow struct {
 	CommentCount int64 `json:"comment_count"`
 }
 
+// ActivitySearchRow is an activity of the activities table, with the measures the user may show as columns
+type ActivitySearchRow struct {
+	ActivityRow
+	// nil until computed, 0 when the records don't tell (see models.Activity)
+	MovingTime     *float64 `json:"moving_time"`
+	AvgMovingSpeed *float64 `json:"avg_moving_speed"`
+	MaxSpeed       float64  `json:"max_speed"`
+	Descent        float64  `json:"descent"`
+	// 0 when not recorded
+	AvgHR    uint8   `json:"avg_hr"`
+	AvgPower uint16  `json:"power_avg"`
+	AvgRPM   uint8   `json:"avg_rpm"`
+	Calories uint16  `json:"kcal"`
+	Co2      float32 `json:"co2"` // grams saved by a commute
+}
+
 // RecomputeStatus is the progress of the analysis of the activities of a device again
 type RecomputeStatus struct {
 	Running    bool       `json:"running"`
@@ -278,9 +294,9 @@ type DuplicateGroup struct {
 
 // ActivitySearch is a page of the user's activities matching a filter, with the totals of all of them
 type ActivitySearch struct {
-	Activities []ActivityRow `json:"activities"`
-	Total      int64         `json:"total"`
-	Totals     PeriodTotals  `json:"totals"`
+	Activities []ActivitySearchRow `json:"activities"`
+	Total      int64               `json:"total"`
+	Totals     PeriodTotals        `json:"totals"`
 	// what the filters can offer: the user's sports, the years with activities, most recent first,
 	// and the recording devices, most used first
 	Sports  []string      `json:"sports"`

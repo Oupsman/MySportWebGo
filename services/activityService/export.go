@@ -91,12 +91,17 @@ func ExportUser(ctx context.Context, db *models.DB, user models.Users, w io.Writ
 	if err != nil {
 		return err
 	}
+	columns, err := db.GetActivitiesColumns(user.ID)
+	if err != nil {
+		return err
+	}
 	if err := addJSON("profile.json", map[string]interface{}{
 		"username": user.Username, "email": user.Email, "role": user.Role, "created_at": user.CreatedAt,
 		"date_of_birth": user.DateOfBirth, "gender": user.Gender, "weight": user.Weight, "height": user.Height,
 		"max_hr": user.MaxHR, "ftp": user.FTP, "weight_objective": user.WeightObjective, "unit": user.Unit,
 		"timezone": user.Timezone, "home_town": user.HomeTown, "security_distance": user.SecurityDistance,
 		"two_factor_enabled_at": user.TOTPEnabledAt, "dashboard_layout": layout,
+		"activities_columns": columns,
 	}); err != nil {
 		return err
 	}

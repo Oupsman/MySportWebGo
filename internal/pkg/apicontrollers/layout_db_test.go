@@ -116,3 +116,53 @@ func TestDashboardLayout(t *testing.T) {
 		t.Error("reset: not the default layout")
 	}
 }
+
+func TestActivitiesColumns(t *testing.T) {
+	db := testDB(t)
+	vars.SecretKey = "testsecret"
+	alice := models.Users{Username: "alice", Email: "alice@test.local", Role: "User"}
+	if err := db.Create(&alice).Error; err != nil {
+		t.Fatal(err)
+	}
+	db.First(&alice, alice.ID)
+	token, _, err := utils.NewSessionToken(alice.ID, alice.UUID, alice.Role, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	App := &app.App{DB: *db, Logger: zerolog.Nop()}
+	router.Use(func(c *gin.Context) { c.Set("App", App); c.Next() })
+	router.GET("/columns", middlewares.IsAuthorized(), GetActivitiesColumns)
+	router.PUT("/columns", middlewares.IsAuthorized(), SetActivitiesColumns)
+	call := func(method, body string) (int, string) {
+		t.Helper()
+		req := httptest.NewRequest(method, "/columns", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w.Code, w.Body.String()
+	}
+
+	if status, body := call(http.MethodGet, ""); status != http.StatusOK || body != `{"columns":null}` {
+		t.Fatalf("default: %d %s", status, body)
+	}
+	if status, _ := call(http.MethodPut, `{"columns":["date","title","avg_hr"]}`); status != http.StatusOK {
+		t.Fatalf("save: %d", status)
+	}
+	if status, body := call(http.MethodGet, ""); status != http.StatusOK || body != `{"columns":["date","title","avg_hr"]}` {
+		t.Fatalf("saved: %d %s", status, body)
+	}
+	for _, bad := range []string{`{"columns":["date","date"]}`, `{"columns":["Date!"]}`, `not json`} {
+		if status, _ := call(http.MethodPut, bad); status != http.StatusBadRequest {
+			t.Errorf("%s: %d, want 400", bad, status)
+		}
+	}
+	if status, _ := call(http.MethodPut, `{"columns":null}`); status != http.StatusOK {
+		t.Fatalf("reset: %d", status)
+	}
+	if _, body := call(http.MethodGet, ""); body != `{"columns":null}` {
+		t.Errorf("reset: %s", body)
+	}
+}

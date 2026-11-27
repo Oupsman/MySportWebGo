@@ -42,6 +42,9 @@ type Users struct {
 	TOTPRecovery  string     `json:"-" gorm:"column:totp_recovery;not null;default:''"`
 	// DashboardLayout is the widgets of their dashboard (see DashboardWidget), nil for the default layout
 	DashboardLayout *string `json:"-" gorm:"type:jsonb"`
+	// ActivitiesColumns is the columns of their activities table (see GetActivitiesColumns), nil for the
+	// default ones
+	ActivitiesColumns *string `json:"-" gorm:"type:jsonb"`
 	// QuotaBytes is the storage quota an admin gave them, nil for the one of the instance (vars.UserQuota), 0
 	// for none: see Quota. Set by SetUserQuota only.
 	QuotaBytes *int64 `json:"-"`
