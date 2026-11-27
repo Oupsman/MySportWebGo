@@ -96,6 +96,9 @@ The variables are prefixed `MSW_` because docker compose also reads the `.env` u
   delete it at once); a password reset link for a user, valid 24 hours, used once, given to them by hand (there
   is no email). Each of these asks a code of the admin's authenticator app, every time. Nobody can remove the
   last admin.
+* **The activity of the users**, in **Admin**: the last login of each user; an event log (the logins and their
+  failures, the uploads, the deletions, the exports and imports, the changes made by the admins), kept 90 days;
+  and the notifications, with when they were queued and sent, to whom and about what, never their message.
 * **Their data**, in **Your profile**: the export downloads a zip of everything the app keeps about the user (their
   uploaded files and every computed value as JSON, see its README.txt); deleting the account removes all of it,
   with the password, the username typed again, and the second factor code. The import takes the zip of an
@@ -221,9 +224,16 @@ the documentation of your service: they change seldom, but they do.
 
 ## Notifications
 
-The app notifies the browsers of a user when maintenance reminders of an equipment are due (set on its page),
-once per cycle. Each user turns them on in **Your profile → Notifications**, on each browser, with a test button;
-and by email too, with the emails on and their address confirmed (see [Emails](#emails)).
+The app notifies a user when:
+
+* maintenance reminders of an equipment are due (set on its page), once per cycle;
+* a goal is reached, once per period of the goal;
+* a recent activity holds new bests;
+* someone comments one of their activities (at once), cheers them (grouped, once the cheers settle), or follows
+  them. Each user turns these social notifications off in their profile.
+
+Each user turns the notifications on in **Your profile → Notifications**, on each browser, with a test button; and
+by email too, with the emails on and their address confirmed (see [Emails](#emails)).
 
 * They are web push notifications: the app must be served over **HTTPS** (`MSW_DOMAIN`), and the backend must
   reach the push services of the browsers (Google for Chrome and the Chromium ones, Mozilla, Apple, Microsoft).
