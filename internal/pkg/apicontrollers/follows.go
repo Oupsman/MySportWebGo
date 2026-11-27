@@ -186,7 +186,7 @@ func notifySocial(App *app.App, to models.Users, message notifications.PushMessa
 	if !to.NotifySocial {
 		return
 	}
-	if _, err := App.DB.NotifyUser(to.ID, message.Encode()); err != nil {
+	if _, err := App.DB.NotifyUser(to.ID, models.NotifyFollow, message.Encode()); err != nil {
 		App.Logger.Error().Err(err).Uint("user_id", to.ID).Msg("follow not notified")
 	}
 }

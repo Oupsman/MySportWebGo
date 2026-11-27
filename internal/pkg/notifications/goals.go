@@ -17,7 +17,7 @@ func CheckGoals(db models.DB, logger zerolog.Logger, now time.Time) error {
 		return err
 	}
 	for _, goal := range reached {
-		queued, err := db.NotifyUser(goal.UserID, goalMessage(goal).Encode())
+		queued, err := db.NotifyUser(goal.UserID, models.NotifyGoal, goalMessage(goal).Encode())
 		if err != nil {
 			return err
 		}

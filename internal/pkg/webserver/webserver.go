@@ -123,6 +123,9 @@ func RunHttp(ctx context.Context, listenAddr string, App *app.App) error {
 	apiv1.GET("/admin/users", middlewares.IsAdmin(), apicontrollers.GetUsers)
 	// the state of the instance, from the metrics read in the process: no Prometheus needed
 	apiv1.GET("/admin/status", middlewares.IsAdmin(), apicontrollers.GetStatus)
+	// what the users do and the notifications they get (never their message)
+	apiv1.GET("/admin/events", middlewares.IsAdmin(), apicontrollers.GetUserEvents)
+	apiv1.GET("/admin/notifications", middlewares.IsAdmin(), apicontrollers.GetNotificationLogs)
 	apiv1.POST("/admin/email/test", middlewares.IsAdmin(), apicontrollers.SendTestEmail)
 	apiv1.POST("/admin/users/:id/role", middlewares.IsAdmin(), apicontrollers.SetUserRole)
 	apiv1.POST("/admin/users/:id/disable", middlewares.IsAdmin(), apicontrollers.DisableUser)

@@ -85,9 +85,25 @@ func (db *DB) DeleteChannel(id uint) error {
 	})
 }
 
-// NotifyUser queues a message for each channel of a user (their push subscriptions, and their email when
-// on), sent by notifications.Run; the number of channels it was queued for
-func (db *DB) NotifyUser(userID uint, message string) (int, error) {
+// the kinds of the notifications: what they are about, shown to the admins
+const (
+	NotifyTest        = "test"
+	NotifyComment     = "comment"
+	NotifyCheers      = "cheers"
+	NotifyFollow      = "follow"
+	NotifyImport      = "import"
+	NotifyHighlights  = "highlights"
+	NotifyGoal        = "goal"
+	NotifyMaintenance = "maintenance"
+)
+
+// NotifyKinds are the kinds of the notifications, the filter of the admins
+var NotifyKinds = []string{NotifyTest, NotifyComment, NotifyCheers, NotifyFollow, NotifyImport, NotifyHighlights,
+	NotifyGoal, NotifyMaintenance}
+
+// NotifyUser queues a message of a kind (NotifyGoal...) for each channel of a user (their push subscriptions,
+// and their email when on), sent by notifications.Run; the number of channels it was queued for
+func (db *DB) NotifyUser(userID uint, kind, message string) (int, error) {
 	var ids []uint
 	err := db.Model(&Channel{}).Where("user_id = ? AND channel_provider IN ?", userID, notifyingProviders).Pluck("id", &ids).Error
 	if err != nil || len(ids) == 0 {
@@ -95,7 +111,7 @@ func (db *DB) NotifyUser(userID uint, message string) (int, error) {
 	}
 	notifications := make([]Notifications, len(ids))
 	for i, id := range ids {
-		notifications[i] = Notifications{ChannelID: uint64(id), Message: message}
+		notifications[i] = Notifications{ChannelID: uint64(id), Kind: kind, Message: message}
 	}
 	return len(ids), db.Omit("Channel").Create(&notifications).Error
 }

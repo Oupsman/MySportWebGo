@@ -202,7 +202,7 @@ func CreateComment(c *gin.Context) {
 	}
 	if access.OwnerID != user.ID && access.OwnerNotifySocial {
 		message := notifications.CommentMessage(user.Username, access.ID, access.Title, body)
-		if _, err := db.NotifyUser(access.OwnerID, message.Encode()); err != nil {
+		if _, err := db.NotifyUser(access.OwnerID, models.NotifyComment, message.Encode()); err != nil {
 			// the comment is saved: the request succeeds without its notification
 			App.Logger.Error().Err(err).Str("activity", access.ID.String()).Msg("comment not notified")
 		}

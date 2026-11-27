@@ -94,5 +94,14 @@ func SetUserQuota(c *gin.Context) {
 		log = log.Int64("quota_bytes", *quota)
 	}
 	log.Msg("storage quota changed")
+	detail := "the quota of the instance"
+	switch {
+	case quota == nil:
+	case *quota == 0:
+		detail = "no quota"
+	default:
+		detail = strconv.FormatInt(*quota, 10) + " bytes"
+	}
+	recordAdminEvent(c, user, models.EventAdminQuota, detail)
 	c.JSON(http.StatusOK, gin.H{"id": user.ID, "quota_bytes": quota, "quota": user.Quota()})
 }

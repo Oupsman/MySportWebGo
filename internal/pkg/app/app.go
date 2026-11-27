@@ -98,10 +98,30 @@ func (app *App) Start(ctx context.Context) error {
 	app.Go(func(ctx context.Context) { app.Notifications.Run(ctx, app.Logger, app.Client, app.DB) })
 	app.Go(func(ctx context.Context) { notifications.RunServiceAlerts(ctx, app.Logger, app.DB) })
 	app.Go(app.backfill)
+	app.Go(app.dropOldEvents)
 	if app.Status != nil {
 		app.Go(app.Status.Run)
 	}
 	return nil
+}
+
+// dropOldEvents removes the user events older than models.EventRetention, at once then every hour, until
+// ctx is done
+func (app *App) dropOldEvents(ctx context.Context) {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		if dropped, err := app.DB.DropOldEvents(time.Now()); err != nil {
+			app.Logger.Error().Err(err).Msg("failed to drop the old user events")
+		} else if dropped > 0 {
+			app.Logger.Info().Int64("events", dropped).Msg("old user events dropped")
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 // backfill brings the activities analysed by the older versions up to date, one step after the other; each

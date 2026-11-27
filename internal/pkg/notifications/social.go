@@ -47,7 +47,7 @@ func cheersMessage(batch models.CheerBatch) PushMessage {
 // the owners who want them (models.Users.NotifySocial)
 func CheckCheers(db models.DB, logger zerolog.Logger, now time.Time) error {
 	notified, err := db.ClaimCheers(now, now.Add(-CheerSettle), func(tx *models.DB, batch models.CheerBatch) error {
-		_, err := tx.NotifyUser(batch.OwnerID, cheersMessage(batch).Encode())
+		_, err := tx.NotifyUser(batch.OwnerID, models.NotifyCheers, cheersMessage(batch).Encode())
 		return err
 	})
 	if notified > 0 {

@@ -324,6 +324,7 @@ func ImportAccount(c *gin.Context) {
 	startAccountImport(App, imp)
 	App.Logger.Info().Uint("user_id", user.ID).Str("import", imp.ID.String()).Int("activities", imp.Total).
 		Msg("import of an export started")
+	recordEvent(c, user, models.EventAccountImport, "")
 	c.JSON(http.StatusAccepted, imp)
 }
 
@@ -520,7 +521,7 @@ func runAccountImport(ctx, shutdown context.Context, App *app.App, imp models.Ac
 		Body: fmt.Sprintf("%d activities imported, %d already there, %d skipped", activities.Created,
 			activities.Existing, activities.Skipped),
 		URL: "/#/profile"}
-	if _, err := db.NotifyUser(user.ID, message.Encode()); err != nil {
+	if _, err := db.NotifyUser(user.ID, models.NotifyImport, message.Encode()); err != nil {
 		logger.Warn().Err(err).Msg("end of the import not notified")
 	}
 	logger.Info().Interface("counts", j.report.Counts).Msg("import of an export finished")

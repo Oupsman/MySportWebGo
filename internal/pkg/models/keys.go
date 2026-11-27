@@ -3,6 +3,7 @@ package models
 import (
 	"MySportWeb/internal/pkg/types"
 	"gorm.io/gorm"
+	"time"
 )
 
 type Notifications struct {
@@ -11,6 +12,9 @@ type Notifications struct {
 	ChannelID uint64  `json:"channel_id"`
 	Message   string  `json:"message"`
 	Sent      bool    `json:"sent"`
+	// Kind is what it is about (NotifyGoal...), shown to the admins with SentAt
+	Kind   string     `json:"kind" gorm:"not null;default:''"`
+	SentAt *time.Time `json:"sent_at"`
 }
 
 type Keys struct {
@@ -52,17 +56,8 @@ func (db *DB) GetUnsentNotifications() ([]types.NotificationsBody, error) {
 }
 
 func (db *DB) MarkAsSent(notificationID uint) error {
-	var notification = Notifications{}
-	result := db.Find(&notification, notificationID)
-	if result.Error != nil {
-		return result.Error
-	}
-	notification.Sent = true
-	result = db.Save(&notification)
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+	return db.Model(&Notifications{}).Where("id = ?", notificationID).
+		Updates(map[string]interface{}{"sent": true, "sent_at": time.Now()}).Error
 }
 
 // DEAD CODE: not used anywhere, commented out to keep it out of the build (kept for reference).

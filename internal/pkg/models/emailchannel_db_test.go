@@ -35,7 +35,7 @@ func TestSetEmailChannelConcurrent(t *testing.T) {
 		if n != 1 {
 			t.Fatalf("round %d: %d email channels", round, n)
 		}
-		if queued, err := db.NotifyUser(user.ID, "{}"); err != nil || queued != 1 {
+		if queued, err := db.NotifyUser(user.ID, NotifyTest, "{}"); err != nil || queued != 1 {
 			t.Fatalf("round %d: queued for %d channels (%v)", round, queued, err)
 		}
 		if err := db.SetEmailChannel(user.ID, false); err != nil {

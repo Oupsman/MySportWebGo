@@ -103,7 +103,7 @@ func TestSend(t *testing.T) {
 	ok, gone, failing := channel("/ok"), channel("/gone"), channel("/failing")
 	service.status["/gone"] = http.StatusGone
 	service.status["/failing"] = http.StatusInternalServerError
-	if n, err := db.NotifyUser(user.ID, PushMessage{Title: "t", Body: "b", URL: "/#/"}.Encode()); err != nil || n != 3 {
+	if n, err := db.NotifyUser(user.ID, models.NotifyTest, PushMessage{Title: "t", Body: "b", URL: "/#/"}.Encode()); err != nil || n != 3 {
 		t.Fatalf("queued %d (%v), want 3", n, err)
 	}
 
@@ -306,7 +306,7 @@ func TestDeletePushChannel(t *testing.T) {
 	if channels, _ := db.GetPushChannels(users[0].ID); len(channels) != 1 || channels[0].Name != "Firefox on Linux" {
 		t.Errorf("subscriptions: %+v", channels)
 	}
-	if _, err := db.NotifyUser(users[0].ID, "pending"); err != nil {
+	if _, err := db.NotifyUser(users[0].ID, models.NotifyTest, "pending"); err != nil {
 		t.Fatal(err)
 	}
 	if found, err := db.DeletePushChannel(users[1].ID, first.ID); err != nil || found {

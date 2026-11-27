@@ -114,6 +114,7 @@ func SetUserRole(c *gin.Context) {
 	}
 	App.Logger.Info().Uint("user_id", user.ID).Str("role", body.Role).Uint("by", middlewares.CurrentUser(c).ID).
 		Msg("role changed")
+	recordAdminEvent(c, user, models.EventAdminRole, body.Role)
 	c.JSON(http.StatusOK, gin.H{"id": user.ID, "role": body.Role})
 }
 
@@ -130,6 +131,11 @@ func setDisabled(c *gin.Context, disabled bool) {
 	}
 	App.Logger.Info().Uint("user_id", user.ID).Bool("disabled", disabled).Uint("by", middlewares.CurrentUser(c).ID).
 		Msg("account disabled or enabled")
+	if disabled {
+		recordAdminEvent(c, user, models.EventAdminDisabled, "")
+	} else {
+		recordAdminEvent(c, user, models.EventAdminEnabled, "")
+	}
 	c.JSON(http.StatusOK, gin.H{"id": user.ID, "disabled": disabled})
 }
 
@@ -159,6 +165,8 @@ func AdminDeleteUser(c *gin.Context) {
 		return
 	}
 	App.Logger.Info().Uint("user_id", user.ID).Uint("by", middlewares.CurrentUser(c).ID).Msg("account deleted by an admin")
+	// the user is gone: only their username stays
+	recordAdminEvent(c, models.Users{Username: user.Username}, models.EventAdminDeleted, "")
 	c.JSON(http.StatusOK, gin.H{"id": user.ID, "deleted": true})
 }
 
@@ -194,6 +202,7 @@ func CreatePasswordReset(c *gin.Context) {
 		return
 	}
 	App.Logger.Info().Uint("user_id", user.ID).Uint("by", admin).Msg("password reset link created")
+	recordAdminEvent(c, user, models.EventAdminResetLink, "")
 	c.JSON(http.StatusCreated, gin.H{"link": link, "expires_at": reset.ExpiresAt})
 }
 
@@ -236,6 +245,7 @@ func ResetPassword(c *gin.Context) {
 	accountFailures.Reset(strings.ToLower(user.Username))
 	loginFailures.ResetPrefix(loginFailureKey(user.Username, ""))
 	App.Logger.Info().Uint("user_id", user.ID).Msg("password reset")
+	recordEvent(c, user, models.EventPasswordReset, "")
 	c.JSON(http.StatusOK, gin.H{"username": user.Username})
 }
 
@@ -265,6 +275,7 @@ func ExportAccount(c *gin.Context) {
 		return
 	}
 	App.Logger.Info().Uint("user_id", user.ID).Msg("data exported")
+	recordEvent(c, user, models.EventAccountExport, "")
 }
 
 // DeleteAccount deletes the account of the user and everything they own, with their password, their
@@ -303,6 +314,8 @@ func DeleteAccount(c *gin.Context) {
 		adminChangeError(c, err)
 		return
 	}
+	// the user is gone: only their username stays
+	recordEvent(c, models.Users{Username: user.Username}, models.EventAccountDeleted, "")
 	middlewares.ClearSessionCookie(c)
 	c.JSON(http.StatusOK, gin.H{"deleted": true})
 }

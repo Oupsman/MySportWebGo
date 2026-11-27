@@ -110,7 +110,7 @@ func NotifyHighlights(db *models.DB, logger zerolog.Logger, userID uint, activit
 	if !ok {
 		return nil
 	}
-	if _, err := db.NotifyUser(userID, message.Encode()); err != nil {
+	if _, err := db.NotifyUser(userID, models.NotifyHighlights, message.Encode()); err != nil {
 		return err
 	}
 	logger.Info().Str("activity", activityID.String()).Msg("new bests: notified")

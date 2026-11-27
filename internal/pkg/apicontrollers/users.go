@@ -142,6 +142,7 @@ func Login(c *gin.Context) {
 	if err := utils.CheckPassword(user.Password, existingUser.Password); err != nil {
 		logger.Debug().Err(err).Uint("user_id", existingUser.ID).Msg("login refused: password check failed")
 		failed()
+		recordEvent(c, existingUser, models.EventLoginFailed, "wrong password")
 		c.JSON(400, gin.H{"error": invalidLogin})
 		return
 	}
@@ -150,6 +151,7 @@ func Login(c *gin.Context) {
 	// told after the password only: it doesn't tell who has an account
 	if existingUser.DisabledAt != nil {
 		logger.Info().Uint("user_id", existingUser.ID).Msg("login refused: account disabled")
+		recordEvent(c, existingUser, models.EventLoginRefused, "account disabled")
 		c.JSON(http.StatusForbidden, gin.H{"error": "this account is disabled, ask an admin of the instance"})
 		return
 	}
@@ -288,6 +290,7 @@ func Register(c *gin.Context) {
 	} else {
 		metrics.Registrations.WithLabelValues("user").Inc()
 	}
+	recordEvent(c, user, models.EventRegister, user.Role)
 	c.JSON(201, gin.H{"success": "user registered", "role": user.Role})
 }
 
@@ -321,6 +324,9 @@ func Logout(c *gin.Context) {
 		if err := db.RevokeSession(session.ID, session.ExpiresAt); err != nil {
 			c.JSON(500, gin.H{"error": "could not log out"})
 			return
+		}
+		if user, err := db.GetUserByUUID(session.UserUUID); err == nil {
+			recordEvent(c, user, models.EventLogout, "")
 		}
 	}
 	c.JSON(200, gin.H{"success": "user logged out"})
@@ -565,6 +571,7 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 	middlewares.SetSessionCookie(c, token, session.ExpiresAt)
+	recordEvent(c, currentUser, models.EventPasswordChanged, "")
 	c.JSON(200, gin.H{"message": "user updated successfully", "session": newSessionInfo(currentUser, session)})
 }
 

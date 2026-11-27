@@ -294,7 +294,7 @@ func TestEmailNotifications(t *testing.T) {
 	// a notification of the app goes by email, with the link of its page
 	message := notifications.PushMessage{Title: "Service due: bike", Body: "1012 km since the last service",
 		URL: "/#/equipment/x/edit#services"}.Encode()
-	if queued, err := db.NotifyUser(users[0].ID, message); err != nil || queued != 1 {
+	if queued, err := db.NotifyUser(users[0].ID, models.NotifyTest, message); err != nil || queued != 1 {
 		t.Fatalf("queued %d %v", queued, err)
 	}
 	App.Notifications.Email = App.EmailNotification
@@ -313,7 +313,7 @@ func TestEmailNotifications(t *testing.T) {
 	}
 	// off: nothing queued for it anymore
 	rawRequest(client, http.MethodPost, "/notifications/email", cookie, `{"enabled": false}`)
-	if queued, _ := db.NotifyUser(users[0].ID, message); queued != 0 {
+	if queued, _ := db.NotifyUser(users[0].ID, models.NotifyTest, message); queued != 0 {
 		t.Errorf("queued after turning it off: %d", queued)
 	}
 }

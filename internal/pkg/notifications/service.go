@@ -54,7 +54,7 @@ func CheckServices(db models.DB, logger zerolog.Logger, now time.Time) error {
 	for _, id := range order {
 		reminders := byEquipment[id]
 		message := reminderMessage(reminders)
-		queued, err := db.NotifyUser(reminders[0].UserID, message.Encode())
+		queued, err := db.NotifyUser(reminders[0].UserID, models.NotifyMaintenance, message.Encode())
 		if err != nil {
 			return err
 		}

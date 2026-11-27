@@ -137,8 +137,10 @@ type UserSummary struct {
 	LastActivity *time.Time `json:"last_activity"` // the date of their latest activity
 	// LastDeviceUse is the last use of one of their device tokens (the desktop application)
 	LastDeviceUse *time.Time `json:"last_device_use"`
-	UUID          string     `json:"-"`
-	DiskBytes     int64      `json:"disk_bytes"` // their files, set by the caller
+	// LastLogin is their latest login of the last EventRetention, nil without
+	LastLogin *time.Time `json:"last_login"`
+	UUID      string     `json:"-"`
+	DiskBytes int64      `json:"disk_bytes"` // their files, set by the caller
 	// QuotaBytes is the quota an admin gave them, nil for the one of the instance; Quota the one that
 	// applies, set by the caller; 0 for none
 	QuotaBytes *int64 `json:"quota_bytes"`
@@ -153,7 +155,8 @@ func (db *DB) GetUserSummaries() ([]UserSummary, error) {
 			u.totp_enabled_at IS NOT NULL AS two_factor,
 			(SELECT COUNT(*) FROM activities a WHERE a.user_id = u.id) AS activities,
 			(SELECT MAX(a.date) FROM activities a WHERE a.user_id = u.id) AS last_activity,
-			(SELECT MAX(t.last_used_at) FROM device_tokens t WHERE t.user_id = u.id) AS last_device_use`).
+			(SELECT MAX(t.last_used_at) FROM device_tokens t WHERE t.user_id = u.id) AS last_device_use,
+			(SELECT MAX(e.created_at) FROM user_events e WHERE e.user_id = u.id AND e.kind = 'login') AS last_login`).
 		Where("u.deleted_at IS NULL").Order("u.username").Scan(&users).Error
 	return users, err
 }

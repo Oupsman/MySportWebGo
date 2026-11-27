@@ -101,6 +101,11 @@ func issueSession(c *gin.Context, user models.Users, mfa bool) {
 	// this browser logs in during an attack on the account (see accountFailures)
 	middlewares.SetKnownDeviceCookie(c, user.Username, time.Now())
 	metrics.Logins.WithLabelValues("success").Inc()
+	detail := "password"
+	if mfa {
+		detail = "password and second factor"
+	}
+	recordEvent(c, user, models.EventLogin, detail)
 	c.JSON(200, gin.H{"session": newSessionInfo(user, session)})
 }
 
@@ -137,6 +142,7 @@ func LoginSecondFactor(c *gin.Context) {
 		return
 	}
 	if user.DisabledAt != nil {
+		recordEvent(c, user, models.EventLoginRefused, "account disabled")
 		c.JSON(http.StatusForbidden, gin.H{"error": "this account is disabled, ask an admin of the instance"})
 		return
 	}
@@ -144,6 +150,7 @@ func LoginSecondFactor(c *gin.Context) {
 		if errors.Is(err, errWrongCode) {
 			loginFailures.Add(key)
 			metrics.Logins.WithLabelValues("failure").Inc()
+			recordEvent(c, user, models.EventLoginFailed, "wrong second factor code")
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -258,6 +265,7 @@ func EnableTwoFactor(c *gin.Context) {
 	}
 	middlewares.SetSessionCookie(c, token, session.ExpiresAt)
 	App.Logger.Info().Uint("user_id", user.ID).Msg("two-factor authentication enabled")
+	recordEvent(c, user, models.EventTwoFactorOn, "")
 	c.JSON(http.StatusOK, gin.H{"recovery_codes": codes, "session": newSessionInfo(user, session)})
 }
 
@@ -296,6 +304,7 @@ func DisableTwoFactor(c *gin.Context) {
 		return
 	}
 	App.Logger.Info().Uint("user_id", user.ID).Msg("two-factor authentication disabled")
+	recordEvent(c, user, models.EventTwoFactorOff, "")
 	c.JSON(http.StatusOK, gin.H{"enabled": false})
 }
 

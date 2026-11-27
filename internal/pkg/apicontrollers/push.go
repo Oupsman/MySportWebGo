@@ -3,6 +3,7 @@ package apicontrollers
 import (
 	"MySportWeb/internal/pkg/app"
 	"MySportWeb/internal/pkg/middlewares"
+	"MySportWeb/internal/pkg/models"
 	"MySportWeb/internal/pkg/notifications"
 	"encoding/base64"
 	"encoding/json"
@@ -123,7 +124,7 @@ func Unsubscribe(c *gin.Context) {
 func TestPush(c *gin.Context) {
 	App := c.MustGet("App").(*app.App)
 	message := notifications.PushMessage{Title: "MySportWeb", Body: "Notifications work on this device.", URL: "/#/profile/view"}
-	queued, err := App.DB.NotifyUser(middlewares.CurrentUser(c).ID, message.Encode())
+	queued, err := App.DB.NotifyUser(middlewares.CurrentUser(c).ID, models.NotifyTest, message.Encode())
 	if err != nil {
 		internalError(c, err)
 		return

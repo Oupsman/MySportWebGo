@@ -99,6 +99,7 @@ func UploadActivity(c *gin.Context) {
 		}
 	})
 
+	recordEvent(c, user, models.EventUpload, activity.Sport+", "+activity.ID.String())
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
 }
 
@@ -289,6 +290,7 @@ func DeleteActivity(c *gin.Context) {
 	}
 	// the rides of the weeks after it may lose the FTP estimated from it
 	activityService.PowerRideChanged(&db, *activity, false, App.Go, App.Logger)
+	recordEvent(c, user, models.EventActivityDeleted, activity.Sport+", "+activity.ID.String())
 	c.JSON(http.StatusOK, gin.H{"id": activity.ID.String()})
 }
 
