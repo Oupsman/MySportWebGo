@@ -173,6 +173,8 @@ func decodeFit(fit *proto.FIT, user models.Users, trimEnd float64,
 	}
 	// from the records: the stops a device without auto-pause counts in its duration
 	setMoving(&activity)
+	// the records of the trimmed activity only
+	activity.RadarEvents = RadarEvents(fitActivity, fitActivity.Sessions[0].StartTime)
 	if len(activity.Legs) > 0 {
 		estimateLegsPower(&activity)
 	}

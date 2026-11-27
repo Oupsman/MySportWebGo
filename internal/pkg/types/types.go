@@ -687,3 +687,51 @@ type Highlight struct {
 	Name   string `json:"name,omitempty"`
 	Metric string `json:"metric,omitempty"` // of a goal
 }
+
+// The threat levels of a radar (EIradar's radar_threat_level, the one of the radar itself): Varia radars send
+// RadarApproaching for a vehicle behind, RadarFast for one closing in fast; RadarCritical is in EIradar's
+// scale but no radar was seen sending it
+const (
+	RadarClear       uint8 = 0
+	RadarApproaching uint8 = 1
+	RadarFast        uint8 = 2
+	RadarCritical    uint8 = 3
+)
+
+// RadarEvent is a stretch of an activity during which a rear radar saw vehicles behind the rider: from the
+// first record with a threat level above RadarClear to the last one
+type RadarEvent struct {
+	Offset   float64 `json:"offset"`   // seconds since the start of the activity, at its first record
+	Duration float64 `json:"duration"` // seconds
+	Threat   uint8   `json:"threat"`   // the highest threat level of the stretch
+	// the most vehicles tracked at once
+	Vehicles uint8 `json:"vehicles"`
+	// meters behind the rider of the nearest vehicle when the threat was highest, the closest then: how far
+	// behind, not how close it passed. 0 when the radar gave no distance
+	Distance uint16 `json:"distance"`
+	// where the threat was highest, nil without GPS fix during the stretch
+	Position *GpsPoint `json:"position"`
+}
+
+// RadarEventArray holds the radar events of an activity: empty when it has none (no radar), nil until
+// computed (stored as JSON null, the backfill computes them)
+type RadarEventArray []RadarEvent
+
+func (s *RadarEventArray) Scan(src interface{}) error {
+	*s = nil
+	switch v := src.(type) {
+	case []byte:
+		return json.Unmarshal(v, s)
+	case string:
+		return json.Unmarshal([]byte(v), s)
+	}
+	return nil
+}
+
+func (s RadarEventArray) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+func (RadarEventArray) GormDataType() string {
+	return "jsonb"
+}

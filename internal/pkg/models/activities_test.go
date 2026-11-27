@@ -33,6 +33,8 @@ func TestHidePrivate(t *testing.T) {
 		Device:           types.Device{Model: "Edge 530", Serial: "3999999999"},
 		Title:            "Morning ride",
 		Distance:         42000,
+		RadarEvents: types.RadarEventArray{{Offset: 120, Duration: 9, Threat: types.RadarFast, Vehicles: 2,
+			Distance: 7, Position: &types.GpsPoint{Lat: 45.987654, Lon: 5.456789}}},
 	}
 	temperature := 12.5
 	a.Weather = &weather.Weather{Latitude: 45.1, Longitude: 5.7, Temperature: &temperature, Source: "open-meteo"}
@@ -43,8 +45,9 @@ func TestHidePrivate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// the radar events tell where and when the owner rides in traffic: theirs only
 	for _, secret := range []string{"45.123456", "5.654321", "ride.fit", "0b5d3e0e", "owner", "3999999999",
-		equipmentID.String(), routeID.String()} {
+		equipmentID.String(), routeID.String(), "45.987654", "radar_events\":[", "\"threat\""} {
 		if strings.Contains(string(data), secret) {
 			t.Errorf("%s still in %s", secret, data)
 		}

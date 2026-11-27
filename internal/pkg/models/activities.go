@@ -135,6 +135,9 @@ type Activity struct {
 	// the best power of a ride with a power meter over activityService.PowerCurveDurations, empty without,
 	// nil until computed
 	PowerCurve types.PowerCurve `json:"power_curve"`
+	// the vehicles a rear radar saw behind the rider (recorded by EIradar on a Karoo), empty without radar,
+	// nil until computed. The owner's only: where and when they ride on roads with traffic
+	RadarEvents types.RadarEventArray `json:"radar_events"`
 }
 
 // The sources of the training score of an activity
@@ -163,6 +166,7 @@ func (a *Activity) HidePrivate() {
 	}
 	a.MaxSpeedPosition = types.GpsPoint{}
 	a.GpsCenter, a.GpsBounds = traceBounds(a.PublicGpsPoints)
+	a.RadarEvents = nil
 
 	a.Filename = ""
 	a.FilePath = ""
@@ -437,6 +441,7 @@ func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, privacy
 		// the power stream changed: BackfillPowerMetrics computes its metrics again
 		updates["power_zones"] = nil
 		updates["power_curve"] = analysed.PowerCurve
+		updates["radar_events"] = analysed.RadarEvents
 		for column, value := range elevationUpdates(analysed) {
 			updates[column] = value
 		}

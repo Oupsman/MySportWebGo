@@ -352,6 +352,7 @@ type userUpdate struct {
 	SecurityDistance     *uint16    `json:"security_distance"`
 	HomeTown             *string    `json:"home_town"`
 	Timezone             *string    `json:"timezone"`
+	ShowRadarEvents      *bool      `json:"show_radar_events"`
 }
 
 // the bounds of the values of userUpdate
@@ -426,6 +427,9 @@ func (u userUpdate) fields(now time.Time) (map[string]interface{}, error) {
 			return nil, errors.New("the home town is at most 100 characters")
 		}
 		fields["home_town"] = homeTown
+	}
+	if u.ShowRadarEvents != nil {
+		fields["show_radar_events"] = *u.ShowRadarEvents
 	}
 	// weeks, months and the time of the day in titles depend on it: an empty one keeps the current one
 	if u.Timezone != nil && *u.Timezone != "" {
