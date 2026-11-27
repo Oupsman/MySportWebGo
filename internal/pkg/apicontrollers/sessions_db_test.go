@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
@@ -226,7 +227,9 @@ func TestSessions(t *testing.T) {
 		t.Errorf("optional user, ended session in the header: %d", code)
 	}
 
-	// changing the password ends the sessions, the answer sets a new cookie
+	// changing the password ends the sessions, the answer sets a new cookie. The token dates are in seconds
+	// and a token of the second of the change stays valid: the change waits for the next second
+	time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(time.Second)))
 	code, answer, cookies = client.browser(http.MethodPost, "/user", laptop, `{"oldpassword": "old password", `+
 		`"newPassword": "new password", "newPasswordConfirmation": "new password", "email": "alice@test.local"}`)
 	if code != http.StatusOK || answer["token"] != "" || answer["session.sub"] != fmt.Sprint(alice.ID) {
