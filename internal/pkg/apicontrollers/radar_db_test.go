@@ -24,7 +24,7 @@ func TestSetRadarEventsShown(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.First(&alice, alice.ID)
-	if !alice.ShowRadarEvents {
+	if !alice.ShowRadarApproaching || !alice.ShowRadarFast {
 		t.Fatal("the radar events are shown by default")
 	}
 	token, _, err := utils.NewSessionToken(alice.ID, alice.UUID, alice.Role, time.Now())
@@ -36,37 +36,41 @@ func TestSetRadarEventsShown(t *testing.T) {
 	App := &app.App{DB: *db, Logger: zerolog.Nop()}
 	router.Use(func(c *gin.Context) { c.Set("App", App); c.Next() })
 	router.PUT("/shown", middlewares.IsAuthorized(), SetRadarEventsShown)
-	call := func(body string) int {
+	call := func(body string) (int, string) {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodPut, "/shown", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
-		return w.Code
+		return w.Code, w.Body.String()
 	}
-	shown := func() bool {
+	shown := func() [2]bool {
 		t.Helper()
 		var u models.Users
 		if err := db.First(&u, alice.ID).Error; err != nil {
 			t.Fatal(err)
 		}
-		return u.ShowRadarEvents
+		return [2]bool{u.ShowRadarApproaching, u.ShowRadarFast}
 	}
 
-	// no password: a switch of the map
-	if status := call(`{"shown":false}`); status != http.StatusOK || shown() {
-		t.Fatalf("hide: %d, shown %v", status, shown())
+	// no password: switches of the map, each level alone; the answer tells both
+	if status, body := call(`{"approaching":false}`); status != http.StatusOK || shown() != [2]bool{false, true} ||
+		body != `{"approaching":false,"fast":true}` {
+		t.Fatalf("hide the approaching ones: %d %s, shown %v", status, body, shown())
 	}
-	for _, bad := range []string{`{}`, `{"shown":"no"}`, `not json`} {
-		if status := call(bad); status != http.StatusBadRequest {
+	if status, _ := call(`{"fast":false}`); status != http.StatusOK || shown() != [2]bool{false, false} {
+		t.Fatalf("hide the fast ones: %d, shown %v", status, shown())
+	}
+	for _, bad := range []string{`{}`, `{"shown":true}`, `{"fast":"no"}`, `not json`} {
+		if status, _ := call(bad); status != http.StatusBadRequest {
 			t.Errorf("%s: %d, want 400", bad, status)
 		}
 	}
-	if shown() {
-		t.Error("a refused request changed the setting")
+	if shown() != [2]bool{false, false} {
+		t.Error("a refused request changed the settings")
 	}
-	if status := call(`{"shown":true}`); status != http.StatusOK || !shown() {
-		t.Fatalf("show: %d, shown %v", status, shown())
+	if status, _ := call(`{"approaching":true,"fast":true}`); status != http.StatusOK || shown() != [2]bool{true, true} {
+		t.Fatalf("show both: %d, shown %v", status, shown())
 	}
 }

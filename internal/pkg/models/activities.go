@@ -138,6 +138,8 @@ type Activity struct {
 	// the vehicles a rear radar saw behind the rider (recorded by EIradar on a Karoo), empty without radar,
 	// nil until computed. The owner's only: where and when they ride on roads with traffic
 	RadarEvents types.RadarEventArray `json:"radar_events"`
+	// whether a rear radar was connected (activityService.RadarConnected), nil until computed
+	RadarConnected *bool `json:"radar_connected"`
 }
 
 // The sources of the training score of an activity
@@ -442,6 +444,7 @@ func (db *DB) UpdateActivityTimeStamps(id uuid.UUID, analysed *Activity, privacy
 		updates["power_zones"] = nil
 		updates["power_curve"] = analysed.PowerCurve
 		updates["radar_events"] = analysed.RadarEvents
+		updates["radar_connected"] = analysed.RadarConnected
 		for column, value := range elevationUpdates(analysed) {
 			updates[column] = value
 		}

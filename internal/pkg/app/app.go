@@ -151,6 +151,8 @@ func (app *App) backfill(ctx context.Context) {
 		{"failed to compute the heart rate zones of activities", activityService.BackfillHrZones},
 		{"failed to compute the best efforts of activities", activityService.BackfillBestEfforts},
 		{"failed to read the radar events of activities", activityService.BackfillRadarEvents},
+		// after BackfillRadarEvents: not needed by it, but the files of the Karoo are read once more anyway
+		{"failed to find the radars of activities", activityService.BackfillRadarConnected},
 		// after BackfillBestEfforts: the FTP is estimated from the best 20 minutes
 		{"failed to compute the power metrics of activities", activityService.BackfillPowerMetrics},
 		{"failed to compute the power curves of activities", activityService.BackfillPowerCurves},

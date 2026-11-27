@@ -352,7 +352,10 @@ type userUpdate struct {
 	SecurityDistance     *uint16    `json:"security_distance"`
 	HomeTown             *string    `json:"home_town"`
 	Timezone             *string    `json:"timezone"`
-	ShowRadarEvents      *bool      `json:"show_radar_events"`
+	ShowRadarApproaching *bool      `json:"show_radar_approaching"`
+	ShowRadarFast        *bool      `json:"show_radar_fast"`
+	// both of them, in the exports made before they were apart
+	ShowRadarEvents *bool `json:"show_radar_events"`
 }
 
 // the bounds of the values of userUpdate
@@ -429,7 +432,14 @@ func (u userUpdate) fields(now time.Time) (map[string]interface{}, error) {
 		fields["home_town"] = homeTown
 	}
 	if u.ShowRadarEvents != nil {
-		fields["show_radar_events"] = *u.ShowRadarEvents
+		fields["show_radar_approaching"] = *u.ShowRadarEvents
+		fields["show_radar_fast"] = *u.ShowRadarEvents
+	}
+	if u.ShowRadarApproaching != nil {
+		fields["show_radar_approaching"] = *u.ShowRadarApproaching
+	}
+	if u.ShowRadarFast != nil {
+		fields["show_radar_fast"] = *u.ShowRadarFast
 	}
 	// weeks, months and the time of the day in titles depend on it: an empty one keeps the current one
 	if u.Timezone != nil && *u.Timezone != "" {

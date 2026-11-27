@@ -52,8 +52,10 @@ type Users struct {
 	NotifySocial bool `json:"notify_social" gorm:"not null;default:true"`
 	// FollowApproval: the user accepts each follower, else anyone follows them at once
 	FollowApproval bool `json:"follow_approval" gorm:"not null;default:true"`
-	// ShowRadarEvents: the vehicles of their rear radar are drawn on the maps of their activities
-	ShowRadarEvents bool `json:"show_radar_events" gorm:"not null;default:true"`
+	// the vehicles of their rear radar drawn on the maps of their activities: the ones approaching, the ones
+	// approaching fast (the threat levels types.RadarFast and above)
+	ShowRadarApproaching bool `json:"show_radar_approaching" gorm:"not null;default:true"`
+	ShowRadarFast        bool `json:"show_radar_fast" gorm:"not null;default:true"`
 }
 
 // Quota is the storage quota of the user, in bytes: the one an admin gave them, else the one of the instance;

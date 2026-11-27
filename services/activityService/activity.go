@@ -175,6 +175,8 @@ func decodeFit(fit *proto.FIT, user models.Users, trimEnd float64,
 	setMoving(&activity)
 	// the records of the trimmed activity only
 	activity.RadarEvents = RadarEvents(fitActivity, fitActivity.Sessions[0].StartTime)
+	radar := RadarConnected(fitActivity, activity.RadarEvents)
+	activity.RadarConnected = &radar
 	if len(activity.Legs) > 0 {
 		estimateLegsPower(&activity)
 	}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/muktihari/fit/profile/filedef"
 	"github.com/muktihari/fit/profile/mesgdef"
+	"github.com/muktihari/fit/profile/typedef"
 	"github.com/muktihari/fit/proto"
 )
 
@@ -61,6 +62,21 @@ func RadarEvents(fit *filedef.Activity, start time.Time) types.RadarEventArray {
 	}
 	flush()
 	return events
+}
+
+// RadarConnected tells whether a rear radar was connected during an activity: a radar among the sensors of
+// the device (the Garmin devices list their Varia as an ANT+ bike radar), or radar events (a Karoo doesn't
+// list the radar, EIradar records it)
+func RadarConnected(fit *filedef.Activity, events types.RadarEventArray) bool {
+	if len(events) > 0 {
+		return true
+	}
+	for _, info := range fit.DeviceInfos {
+		if typedef.AntplusDeviceType(info.DeviceType) == typedef.AntplusDeviceTypeBikeRadar {
+			return true
+		}
+	}
+	return false
 }
 
 // radarKey is a developer field: its developer data index and its number
